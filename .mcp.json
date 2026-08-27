@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "ghidra": {
+      "command": "${HOME}/bin/uv",
+      "args": ["run", "--directory", "${REVERSE}/ghidra/ghidra-mcp", "bridge-mcp-ghidra"]
+    }
+  }
+}

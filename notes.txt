@@ -1,0 +1,2 @@
+hatari --machine st --memsize 1 --disk-a disks/chaos43.msa
+savebin /Users/stephan.gay/Code/xrick2/re/atari_ram.bin 0 327680
