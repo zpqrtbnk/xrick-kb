@@ -48,6 +48,8 @@ FN_RESET   = 0x44C10          # reset_sound_chip
 FN_PLAY    = 0x44CCE          # play_music(d0 = track, d1 = variant)
 FN_TICK    = 0x44E0C          # music_tick  (called once per 50 Hz frame)
 FN_TIMERA  = 0x45006          # setup_timer_a  — required for PCM
+FN_SILENCE = 0x45528          # silence_all_channels — clears the 3 channel-active
+                              # flags (0x45454/0x4546E/0x45488) and zeroes PSG volumes
 
 # ENCODINGS — each verified against a real instruction in atari_ram.bin
 MOVEM_PUSH = 0x48E7FFFE       # movem.l d0-a6,-(sp)      (as at 0x4B032)
@@ -64,6 +66,9 @@ JSR_ABS    = 0x4EB9           # jsr xxx.l                (as at 0x4C536)
 MOVEQ0_D1  = 0x7200           # moveq #0,d1             (cf. 0x7201 at 0x4C534)
 RTS        = 0x4E75           # rts
 BRA_W      = 0x6000           # bra.w disp
+MOVE_SR_PUSH = 0x40E7         # move.w sr,-(sp)
+MOVE_POP_SR  = 0x46DF         # move.w (sp)+,sr
+MOVE_IMM_SR  = 0x46FC         # move.w #imm,sr
 
 be16 = lambda v: struct.pack(">H", v & 0xFFFF)
 be32 = lambda v: struct.pack(">I", v & 0xFFFFFFFF)
@@ -106,6 +111,11 @@ def build(blob_off):
     c += be32(MOVEM_PUSH)
     c += be16(SUBQ1_D0)                          # SNDH subtunes are 1-based
     c += be16(PUSH_D0_W)                         # stash track across the calls
+    # Interrupts OFF across the copy: if Timer A is still armed from a previous
+    # subtune, its ISR streams from 0x457C8 -- which lives inside the blob we are
+    # overwriting. Without this the copy races the sample interrupt.
+    c += be16(MOVE_SR_PUSH)
+    c += be16(MOVE_IMM_SR) + be16(0x2700)
     lea_at = off()
     c += be16(LEA_PC_A0)
     # lea d16(pc),a0 : EA = (address of extension word) + d16
@@ -115,7 +125,14 @@ def build(blob_off):
     loop_at = off()
     c += be16(MOVE_L_INC)
     c += be16(DBF_D7) + be16(loop_at - (off() + 2))
+    c += be16(MOVE_POP_SR)                       # interrupts back on
     c += be16(JSR_ABS) + be32(FN_RESET)
+    # Only type-0 tracks call init_music_playback (which zeroes the per-channel work
+    # area). Type-1 and type-2 tracks assume the engine is already clean, as it is in
+    # the real game where music starts first. Our blob restores the snapshot's LIVE
+    # state (track 5 mid-play, song_active=0xFF00), so without this the stale channel
+    # rings under every type-1/2 subtune -- audible as a 'ding' from subtune 9 on.
+    c += be16(JSR_ABS) + be32(FN_SILENCE)
     c += be16(JSR_ABS) + be32(FN_TIMERA)         # <- PCM depends on this
     c += be16(POP_D0_W)
     c += be16(MOVEQ0_D1)                         # variant 0 = loop
@@ -126,6 +143,7 @@ def build(blob_off):
     exit_off = off()
     c += be32(MOVEM_PUSH)
     c += be16(JSR_ABS) + be32(FN_RESET)
+    c += be16(JSR_ABS) + be32(FN_SILENCE)
     c += be32(MOVEM_POP)
     c += be16(RTS)
 

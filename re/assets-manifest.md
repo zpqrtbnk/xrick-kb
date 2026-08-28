@@ -191,7 +191,7 @@ the game. No emulator was written and no audio was rendered.
 |---|---|
 | Lift | Bytes `0x44C10`–`0x5324F` (58,944) — the whole sound subsystem in one window |
 | Relocate | The replay code is position-dependent, so a hand-assembled stub copies the image back to `0x44C10` before calling anything |
-| Init | `reset_sound_chip` → **`setup_timer_a`** → `play_music(d0 = subtune − 1, d1 = 0)` |
+| Init | interrupts off → copy → `reset_sound_chip` → **`silence_all_channels`** → **`setup_timer_a`** → `play_music(d0 = subtune − 1, d1 = 0)` |
 | Play | `music_tick`, called at 50 Hz (`TC50`) |
 | Exit | `reset_sound_chip` |
 
@@ -260,3 +260,31 @@ longword-aligned and its first bytes match the dump at `0x44C10`.
 3. **Header tag conventions vary slightly between players.** If a player rejects the
    file, the tags are the first thing to adjust; the entry points and code are the
    part that has been verified.
+
+
+### Playback bug found and fixed: the superimposed 'ding'
+
+First build had a stale note ringing under every subtune from **9 onward**. The
+boundary is the tell: subtunes 1–8 are the only **type-0** tracks.
+
+**Cause.** Only the type-0 path in `play_music` calls `init_music_playback`, which
+zeroes the per-channel work area. Type-1 and type-2 tracks skip it — they assume the
+engine is *already* in a clean state, which it always is in the real game, where music
+starts before any effect plays. But the blob restores the snapshot's **live** engine
+state: it was captured with track 5 (the title music) mid-play, `song_active =
+0xFF00`, `play_state = 1`. `reset_sound_chip` clears the top-level flags but **not**
+the three channel-active flags at `0x45454`/`0x4546E`/`0x45488`, so a leftover voice
+kept sounding under the selected track.
+
+**Fix.** `init` now calls **`silence_all_channels` (`0x45528`)** after
+`reset_sound_chip` — the engine's own routine, which clears exactly those three flags
+and zeroes the PSG volume registers.
+
+**Also hardened.** The copy now runs with interrupts masked (`move.w #$2700,sr`,
+restored afterwards). Once any sample track has played, Timer A is armed and its ISR
+streams from `0x457C8` — an address *inside the blob being overwritten*. That race
+would corrupt playback on every subtune switch even after the ding was fixed.
+
+This is a good illustration of a general hazard when lifting code out of a RAM
+snapshot: **the captured state is whatever the program happened to be doing**, not a
+clean boot state, and any routine that assumes prior initialisation will misbehave.
