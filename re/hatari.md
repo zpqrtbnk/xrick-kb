@@ -5,7 +5,9 @@ list of behavioural details that cannot be settled by reading bytes — they nee
 game *running*. This document is the standing record of how we talk to Hatari, what
 has been verified about the setup, and the state of each probe.
 
-**Status: environment verified 2026-08-28, no probes run yet.**
+**Status: harness working end-to-end 2026-08-28.** The game boots unattended to the
+title screen under script control, RAM dumps out in the same form as `atari_ram.bin`,
+and the relocation delta is measured and self-checked automatically. No probes run yet.
 
 ---
 
@@ -19,6 +21,9 @@ has been verified about the setup, and the state of each probe.
 | hconsole | **packaged**: `/usr/share/hatari/hconsole/hconsole.py` |
 | Repo from WSL | `/mnt/d/d/reverse/xrick` — no copying needed |
 | Disk images | `disks/rd.st`, `disks/rd.msa` (also `rd2.st`, `RICKDA2`) |
+| TOS | **EmuTOS 512k 1.4 US** — `../atari/emutos-512k-1.4/etos512us.img` (outside the repo) |
+| Machine config | `--machine st --memsize 1` — from the pre-existing `hatari.sh`; the status bar reads `1MB ST(WS3), EmuTOS 1.4.0` |
+| Driver | `re/hatari_probe.py` — boots, drives the menus, dumps RAM, measures the delta |
 
 Hatari options that matter: `--control-socket`, `--parse`, `--log-file`,
 `--trace` / `--trace-file`, `--memstate`, `--memsize`, `--machine`, `--joy1`.
@@ -69,27 +74,56 @@ If the socket ever misbehaves, `hatari --parse <file>` executes a debugger comma
 file at startup, with `:trace` breakpoints logging without ever halting the machine.
 Same evidence, no interactivity. Not expected to be needed.
 
-## 3. Step zero — re-establish the address base (mandatory)
+## 3. Booting the game — `disks/rd.st` is not a bare game disk
+
+It is a **Fuzion cracktro compilation (CD#12)**. Booting it lands on a menu:
+`F1 CHASE HQ / F2 RICK / F3 SUPER SPRINT / F4 QUARTZ`. Selecting F2 (Atari scancode
+`0x3C`) then hits a second prompt:
+
+```
+TRAINER (Y/N) ?
+```
+
+**Always answer N.** A trainer *patches the game code* (infinite lives and so on), so
+answering Y would silently invalidate every comparison against `algo-*.md`. This is
+not a preference; it is a correctness requirement for the whole exercise.
+
+`re/hatari_probe.py` automates the full chain — boot → F2 → N → title screen — and it
+runs unattended. Verified working 2026-08-28.
+
+Debugger syntax confirmed on this build: `savebin <filename> <address> <length>`.
+`savebin <f> 0 0x100000` yields a 1 MB raw image byte-identical in form to
+`atari_ram.bin`, so all existing Python tooling parses it unchanged.
+
+## 4. Step zero — re-establish the address base (mandatory, EVERY session)
 
 **Every address in this knowledge base comes from one specific run's memory layout.**
 Rick Dangerous is a GEMDOS program, so TOS chooses its load address; a different TOS
 version or RAM size relocates the entire image and every documented address becomes
 wrong by a constant.
 
-Before any probe is trusted:
+**Measured result: the delta is real, and it is not stable across boots.**
 
-1. Run with `--machine st --memsize 1024` to match the snapshot's configuration.
-2. Dump RAM once the game is running (debugger `savebin`, or the `savemem` shortcut).
-3. Run **`find_delta()` from `build_sndh.py`** on the dump — it anchors on
-   `reset_sound_chip`'s absolute PSG pokes (position-independent by construction) and
-   self-checks the result against the music track table's type field.
+Two runs of the *identical* command, same disk and same config, produced:
 
-Do not restate the anchor constant here; reuse that function so the two cannot drift.
+| Run | Delta vs `atari_ram.bin` |
+|---|---|
+| 1 (stopped at the trainer prompt) | `-0x70FE` |
+| 2 (through to the title screen) | `-0x7276` |
 
-If the delta is `0`, every documented address is live as-is. If not, apply it
-uniformly and **record the value in §6 below**. This is a five-minute first run that
-de-risks everything after it, and it already caught one wrong assumption when the 1 MB
-dump turned out to sit at −0x2054.
+A 0x178-byte difference between otherwise identical boots. The cracktro loader does
+not place the game deterministically, so **the delta can never be hardcoded, cached,
+or carried between sessions.** Every probe run must measure it first and rebase every
+address before use. `hatari_probe.py` does this automatically and refuses to report a
+delta that fails its self-check.
+
+The measurement anchors on `reset_sound_chip`'s absolute PSG pokes — position-
+independent by construction — and validates the candidate against the music track
+table's type field (all 29 entries must be 0/1/2). `build_sndh.py::find_delta()` is
+the canonical implementation; `hatari_probe.py::measure_delta()` mirrors it and
+returns the reason on failure.
+
+For reference, `atari_ram_1M.bin` sits at `-0x2054` relative to `atari_ram.bin`.
 
 ## 4. Driving the game
 
@@ -136,8 +170,12 @@ measurement — which is exactly what `analyze_function_completeness` could not 
 
 ## 6. Findings log
 
-*(empty — append dated entries as probes run: the measured relocation delta first,
-then one entry per probe with the evidence and which document it updated)*
+**2026-08-28 — harness commissioned.** Environment verified (nothing needed
+installing). Established that `rd.st` is a Fuzion cracktro requiring F2 + a trainer
+prompt, and that the trainer must be declined. Automated the boot chain in
+`hatari_probe.py`; confirmed `savebin` produces an `atari_ram.bin`-compatible image.
+**Key result: the relocation delta varies between identical boots (`-0x70FE` vs
+`-0x7276`), so it must be re-measured every session.** No G1 probe run yet.
 
 ## 7. Gotchas
 
@@ -150,3 +188,8 @@ then one entry per probe with the evidence and which document it updated)*
 - Match `--machine st --memsize 1024`, or the relocation delta changes under you.
 - `savemem` saves a Hatari *state snapshot*; a raw RAM image (what our Python tooling
   parses) comes from the debugger's `savebin`.
+- **Never accept the trainer.** It patches code; observations would not match the
+  transcriptions.
+- **Never hardcode the relocation delta** — see §4. Measure, self-check, then rebase.
+- The `screenshot` shortcut writes `grabNNNN.png` into Hatari's working directory, not
+  into `re/hatari/`. Dumps and screenshots are gitignored (large, regenerable).
