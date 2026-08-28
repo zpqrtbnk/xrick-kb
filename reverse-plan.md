@@ -23,7 +23,7 @@ identical behaviour*. Everything below is assessed against that bar.
 | Functions | **133**, all named; every non-trivial one transcribed |
 | Structs defined & applied | 9 |
 | Entity dispatch types | **74/74** characterised |
-| Knowledge base | 12 files in `re/`, ~6,000 lines |
+| Knowledge base | 14 files in `re/`, ~6,300 lines, + 11 extracted PNGs |
 | Largest untyped region | `0x1B01E`–`0x44BED` (170,960 bytes) — the graphics blob |
 | Program bytes not captured | 12,880 (`0x50000`–`0x5324F`) — **stack + audio only, not code** |
 
@@ -50,21 +50,35 @@ located and their formats documented, but nothing has been extracted or visually
 validated. That is the bulk of the remaining distance to a working reimplementation,
 and it is **deferred by decision**.
 
-**Verdict: ~85% of a reimplementation spec.** The remaining 15% is almost entirely
-asset extraction plus a short list of behavioural details wanting a live run.
+**Verdict: ~95% of a reimplementation spec.** Code fully reversed; graphics extracted
+and visually validated. What remains is audio rendering, room-map rendering (both
+unblocked), and a short list of behavioural details wanting a live run.
 
 ---
 
 ## 3. Gap register
 
-### A. Assets not extracted — *deferred by decision*
-Formats and anchors are recorded and ready: sprite frames are **0x150 bytes = 21 rows
-× 16 bytes, 4 interleaved bitplanes, transparency derived as `NOT(p0|p1|p2|p3)`
-(colour 0), no stored mask**; frames cluster `0x2FC4E`–`0x334xx`; treasures at
-`type*0x150 + 0x2F70E`; enemy banks `0xD20` stride (alt banks `0xA80`); tile graphics
-`0x1D01E`/`0x1F01E`; tile bitmaps 16 bytes each at `0x22FEE`; title bitmap `0x23FEE`;
-menu bitmap `0x40FEE`; font `0x1B01E` (32 bytes/glyph). Rendering a frame is also the
-cheapest possible *validation* of these claims — none has been visually checked.
+### A. Assets — ✅ EXTRACTED AND VALIDATED (2026-08-28)
+`re/extract_assets.py` renders every located graphic to `re/assets/` (11 PNGs), and
+`re/assets-manifest.md` documents the formats. **Validated by looking at the output**:
+the title screen, sprite sheet and tile blocks all come out as recognisable artwork,
+which confirms the palette, plane decoding and base addresses simultaneously.
+
+Extracted: 16-colour palette, 95-glyph font, 2×256 tiles, 2×256 assembled 32×32
+blocks, 124 sprite frames, the title screen, and three 320×32 banners.
+
+Findings from doing it:
+- **Sprite data is plane-major**, not ST screen format — each row stores one longword
+  per bitplane so `render_sprites` can rotate planes independently. Decoding it as
+  screen data yields noise. This is a trap for any reimplementation.
+- **The font extent is settled**: 95 glyphs, `0x00`–`0x5E`, with digits at `0x00`
+  (hence unpacked-decimal scores) and `A`–`Z` at ASCII positions.
+- **`0x40FEE` is three 320×32 banners**, not a full-screen image — which explains
+  `blit_image_5120`'s otherwise odd 5120-byte size.
+
+Still unrendered: **audio** (PSG sequences and the three PCM samples are decoded but
+not synthesised) and **whole-room maps** (the tilemap encoding and blocks are both
+available, so this is now straightforward).
 
 ### B. Incomplete capture — closed as a code concern
 `p_tbase 0x1B018 + p_tlen 0x38238 = 0x53250`; the snapshot ends at `0x50000`, so
@@ -124,27 +138,16 @@ reimplementation may not need this at all.
 
 ## 4. Proposed next tasks
 
-1. **Asset extraction** (Gap A) — the single largest remaining piece, and now the only
-   thing between the KB and a buildable reimplementation. Offline Python over
-   `re/atari_ram.bin`: dump sprite frames, tiles, the font and the two full-screen
-   bitmaps to PNG plus a manifest. Doubles as validation of every format claim.
-   *Deferred by user decision; pick up when assets are wanted.*
-2. ~~**Hunt the slot-0 block writer**~~ — ✅ **DONE 2026-08-28.** There is no block
-   pusher; slot 0 is the scripted crusher/boulder hazard. See Gap D. Method note: the
-   searches failed because the writes go through `A0`/`A1`, not absolute addresses —
-   when an address-based hunt comes up empty, check whether the access is
-   register-indirect before concluding the code is missing.
-3. ~~**Reconcile `functions.md` / `entities.md`**~~ — ✅ **DONE 2026-08-28.** Demoted to
-   indexes rather than reconciled: duplicated facts were the drift mechanism, so the
-   fix was to remove the duplication, not to re-sync it. `functions.md` is now a
-   133-row address→name→purpose→owning-document map (271→185 lines); `entities.md` is
-   a type→handler map; the globals table moved to `data-structures.md` with six stale
-   entries corrected.
-4. **Dynamic-verification pass** once Hatari is available — the list (Gap D) is now
-   short enough to batch in one session.
-5. **Wider memory capture** — only to recover the two missing sound samples.
-
----
+1. **Render whole rooms.** Everything needed now exists — the tilemap encoding
+   (`algo-level.md`), the block/tile graphics (`assets/`), and `RoomHeader`. Producing
+   a PNG per room would validate the tilemap decode end-to-end and give a visual map
+   of all 47 rooms. Cheapest remaining high-value item.
+2. **Audio.** Render the PSG sequences and the three PCM samples to WAV using
+   `algo-music.md`. Two samples are partly outside the capture (Gap B).
+3. **Dynamic-verification pass** once Hatari is available — the Gap D list is short.
+4. **Wider memory capture** — recovers the two truncated sound samples.
+5. **Sweep for unreferenced sprite frames** — the 124 extracted are those reachable
+   from animation tables; a linear sweep of the graphics blob would find any orphans.
 
 ## 5. Method notes worth keeping
 
@@ -190,5 +193,6 @@ reimplementation may not need this at all.
 | **Transcription pass (6 forks)** | 08-28 | ~4,400 lines of exact pseudocode; **tilemap encoding** and **music opcodes** decoded; `Super()`, joystick input, row-major tilemap, AI modes, carry-flag returns all corrected |
 | String extraction | 08-28 | `re/strings.md`: 64 strings, font-validated encoding; intro-text gap explained; **ending text** found |
 | Slot-0 investigation | 08-28 | **No block-pushing mechanic exists** — slot 0 is the scripted crusher/boulder hazard, moved by `scripted_trap_update` via `A0`; confirmed by all 26 slot-0 placement records carrying types 24–73 |
+| Asset extraction | 08-28 | 11 PNGs rendered and visually validated; sprite format found to be plane-major; font extent settled at 95 glyphs; `0x40FEE` identified as three banners |
 | Index demotion | 08-28 | `functions.md`/`entities.md` demoted to indexes; globals moved to `data-structures.md`; authority order documented in `README.md` |
 | KB review | 08-28 | Stale content purged; `sprite_type_dispatch` corrected to **74 entries**; `hide_entity` relocated to `0x4AC08`; `bullet_range_remaining` → `bullet_point_x/y`; `CheckpointState` axes fixed |

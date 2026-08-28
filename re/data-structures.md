@@ -212,9 +212,21 @@ disassembly (`LEA 0x1B01E,A4; ADDA.L D1,A4` where `D1 = char_index << 5`). The f
 32 glyphs (`0x1B01E`–`0x1B41E`) were typed as `byte[32][32]` and look
 alphabet-shaped; beyond that the data is ambiguous (glyph 32 non-zero but less
 letter-like, glyph 64 all-zero, glyphs 96/128/160/192/224 non-zero but look more
-like graphic tiles than characters). **True glyph count is unconfirmed** — tracing
-the actual maximum character index used across all `draw_string`/`draw_glyph_string`
-callers would resolve this; not done this pass.
+like graphic tiles than characters).
+
+✅ **Resolved 2026-08-28 by rendering the sheet** (`assets/font.png`). The font is
+**95 glyphs, `0x00`–`0x5E`**:
+
+| Range | Contents |
+|---|---|
+| `0x00`–`0x09` | **digits 0–9** — which is why score digits are stored as unpacked decimal, indexing glyphs directly rather than as ASCII |
+| `0x0A`–`0x0C` | the three HUD icons (bullets, dynamite, lives) |
+| `0x0D`–`0x40` | assorted small graphics |
+| `0x41`–`0x5A` | `A`–`Z` at their ASCII positions |
+| `0x5B`–`0x5E` | `,` `.` `?` and space (`0x5E`, a blank glyph) |
+| `0x5F`+ | **not font** — unrelated graphics data |
+
+This matches the `byte[95][32]` typing an earlier pass had applied in Ghidra.
 
 ---
 
@@ -366,8 +378,13 @@ Not a struct, but the single most important *asset* format for reimplementation.
 - **16 bytes per row, 21 rows.** `render_sprites` reads four longwords per row and
   then advances the destination by 0x28 longwords (160 bytes = one ST low-res
   scanline).
-- **4 interleaved bitplanes** (standard ST low-res, 16 px per plane-word), so a row
-  spans 32 pixels — sprites nominally 24 px wide leave the right 8 px blank.
+- **4 bitplanes stored PLANE-MAJOR**: row `r`, plane `p` = the longword at
+  `base + r*16 + p*4`; pixel `x` = bit `31-x`. A row spans 32 pixels; sprites are
+  nominally 24 px wide, leaving the right 8 px blank.
+- ⚠️ **This is NOT ST screen format.** Screen memory interleaves planes by *word*;
+  sprite source keeps a whole longword per plane so `render_sprites` can rotate each
+  plane independently for sub-word shifts. Decoding sprites as screen data yields
+  noise — verified by rendering Rick's idle frame (`0x2CA6E`) both ways.
 - **No stored mask.** Transparency is *derived*: `render_sprites` computes
   `mask = NOT(p0 | p1 | p2 | p3)`, i.e. colour index 0 is transparent. A
   reimplementation must derive it the same way rather than expecting mask data.
@@ -375,9 +392,15 @@ Not a struct, but the single most important *asset* format for reimplementation.
   banks are `0xD20` apart (see `re/entities.md`), with alternate banks at `0xA80`
   stride.
 
-⚠️ None of this has been **visually verified** by actually rendering a frame — that
-is the cheapest available validation and is proposed as the next step in
-`reverse-plan.md`.
+✅ **Visually verified 2026-08-28** by rendering every asset — see
+`assets-manifest.md` and `assets/`. The title screen, sprite sheet and tile blocks
+all come out as recognisable artwork, which confirms the palette, plane decoding
+and base addresses together.
+
+Related 8×8 formats (font and tiles) are **different**: 32 bytes per cell, **one
+byte per plane per row** (`base + r*4 + p`). Tile banks `0x1D01E`/`0x1F01E`, 256
+tiles each; block definitions at `0x22FEE` are 16 bytes = a 4×4 grid of tile
+indices (a 32×32 px block).
 
 ---
 

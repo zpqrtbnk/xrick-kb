@@ -5,9 +5,11 @@ Motorola 68000, derived from a Hatari RAM snapshot (`atari_ram.bin`) analysed in
 Ghidra (project `ghidra.xrick`, program `atari_ram.bin`).
 
 **Goal:** become complete enough to *mechanically re-code the game with identical
-behaviour*. Current estimate against that bar: **~60–65%**. The architecture and data
-model are solid; asset data, several byte-level formats, and one missing chunk of the
-program are not. `../reverse-plan.md` is the authoritative gap register and plan.
+behaviour*. Current estimate against that bar: **~95%**. The code is fully reversed
+(every function named, every non-trivial one transcribed) and the graphics are
+extracted and visually validated. What remains is audio rendering and a short list of
+behavioural details wanting a live run. `../reverse-plan.md` is the authoritative gap
+register and plan.
 
 ## Authority order
 
@@ -33,6 +35,7 @@ behavioural detail to an index file** — put it in the owning document and link
 | `data-structures.md` | All 9 structs, the level-data model, and the sprite frame format |
 | `entities.md` | The 74-entry entity dispatch table and the collision/interaction suite |
 | `strings.md` | All in-game text, the character encoding, and the font mapping |
+| `assets-manifest.md` | Extracted graphics: formats, palette, and what's in `assets/` |
 
 ### Transcriptions (`algo-*.md`) — exact, re-codable pseudocode
 
