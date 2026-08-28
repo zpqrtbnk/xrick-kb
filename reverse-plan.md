@@ -178,11 +178,17 @@ easter egg's full effect; which enemy sprite variant is which creature per level
 trigger-bit behaviour in live play; the landing rebound `nVelY = 0xFE - nVelY`; the
 four name-entry control glyphs.
 
-**T4b. Pixel-diff a room against the real thing.** *(New.)* Our 47 room renders are
-self-consistent and plausible, but that only proves the decode agrees with itself.
-Screenshot a known room in Hatari and diff it against
-`assets/rooms/roomNN_*.png` — that is the one check that would make the renderer
-*provably* correct rather than merely coherent. Cheap now that Hatari is in use.
+**T4b. Pixel-diff a room against Hatari.** ❌ **NOT DOING — decided 2026-08-28.**
+The user validates the room renders visually themselves and has confirmed them
+correct, so an automated screenshot diff buys nothing. Do not re-propose it.
+
+One defect came out of that visual check and is fixed: a few tile rows were missing
+at the bottom of every room. Cause — the renderer drew only each room's *own*
+block-index stream, but `world_row_base` can reach the room's last transition row
+and the decoder then fills a further screenful from the *following* stream, which the
+player sees. `render_rooms.py` now adds a 6-block-row (192 px) margin, clamped at the
+block-definition table. Verified against the raw data: the renderer had no
+off-by-one; the room's own stream was being drawn exactly, it was simply short.
 
 **T5. Wider memory capture.** ✅ **DONE 2026-08-28** — see above.
 

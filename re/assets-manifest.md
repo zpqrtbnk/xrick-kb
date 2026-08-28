@@ -157,11 +157,16 @@ loader/HPack decompression stage described in `rick.md`.
 All **47 rooms** rendered, named `roomNN_L<level>_<name>.png`. Pass `--overlay` for a
 second set with entity spawn points marked (`_ents.png`, 462 placements).
 
-Every room is **8 blocks = 256 px wide**; heights range from 9 to 73 block-rows
-(288–2336 px). Room 8 is the tallest — a 2336 px vertical shaft at the end of level 0.
+Every room is **8 blocks = 256 px wide**. Height is the room's own block-index stream
+(distance to the next room's `pTileMap`; the last runs to `block_defs`) **plus a
+6-block-row / 192 px margin**.
 
-Each room's block-index stream extent is the distance to the next room's `pTileMap` in
-address order; the last runs to `block_defs`.
+That margin is not padding. `world_row_base` can reach the room's last transition row
+— empirically `(own_rows − 1) × 4` — and the decoder then fills one more screenful,
+which physically lives in the *following* stream but is visible to the player.
+Rendering only a room's own stream cut a few tile rows off the bottom of every image.
+Room 46 gets a reduced margin because its data ends at the block table.
+Heights now range from 15 to 79 block-rows (480–2528 px); room 8 is the tallest.
 
 **This validated the tilemap decode end-to-end** — the one major format that had never
 been checked by rendering its output. Every room comes out as coherent level geometry,

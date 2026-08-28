@@ -9,9 +9,17 @@ tilemap decode chain end-to-end:
       -> block_defs[block] @0x22FEE  (16 bytes = 4x4 tile indices, row-major)
         -> tile bitmap @ tile_gfx_base + tile*32  (8x8, 4 planes, byte-per-plane)
 
-Each room is 8 blocks (= 32 tiles = 256 px) wide. Its height is implied by how much
-block-index data it owns, which is the distance to the next room's pTileMap in
-address order (the streams are packed contiguously, ending at the block table).
+Each room is 8 blocks (= 32 tiles = 256 px) wide. Height has two parts:
+
+  own_rows  the room's own block-index stream, which runs to the next room's
+            pTileMap in address order (the streams are packed contiguously,
+            ending at the block table).
+  margin    a further 6 block-rows (192 px = one screen). The player can see
+            below the room's own stream: world_row_base reaches the room's last
+            transition row -- empirically (own_rows-1)*4 -- and the screen then
+            shows one more screenful, which physically lives in the FOLLOWING
+            stream. Without this the bottom of every room is cut mid-structure.
+            Clamped so we never read past the block-definition table (room 46).
 
 With --overlay, entity spawn positions from placement_table are marked, which also
 cross-checks the placement format against the geometry.
@@ -51,12 +59,23 @@ rooms = [{"idx": i,
           "tilemap": u32(ROOM_HEADERS + i * 14 + 2),
           "placements": u32(ROOM_HEADERS + i * 14 + 10)} for i in range(N_ROOMS)]
 
-# Room tilemap extent = distance to the next stream start in address order.
+# A room's OWN block-index stream runs to the next stream start in address order.
 bounds = sorted({r["tilemap"] for r in rooms} | {BLOCK_DEFS})
 for r in rooms:
     nxt = next(b for b in bounds if b > r["tilemap"])
     r["bytes"] = nxt - r["tilemap"]
-    r["block_rows"] = r["bytes"] // BLOCKS_PER_ROW
+    r["own_rows"] = r["bytes"] // BLOCKS_PER_ROW
+
+# ...but the player can see BELOW that. world_row_base may reach the room's last
+# transition row (empirically (own_rows-1)*4 for most rooms), and the screen then
+# shows a further 192 px = 6 block-rows. Those rows physically live in the following
+# stream, yet they are part of what the room looks like in play, so render them too.
+# Clamp so we never read past the block-definition table.
+VISIBLE_BLOCK_ROWS = 192 // 32          # one screen below world_row_base
+for r in rooms:
+    avail = (BLOCK_DEFS - r["tilemap"]) // BLOCKS_PER_ROW
+    r["margin"] = max(0, min(VISIBLE_BLOCK_ROWS, avail - r["own_rows"]))
+    r["block_rows"] = r["own_rows"] + r["margin"]
 
 # Level ownership, from level_start_info entry rooms
 entries = [(u32(LEVEL_START + i * 20 + 0x0A) - ROOM_HEADERS) // 14 for i in range(4)]
@@ -127,7 +146,7 @@ def overlay_entities(img, r):
 
 # -------------------------------------------------------------------- main
 overlay = "--overlay" in sys.argv
-print(f"{'room':>4} {'lvl':>3} {'bank':>4} {'blkrows':>7} {'size':>10}  tilemap")
+print(f"{'room':>4} {'lvl':>3} {'bank':>4} {'own':>4} {'+mgn':>5} {'size':>11}  tilemap")
 total_ents = 0
 for r in rooms:
     img = render_room(r)
@@ -137,8 +156,8 @@ for r in rooms:
         total_ents += n
         rgb.save(os.path.join(OUT, name + "_ents.png"))
     img.save(os.path.join(OUT, name + ".png"))
-    print(f"{r['idx']:>4} {r['level']:>3} {r['variant']:>4} {r['block_rows']:>7} "
-          f"{img.size[0]:>4}x{img.size[1]:<5} 0x{r['tilemap']:05X}")
+    print(f"{r['idx']:>4} {r['level']:>3} {r['variant']:>4} {r['own_rows']:>4} {r['margin']:>5} "
+          f"{img.size[0]:>4}x{img.size[1]:<6} 0x{r['tilemap']:05X}")
 
 print(f"\n{N_ROOMS} rooms written to {OUT}")
 if overlay:
@@ -146,3 +165,6 @@ if overlay:
 tallest = max(rooms, key=lambda r: r["block_rows"])
 print(f"tallest: room {tallest['idx']} at {tallest['block_rows']} block-rows "
       f"({tallest['block_rows']*32} px)")
+short = [r["idx"] for r in rooms if r["margin"] < VISIBLE_BLOCK_ROWS]
+if short:
+    print(f"rooms with a reduced margin (data ends at block_defs): {short}")
