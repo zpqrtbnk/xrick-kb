@@ -125,7 +125,7 @@ returns the reason on failure.
 
 For reference, `atari_ram_1M.bin` sits at `-0x2054` relative to `atari_ram.bin`.
 
-## 4. Driving the game
+## 5. Driving the game
 
 Rick Dangerous is joystick-controlled. Set `--joy1 keys` (keyboard joystick emulation)
 and drive with `hatari-event keypress <scancode>`; the `Scancode` class in
@@ -145,7 +145,7 @@ is stronger evidence than observation.
 State files live in `re/hatari/states/` and are **not** committed (binary, large,
 regenerable).
 
-## 5. Probe plan — the G1 items
+## 6. Probe plan — the G1 items
 
 | # | Item | Technique | Status |
 |---|---|---|---|
@@ -168,7 +168,7 @@ with a breakpoint on each major function, log the register state, and diff again
 what `algo-*.md` predicts. That converts the ~98% estimate from a judgement into a
 measurement — which is exactly what `analyze_function_completeness` could not do.
 
-## 6. Findings log
+## 7. Findings log
 
 **2026-08-28 — harness commissioned.** Environment verified (nothing needed
 installing). Established that `rd.st` is a Fuzion cracktro requiring F2 + a trainer
@@ -177,7 +177,7 @@ prompt, and that the trainer must be declined. Automated the boot chain in
 **Key result: the relocation delta varies between identical boots (`-0x70FE` vs
 `-0x7276`), so it must be re-measured every session.** No G1 probe run yet.
 
-## 7. Gotchas
+## 8. Gotchas
 
 - The control socket returns **nothing**; always pair a send with a log read.
 - Hatari **connects to** the socket — the driver must `bind()` and `listen()` first.
