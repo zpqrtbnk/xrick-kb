@@ -1,0 +1,12 @@
+# Leftover Ghidra project — permanently out of scope for this analysis.
+# See the warning at the top of reverse-plan.md.
+ghidra.xrick2/
+
+# A macOS-side copy of the whole tree (~357 MB, mostly ._ resource forks).
+# Not part of the project.
+mac/
+
+# Ghidra transient files: locks, temp snapshots, scratch.
+*.lock
+*.lock~
+**/tmp*.ps

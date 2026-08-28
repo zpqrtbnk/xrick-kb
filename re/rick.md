@@ -19,7 +19,7 @@ Rick Dangerous on Chaos #43 is not the original Core Design release. It is a cra
 
 1. **Static analysis of RICK.PRG** — fully understood the outer backward-LZ decompressor (custom, no standard packer signature), the HPack trainer stub, and the inner LSD compression layer. All documented in the technical files.
 
-2. **Layer 1 decompression** — re-implemented in Python (`re/decompress_rick.py`). Produced `rick_decompressed.bin`, which is the outer LZ output: still contains the HPack trainer and the LSD-compressed game.
+2. **Layer 1 decompression** — re-implemented in Python (script not retained; see the Files note below). Produced `rick_decompressed.bin`, the outer LZ output: still contains the HPack trainer and the LSD-compressed game.
 
 3. **Layer 2 decompression** — attempted a Python micro-emulator of the LSD decompressor. Abandoned due to self-modifying code and exception-based control flow that are impractical to replicate without a full 68K emulator.
 
@@ -31,33 +31,129 @@ Rick Dangerous on Chaos #43 is not the original Core Design release. It is a cra
 
 7. **Function labeling** — 26 functions identified and named in Ghidra. See `functions.md` for the complete catalog.
 
+8. **(2026-08-27/28) Deep passes** — a coordinated multi-agent Ghidra session plus
+   three focused follow-up passes took coverage from 82 functions (27 named) to
+   **133 functions, all named**, with **9 applied data structures**. The 74-entry
+   `sprite_type_dispatch` table was enumerated *and* every type behaviourally
+   characterised; the complete level-data model (rooms, transitions, placements,
+   object-type templates) was decoded and typed. Several earlier claims were
+   **corrected** along the way — notably the `SpriteEntity` X/Y axes were swapped,
+   `0x4BF18` is `player_dying` not "game_running", and `0x4B586` is the level index
+   not a lives counter. See `re/functions.md`, `re/data-structures.md`,
+   `re/entities.md`, and `reverse-plan.md` for full detail.
+
+## What We Now Know (resolved since the last pass)
+
+- **Entity/object system**: resolved. `sprite_list` is a fixed **13-slot** array
+  (not open-ended), struct fully mapped (`re/data-structures.md`). Reserved slots:
+  `[0]`=solid block, `[1]`=player, `[2]`/`[3]`=bullet/dynamite, `[4..8]`/`[9..11]`=level
+  entities, `[12]`=decorative sprite.
+- **Type dispatch table**: fully resolved. All **74 entries enumerated *and*
+  behaviourally characterised** (`re/entities.md`): type 1 player, 2/3
+  bullet/dynamite, 4–15 enemies over a shared `enemy_ai_update` (3 AI modes), 16/17
+  destructible crates, 18–21 treasures, 22/23 trigger zones, 24–73 a shared
+  data-driven `scripted_trap_update`, 74 decorative. (The count was 70 for several
+  passes — a spurious function had truncated the table.)
+- **Level data model**: resolved. Rooms (`RoomHeader[47]`) link into a left/right
+  graph via `TransitionWaypoint` lists; entities spawn from `PlacementRecord[523]`
+  as their world-row band scrolls in; per-type template data comes from
+  `ObjectTypeDef[75]`. All decoded field-by-field — see `re/data-structures.md`.
+- **Player input**: fully resolved — and it is the **joystick**, not the keyboard.
+  `keyboard_isr` decodes IKBD packets; a `0xFF` header introduces a joystick-1 report
+  whose byte lands at `0x4922B` with standard Atari bits UP/DOWN/LEFT/RIGHT/FIRE =
+  `0x01/0x02/0x04/0x08/0x80`. Control scheme is FIRE+direction: FIRE+L/R = stick jab,
+  FIRE+UP = shoot, FIRE+DOWN = dynamite. Keyboard codes are used only for ESC, P and
+  SPACE.
+- **Level loading**: cannot be resolved from this binary. Exhaustive search
+  found exactly one GEMDOS trap in the whole snapshot (`Super(0x5324C)`, supervisor
+  entry — not file I/O) — no
+  `Fopen`/`Fread`/`Fclose` anywhere. Loading either uses raw BIOS/XBIOS disk access
+  (unlocated) or happens before this snapshot's entry point. Don't re-attempt this
+  search without a different/earlier RAM capture.
+- **HUD**: resolved, with a correction. There are only **3 counters** (not 4) —
+  the old "lives, bullets, dynamite sticks, and one other (keys?)" guess was wrong.
+  Now fully pinned down and renamed: `bLives`, `bBullets`, `bDynamite` (the
+  bullet-vs-dynamite ordering was resolved statically from `player_controller`'s two
+  fire paths at `0x4C524`/`0x4C60E`).
+- **Music system**: mostly resolved. `music_track_table` confirmed at exactly **29
+  records**. Full per-tick engine mapped: `music_tick` -> `advance_music_channels`
+  (procedural path) / `step_all_channel_coroutines` -> `channel_coroutine_dispatch`
+  (self-modifying coroutine path, 3 PSG channels confirmed) -> `resolve_channel_note_period`
+  (confirmed 84-entry PSG tone-period table). The **sequence opcode set and the
+  sample-playback path are now decoded too** — see `re/algo-music.md`.
+- **Level transitions**: resolved. `main_init_and_loop`'s full per-frame dispatch
+  is now documented (`re/functions.md`) — room-transition controller, active
+  gameplay, game-over, and respawn paths are all traced. Checkpointing is
+  **per-room** (not per-level): `save_checkpoint_state`/`restore_checkpoint_state`
+  round-trip the player's position every time Rick enters a new room.
+
 ## What We Still Need To Do
 
-The game's **high-level architecture** is mapped. The next phase is to understand the game's **logic** — how Rick moves, how enemies behave, how levels are loaded.
+Items 1–3 and 6 of the previous list (entity handlers, the remaining
+`FUN_xxxxxxxx` functions, and the placement-table format) are **all done** — see the
+appendix in `reverse-plan.md`. **`reverse-plan.md` is now the authoritative gap
+register**; the summary below just orients you.
 
-Suggested next steps, roughly in order:
+The goal is a knowledge base sufficient to *mechanically re-code the game with
+identical behaviour*. Measured against that bar we are roughly **85%** there.
 
-1. **Identify the entity/object system** — the sprite object list at `0x4A702` drives both rendering passes. Each entry is 0x4C bytes. Understand the fields: position, type, state flags, animation frame, velocity.
+**The code itself is fully reversed.** Every function is named and every non-trivial
+one is transcribed to exact pseudocode in `re/algo-*.md`. The tilemap encoding and
+the music sequence opcodes — the last two undecoded formats — were closed by the
+2026-08-28 transcription pass.
 
-2. **Map the type dispatch table** — `render_sprites` jumps through a table at `0x4AAE0`, one function pointer per entity type. Each pointer is a per-type update function. Enumerate and label them.
+What remains:
 
-3. **Understand player input** — find where joystick/keyboard state is read and converted into player movement. The keyboard ISR installed at `0x118` and the ACIA at `0xFFFC00` are the entry points.
+1. **Assets not extracted** *(deferred by decision)*. The 171 KB blob holds the
+   graphics, tilemaps and music data. Formats and anchor addresses are documented
+   (`re/data-structures.md`), but nothing has been exported or visually verified.
+   This is now the bulk of the remaining distance to a working reimplementation.
 
-4. **Understand level loading** — the `.HNK` files are loaded at runtime via GEMDOS. Find the Fopen/Fread calls and trace how level data populates game state.
+2. **The incomplete capture is no longer a blocker.** `0x50000`–`0x5324F` (12,880
+   bytes) is missing, but a reachability analysis proved it contains **supervisor
+   stack plus PCM sample data, not code** — the game calls `Super(0x5324C)`, so the
+   stack grows down into it, and three sample tracks point there. A wider capture
+   would recover two sound samples; nothing else. See `re/memory_map.md`.
 
-5. **Understand the HUD** — the four `hud_update_element` functions draw counters at fixed screen positions. Identify which counters correspond to lives, bullets, dynamite, and score.
+3. **A short list of behavioural details** wanting a live run — most notably the
+   **slot-0 block pushing logic**, which is read as solid everywhere but whose writer
+   no pass has located. Full list in `reverse-plan.md` Gap D.
 
-6. **Document the music system** — `timer_a_music_isr` streams data to the YM2149. Understand the music data format and the `play_music` track table at `0x44F08`.
+## Do Not Do
 
-7. **Understand level transitions** — the main loop has distinct states for "game running", "player dying", and "level transition". Trace the control flow between them.
+- **Never inspect, open, or reference `ghidra.xrick2`/`xrick2-prg`** (on disk at
+  `ghidra.xrick2/` or `mac/ghidra.xrick2/`). It's an untracked leftover, permanently
+  out of scope for this analysis.
+- ~~**Don't re-run ASCII string search.**~~ **RETRACTED 2026-08-28 — the advice was
+  wrong and cost us the game text for several passes.** Text *is* ASCII, but
+  `0xFF`-terminated rather than NUL-terminated, and Ghidra's analyzer required NUL
+  termination. Scanning for `0xFF`-terminated printable runs yields 63 strings
+  (level names, high-score table, intro stories at `0x4B8FE`+). `^`=space, `\`=`.`,
+  `[`=`,`, `]`=`?`.
+- **Don't re-search for GEMDOS Fopen/Fread.** Already done exhaustively (see "What We
+  Now Know" above) — the answer is "not present in this snapshot," not "not yet
+  found."
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `re/atari_ram.bin` | RAM snapshot from Hatari — primary analysis artifact |
-| `re/decompress_rick.py` | Python reimplementation of the outer LZ decompressor |
-| `re/memory_map.md` | Technical: Atari ST physical memory layout from the RAM dump |
-| `re/functions.md` | Technical: complete catalog of identified functions |
+| `re/atari_ram.bin` | RAM snapshot from Hatari — primary analysis artifact (incomplete, see blocker above) |
+| `re/memory_map.md` | Technical: Atari ST physical memory layout, capture limits |
+| `re/functions.md` | Technical: complete catalog of all **133** functions (all named) |
+| `re/data-structures.md` | Technical: all 9 structs, the level-data model, sprite frame format |
+| `re/entities.md` | Technical: the 74-entry dispatch table and entity behaviour map |
+| `re/strings.md` | Technical: all in-game text, character encoding, font mapping |
+| `re/algo-*.md` | **Exact re-codable pseudocode** for every non-trivial function (6 files) |
+| `reverse-plan.md` | **Authoritative** current state, gap register, and next steps |
 
-The Ghidra project is `xrick` and contains three programs: `RICK.PRG` (original packed), `rick_decompressed.bin` (Layer 1 output, mostly obsolete), and `atari_ram.bin` (the live RAM dump, primary).
+Note: `re/decompress_rick.py`, referenced by earlier versions of this file, is **not
+present** in the repo. The Layer-1 decompressor work described above produced it at
+the time but it was not kept; the Hatari snapshot route superseded it.
+
+The Ghidra project is `xrick` (at `ghidra.xrick/`) and currently contains **one**
+program, `atari_ram.bin` — the live RAM dump, primary and only analysis target. (An
+earlier version of this note claimed three programs including `RICK.PRG` and
+`rick_decompressed.bin`; those are not present in the current project.) The
+`ghidra.xrick2`/`xrick2-prg` project elsewhere in the repo is an unrelated, untracked
+leftover — see "Do Not Do" above.
