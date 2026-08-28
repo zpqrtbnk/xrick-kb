@@ -139,18 +139,66 @@ loader stage. A reimplementation needs no loader at all.
 
 ---
 
-## 4. Proposed next tasks
+## 4. Remaining tasks
 
-1. **Render whole rooms.** Everything needed now exists — the tilemap encoding
-   (`algo-level.md`), the block/tile graphics (`assets/`), and `RoomHeader`. Producing
-   a PNG per room would validate the tilemap decode end-to-end and give a visual map
-   of all 47 rooms. Cheapest remaining high-value item.
-2. **Audio.** Render the PSG sequences and the three PCM samples to WAV using
-   `algo-music.md`. Two samples are partly outside the capture (Gap B).
-3. **Dynamic-verification pass** once Hatari is available — the Gap D list is short.
-4. **Wider memory capture** — recovers the two truncated sound samples.
-5. **Sweep for unreferenced sprite frames** — the 124 extracted are those reachable
-   from animation tables; a linear sweep of the graphics blob would find any orphans.
+Ordered by value. Nothing here blocks anything else except where noted.
+
+### Tier 1 — unblocked, high value
+
+**T1. Render every room to PNG.** All prerequisites now exist: the tilemap encoding
+(`algo-level.md`), block/tile graphics (`assets/`), and `RoomHeader[47]`. Produce one
+image per room (47 total), optionally with entity placements overlaid from
+`placement_table`. *Why it matters:* it end-to-end validates the tilemap decode — the
+one major format never checked by rendering — and yields a visual map of the whole
+game. *Effort:* small; extends `extract_assets.py`. *Risk:* if rooms come out garbled,
+the tilemap decode has a bug worth finding now rather than during a rewrite.
+
+**T2. Render audio.** Synthesise the PSG sequences and the three PCM samples to WAV
+using `algo-music.md`. *Why:* audio is the only subsystem never validated by output;
+everything else has been seen or heard. *Effort:* medium — needs a small YM2149
+emulation (tone/noise/envelope, 3 channels). *Caveat:* samples for tracks 10 and 19
+are truncated by the capture (Gap B), so expect two to cut short.
+
+**T3. Type the identified-but-untyped data regions in Ghidra.** Several regions are
+*known* but still raw bytes, so the database understates what we know:
+`note_period_table` `0x45720` (`word[84]`), the instrument table `0x46932` (stride 6),
+the arpeggio table `0x46B66`, the animation-frame tables `0x46B96`–`0x46D3A`, the two
+256-byte tile-attribute LUTs `0x49F1E`/`0x4A01E`, `room_tile_map` `0x4A17E`
+(`byte[44][32]`), and `level_intro_texts` `0x4B8FE`. *Effort:* small. *Why:* makes the
+Ghidra database self-describing and closes most remaining `find_code_gaps` noise.
+
+### Tier 2 — needs Hatari (currently unavailable)
+
+**T4. Dynamic-verification pass.** Batch all of Gap D in one session: remaining
+tile-attribute bits and the `0x6F` probe mask; the POOKY easter egg's full effect;
+which enemy sprite variant is which creature per level; trigger-bit behaviour in live
+play; the landing-rebound `nVelY = 0xFE - nVelY`; the four name-entry control glyphs.
+
+**T5. Wider memory capture.** `savebin` over `0x1B018`–`0x53250` (or a full 1 MB dump)
+to recover the two truncated PCM samples. Only worth doing alongside T2/T4.
+
+### Tier 3 — completeness, low urgency
+
+**T6. Linear sweep for unreferenced sprite frames.** The 124 extracted are those
+reachable from animation tables; a sweep of `0x2C000`–`0x34000` on the `0x150` stride
+would find any orphans (cut content, unused death frames).
+
+**T7. Identify `0x1BBFE`–`0x1D01D`** (~5 KB between the font and tile bank 0) — the
+last unidentified region inside the graphics blob.
+
+**T8. Resolve whether `level_start_info` is formally 5 entries.** The 5th pointer's
+target is known (the ending text); whether it is an array member or adjacent data is
+not.
+
+**T9. Decide the fate of `attempt.0`/`attempt.1`/`disks`.** These predate the current
+work and are untouched by it; either document their role in `rick.md` or archive them.
+
+### Explicitly NOT tasks
+
+- **Level loading** — resolved: there is none at runtime. Do not re-search.
+- **ASCII string search** — done; all 64 strings are in `strings.md`.
+- **Slot-0 block pushing** — resolved: no such mechanic exists.
+- **`ghidra.xrick2`** — permanently out of scope.
 
 ## 5. Method notes worth keeping
 
