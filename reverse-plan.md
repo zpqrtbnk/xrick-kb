@@ -170,32 +170,21 @@ with interrupts masked to avoid racing the Timer-A sample ISR. Rebuilt from
 **confirmed by listening** — music, sound effects and digidrums all play, including
 the death "waaaaa" (subtune 20). **Audio is closed.** See `assets-manifest.md`.
 
-### Tier 2 — needs Hatari (currently unavailable)
+### Tier 2 — Hatari work (**now unblocked** — the 1 MB dump proves it is available)
 
-**T4. Dynamic-verification pass.** Batch all of Gap D in one session: remaining
-tile-attribute bits and the `0x6F` probe mask; the POOKY easter egg's full effect;
-which enemy sprite variant is which creature per level; trigger-bit behaviour in live
-play; the landing-rebound `nVelY = 0xFE - nVelY`; the four name-entry control glyphs.
+**T4. Dynamic-verification pass.** The last substantive item. Batch all of Gap D in
+one session: the remaining tile-attribute bits and the `0x6F` probe mask; the POOKY
+easter egg's full effect; which enemy sprite variant is which creature per level;
+trigger-bit behaviour in live play; the landing rebound `nVelY = 0xFE - nVelY`; the
+four name-entry control glyphs.
 
-**T5. Wider memory capture.** ✅ **DONE 2026-08-28** — `re/atari_ram_1M.bin`
-supplied. All three PCM samples are now complete and the SNDH has been rebuilt from
-it, so the death "waaaaa" (subtune 20, 5,150 bytes) is finally present.
+**T4b. Pixel-diff a room against the real thing.** *(New.)* Our 47 room renders are
+self-consistent and plausible, but that only proves the decode agrees with itself.
+Screenshot a known room in Hatari and diff it against
+`assets/rooms/roomNN_*.png` — that is the one check that would make the renderer
+*provably* correct rather than merely coherent. Cheap now that Hatari is in use.
 
-> ⚠️ **The 1 MB capture uses a different load address.** Everything is shifted by
-> **−0x2054** relative to `atari_ram.bin` (`reset_sound_chip` at `0x42BBC`, not
-> `0x44C10`). All addresses in `re/` and in the Ghidra project are in
-> **`atari_ram.bin` numbering** — the two must not be mixed. Convert with
-> `1M_address = doc_address − 0x2054`.
->
-> The captures were verified to be the same program: with the delta applied the sound
-> code matches ~95% and its data ~88% byte-for-byte (residual differences being
-> exactly the relocated absolute addresses), and overlapping sample bytes match 100%.
->
-> **Open decision:** whether to re-base the Ghidra project and all of `re/` onto the
-> 1 MB dump. Not done, and not obviously worth it — the current KB is complete and
-> self-consistent, and re-basing would touch every address in ~6,000 lines of
-> documentation plus every Ghidra label. `build_sndh.py` already handles either dump
-> automatically by locating a position-independent anchor.
+**T5. Wider memory capture.** ✅ **DONE 2026-08-28** — see above.
 
 ### Tier 3 — completeness, low urgency
 
