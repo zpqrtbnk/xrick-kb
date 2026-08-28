@@ -5,11 +5,12 @@ Motorola 68000, derived from a Hatari RAM snapshot (`atari_ram.bin`) analysed in
 Ghidra (project `ghidra.xrick`, program `atari_ram.bin`).
 
 **Goal:** become complete enough to *mechanically re-code the game with identical
-behaviour*. Current estimate against that bar: **~95%**. The code is fully reversed
-(every function named, every non-trivial one transcribed) and the graphics are
-extracted and visually validated. What remains is audio rendering and a short list of
-behavioural details wanting a live run. `../reverse-plan.md` is the authoritative gap
-register and plan.
+behaviour*. Current estimate against that bar: **~98%**. The code is fully reversed
+(every function named, every non-trivial one transcribed); graphics are extracted and
+visually validated; all 47 room maps render; and the sound engine is packaged as a
+playable SNDH, confirmed by ear with every PCM sample intact. What remains is a short
+list of behavioural details wanting a live Hatari run. `../reverse-plan.md` is the
+authoritative gap register and plan.
 
 ## Authority order
 

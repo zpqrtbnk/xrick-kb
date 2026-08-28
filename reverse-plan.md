@@ -49,9 +49,10 @@ alone:
 `assets-manifest.md`). **Audio is decoded but not rendered** — the PSG sequences and
 three PCM samples have documented formats but have never been synthesised.
 
-**Verdict: ~95% of a reimplementation spec.** Code fully reversed; graphics extracted
-and visually validated. What remains is audio rendering, room-map rendering (both
-unblocked), and a short list of behavioural details wanting a live run.
+**Verdict: ~98% of a reimplementation spec.** Code fully reversed; graphics extracted
+and visually validated; room maps rendered; audio packaged and confirmed by ear with
+every sample intact. What remains is a short list of behavioural details wanting a
+live run, plus optional completeness work — nothing structural.
 
 ---
 
@@ -164,7 +165,10 @@ window (`0x44C10`–`0x5324F`) back to its fixed address, then calls `reset_soun
 testing and was fixed: a stale note rang under every type-1/type-2 subtune, because
 only type-0 tracks call `init_music_playback` and the blob restores the snapshot's
 live mid-song state; `init` now calls `silence_all_channels`, and the blob copy runs
-with interrupts masked to avoid racing the Timer-A sample ISR. All three PCM samples are now complete, rebuilt from the 1 MB capture. See `assets-manifest.md`.
+with interrupts masked to avoid racing the Timer-A sample ISR. Rebuilt from
+`atari_ram_1M.bin` so **all three PCM samples are complete**, and the result has been
+**confirmed by listening** — music, sound effects and digidrums all play, including
+the death "waaaaa" (subtune 20). **Audio is closed.** See `assets-manifest.md`.
 
 ### Tier 2 — needs Hatari (currently unavailable)
 

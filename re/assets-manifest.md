@@ -234,16 +234,17 @@ an enemy's death play the same digitised sample**. And all three PCM samples tur
 to be the game's three "punchy" effects — gunshot, explosion, death — which is exactly
 what a 1989 ST title would spend its sample budget on.
 
-⚠️ **The death sound is the one asset we do not have.** Track 19's sample lives at
-`0x50DA8`, entirely inside the uncaptured `0x50000`–`0x5324F` region, so **subtune 20
-plays silence**. The explosion (subtune 11) is partially truncated. Only the gunshot
-is complete. A wider Hatari dump fixes both — rebuild and the samples appear.
+✅ **All three samples are complete and confirmed audible** (rebuilt from
+`atari_ram_1M.bin`, 2026-08-28). The death "waaaaa" — track 19, the one asset the
+original 320 KB capture was missing entirely — is subtune 20, 5,150 bytes.
 
 ### Verification status
 
-✅ **Plays correctly — confirmed in a real SNDH player (2026-08-28).** The relocating
-stub, the Timer-A/PCM path and the subtune mapping all work as designed. One playback
-defect was found and fixed on the way (the superimposed 'ding' — see below).
+✅ **Fully verified by listening (2026-08-28).** Confirmed in a real SNDH player:
+the relocating stub, the Timer-A/PCM path, the subtune mapping and **all three PCM
+samples** work as designed. Two defects were found and fixed along the way — the
+superimposed 'ding' (see below) and the incomplete samples (fixed by rebuilding from
+the 1 MB capture). **The audio extraction is complete; nothing about it is outstanding.**
 
 Structural checks, all still passing after the fix: every opcode encoding in the stub
 matches an identical instruction found elsewhere in the same binary; the three branch
