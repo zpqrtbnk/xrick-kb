@@ -160,9 +160,12 @@ replay code and runs it under the player's 68000 emulator, so nothing is
 re-synthesised. A hand-assembled relocating stub copies the self-contained sound
 window (`0x44C10`–`0x5324F`) back to its fixed address, then calls `reset_sound_chip`
 → `setup_timer_a` → `play_music`; the Timer-A call is what makes the digidrums sound.
-Structurally verified (encodings cross-checked against real instructions in the
-binary; all displacements decoded and confirmed) but **playback untested** — no SNDH
-player here. Two samples are zero-filled pending T5. See `assets-manifest.md`.
+✅ **Playback confirmed working in a real SNDH player.** One defect surfaced during
+testing and was fixed: a stale note rang under every type-1/type-2 subtune, because
+only type-0 tracks call `init_music_playback` and the blob restores the snapshot's
+live mid-song state; `init` now calls `silence_all_channels`, and the blob copy runs
+with interrupts masked to avoid racing the Timer-A sample ISR. Two samples remain
+zero-filled pending T5. See `assets-manifest.md`.
 
 ### Tier 2 — needs Hatari (currently unavailable)
 
@@ -225,6 +228,12 @@ work and are untouched by it; either document their role in `rick.md` or archive
   absolute addresses — so no xref or operand search could ever match. When a
   program-wide search for writes to a known global comes up empty, ask whether the
   access is register-indirect before concluding the logic is missing or elsewhere.
+- **A RAM snapshot captures a *running* state, not a clean one.** Code lifted out of
+  it inherits whatever the program happened to be doing — here the snapshot was taken
+  with the title music mid-play, and every routine that assumed prior initialisation
+  misbehaved until the state was explicitly cleared. When re-hosting lifted code,
+  reset the subsystem with its *own* init/cleanup routines rather than trusting the
+  captured values.
 - **Ghidra analyzer defaults can hide data.** The ASCII Strings analyzer had *Require
   Null Termination* enabled, so it reported zero strings for a game whose text is
   entirely `0xFF`-terminated ASCII. Check analyzer options before concluding "absent".

@@ -241,12 +241,15 @@ is complete. A wider Hatari dump fixes both — rebuild and the samples appear.
 
 ### Verification status
 
-**Structurally verified, playback untested** — there is no SNDH player in this
-environment. What *was* checked: every opcode encoding in the stub matches an
-identical instruction found elsewhere in the same binary; all three branch targets
-resolve correctly; the PC-relative `lea` lands exactly on the blob; the `dbf` loop
-returns to the copy instruction; the copy count covers the blob exactly; the blob is
-longword-aligned and its first bytes match the dump at `0x44C10`.
+✅ **Plays correctly — confirmed in a real SNDH player (2026-08-28).** The relocating
+stub, the Timer-A/PCM path and the subtune mapping all work as designed. One playback
+defect was found and fixed on the way (the superimposed 'ding' — see below).
+
+Structural checks, all still passing after the fix: every opcode encoding in the stub
+matches an identical instruction found elsewhere in the same binary; the three branch
+targets resolve correctly; the PC-relative `lea` lands exactly on the blob; the `dbf`
+loop returns to the copy instruction; the copy count covers the blob exactly; the blob
+is longword-aligned and its first bytes match the dump at `0x44C10`.
 
 ### Known limitations
 
@@ -254,18 +257,17 @@ longword-aligned and its first bytes match the dump at `0x44C10`.
    and subtune 20's lies entirely beyond it. The uncaptured tail is **zero-filled**, so
    these fail as silence rather than as noise. A wider Hatari dump fixes both — swap
    the blob and rebuild.
-2. **Copy-target collision.** If a player loads the file into `0x44C10`–`0x5324F` the
-   stub overwrites itself. sc68 and sndh-player normally load low with ≥512 KB
-   emulated, so this should be clear, but it is the most likely first failure.
-3. **Header tag conventions vary slightly between players.** If a player rejects the
-   file, the tags are the first thing to adjust; the entry points and code are the
-   part that has been verified.
+2. ~~Copy-target collision~~ — did not occur in practice; the player loaded the file
+   clear of `0x44C10`–`0x5324F`. Still a theoretical risk with a player that loads
+   high.
+3. ~~Header tag conventions~~ — the header as written is accepted.
 
 
 ### Playback bug found and fixed: the superimposed 'ding'
 
-First build had a stale note ringing under every subtune from **9 onward**. The
-boundary is the tell: subtunes 1–8 are the only **type-0** tracks.
+The first build had a stale note ringing under every subtune from **9 onward**
+(reported from real playback; **fix confirmed working**). The boundary is the tell:
+subtunes 1–8 are the only **type-0** tracks.
 
 **Cause.** Only the type-0 path in `play_music` calls `init_music_playback`, which
 zeroes the per-channel work area. Type-1 and type-2 tracks skip it — they assume the
