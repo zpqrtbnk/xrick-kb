@@ -63,6 +63,11 @@ briefly, with their findings, rather than moved to the appendix — because each
 in a conclusion worth not rediscovering.
 
 ### G1. Behavioural details that need a live run — *the only substantive gap*
+
+> **Harness: see `re/hatari.md`.** Environment verified 2026-08-28 — WSL2 Debian 13,
+> Hatari 2.5.0 with `--control-socket`, WSLg display, and `hconsole.py` packaged and
+> importable as a Python module. Nothing needs installing. First run must re-establish
+> the address relocation delta before any probe result is trusted.
 Each is inferred from static reading with good confidence but has never been observed.
 
 | Item | What is unclear |

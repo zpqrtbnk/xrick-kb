@@ -9,8 +9,8 @@ behaviour*. Current estimate against that bar: **~98%**. The code is fully rever
 (every function named, every non-trivial one transcribed); graphics are extracted and
 visually validated; all 47 room maps render; and the sound engine is packaged as a
 playable SNDH, confirmed by ear with every PCM sample intact. What remains is a short
-list of behavioural details wanting a live Hatari run. `../reverse-plan.md` is the
-authoritative gap register and plan.
+list of behavioural details wanting a live Hatari run — see `hatari.md` for the
+harness and probe plan. `../reverse-plan.md` is the authoritative gap register.
 
 ## Authority order
 
@@ -37,6 +37,7 @@ behavioural detail to an index file** — put it in the owning document and link
 | `entities.md` | The 74-entry entity dispatch table and the collision/interaction suite |
 | `strings.md` | All in-game text, the character encoding, and the font mapping |
 | `assets-manifest.md` | Extracted graphics: formats, palette, and what's in `assets/` |
+| `hatari.md` | **Dynamic verification**: the Hatari harness, how we drive it, and the G1 probe plan |
 
 ### Transcriptions (`algo-*.md`) — exact, re-codable pseudocode
 
