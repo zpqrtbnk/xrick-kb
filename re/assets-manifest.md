@@ -253,10 +253,9 @@ is longword-aligned and its first bytes match the dump at `0x44C10`.
 
 ### Known limitations
 
-1. **Two samples are incomplete.** Subtune 11's sample runs past the capture boundary
-   and subtune 20's lies entirely beyond it. The uncaptured tail is **zero-filled**, so
-   these fail as silence rather than as noise. A wider Hatari dump fixes both — swap
-   the blob and rebuild.
+1. ~~Two samples are incomplete~~ — ✅ **fixed 2026-08-28** by rebuilding from
+   `atari_ram_1M.bin`. All three PCM samples are now complete: gunshot 7,530 bytes,
+   explosion 4,277, **death 5,150**. Nothing is zero-filled.
 2. ~~Copy-target collision~~ — did not occur in practice; the player loaded the file
    clear of `0x44C10`–`0x5324F`. Still a theoretical risk with a player that loads
    high.
@@ -290,3 +289,37 @@ would corrupt playback on every subtune switch even after the ding was fixed.
 This is a good illustration of a general hazard when lifting code out of a RAM
 snapshot: **the captured state is whatever the program happened to be doing**, not a
 clean boot state, and any routine that assumes prior initialisation will misbehave.
+
+---
+
+## Rebuilt from the 1 MB dump — and a warning about that dump
+
+`re/atari_ram_1M.bin` is a complete 1 MB capture, and the SNDH is now built from it,
+so **all three PCM samples are complete** — including the death "waaaaa" (subtune 20,
+5,150 bytes), which was entirely absent before.
+
+> ⚠️ **`atari_ram_1M.bin` is NOT a drop-in replacement for `atari_ram.bin`.**
+> The game is loaded at a **different base address** in that capture — everything is
+> shifted by **−0x2054**. `reset_sound_chip` is at `0x42BBC` there, not `0x44C10`.
+> Every address in `re/` and in the Ghidra project refers to **`atari_ram.bin`
+> numbering**; do not mix them. To convert: `1M_address = doc_address − 0x2054`.
+
+The two captures were verified to be the same program, not merely similar: with the
+delta applied, the sound engine's code matches ~95% and its data ~88% byte-for-byte —
+the residual differences being exactly the embedded absolute addresses, which is what
+relocation looks like — and the overlapping sample bytes match **100%**.
+
+`build_sndh.py` now handles this automatically. It locates `reset_sound_chip` by a
+**position-independent anchor** (the routine opens by poking the PSG through absolute
+hardware addresses, which do not relocate), derives the delta, and resolves every
+function and table from it. It then self-checks by verifying all 29 track-table
+entries have a valid type before proceeding, and prefers the 1 MB dump when present.
+So the same script produces a correct SNDH from either capture.
+
+### Sample extents (1 MB dump, contiguous block `0x4BF32`–`0x50172`)
+
+| Subtune | Sound | Address | Length |
+|---|---|---|---|
+| 9 | gunshot | `0x4BF32` | 7,530 |
+| 11 | explosion | `0x4DC9E` | 4,277 |
+| 20 | **death "waaaaa"** | `0x4ED54` | 5,150 |

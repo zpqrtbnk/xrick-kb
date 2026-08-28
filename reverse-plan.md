@@ -164,8 +164,7 @@ window (`0x44C10`–`0x5324F`) back to its fixed address, then calls `reset_soun
 testing and was fixed: a stale note rang under every type-1/type-2 subtune, because
 only type-0 tracks call `init_music_playback` and the blob restores the snapshot's
 live mid-song state; `init` now calls `silence_all_channels`, and the blob copy runs
-with interrupts masked to avoid racing the Timer-A sample ISR. Two samples remain
-zero-filled pending T5. See `assets-manifest.md`.
+with interrupts masked to avoid racing the Timer-A sample ISR. All three PCM samples are now complete, rebuilt from the 1 MB capture. See `assets-manifest.md`.
 
 ### Tier 2 — needs Hatari (currently unavailable)
 
@@ -174,12 +173,25 @@ tile-attribute bits and the `0x6F` probe mask; the POOKY easter egg's full effec
 which enemy sprite variant is which creature per level; trigger-bit behaviour in live
 play; the landing-rebound `nVelY = 0xFE - nVelY`; the four name-entry control glyphs.
 
-**T5. Wider memory capture.** `savebin` over `0x1B018`–`0x53250` (or a full 1 MB dump)
-to recover the two incomplete PCM samples. **Now higher value than it looked:** the
-sound map shows the missing sample at `0x50DA8` is the **death "waaaaa"**, played by
-both `kill_player` and `kill_enemy` — the game's most recognisable sound effect, and
-currently silent in the SNDH. The partially-truncated one at `0x4FCF2` is the
-explosion. Only the gunshot is intact.
+**T5. Wider memory capture.** ✅ **DONE 2026-08-28** — `re/atari_ram_1M.bin`
+supplied. All three PCM samples are now complete and the SNDH has been rebuilt from
+it, so the death "waaaaa" (subtune 20, 5,150 bytes) is finally present.
+
+> ⚠️ **The 1 MB capture uses a different load address.** Everything is shifted by
+> **−0x2054** relative to `atari_ram.bin` (`reset_sound_chip` at `0x42BBC`, not
+> `0x44C10`). All addresses in `re/` and in the Ghidra project are in
+> **`atari_ram.bin` numbering** — the two must not be mixed. Convert with
+> `1M_address = doc_address − 0x2054`.
+>
+> The captures were verified to be the same program: with the delta applied the sound
+> code matches ~95% and its data ~88% byte-for-byte (residual differences being
+> exactly the relocated absolute addresses), and overlapping sample bytes match 100%.
+>
+> **Open decision:** whether to re-base the Ghidra project and all of `re/` onto the
+> 1 MB dump. Not done, and not obviously worth it — the current KB is complete and
+> self-consistent, and re-basing would touch every address in ~6,000 lines of
+> documentation plus every Ghidra label. `build_sndh.py` already handles either dump
+> automatically by locating a position-independent anchor.
 
 ### Tier 3 — completeness, low urgency
 

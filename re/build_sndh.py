@@ -33,23 +33,70 @@ against an identical instruction found elsewhere in this same binary (see ENCODI
 import os, struct, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-D    = open(os.path.join(HERE, "atari_ram.bin"), "rb").read()
 OUT  = os.path.join(HERE, "assets", "audio")
 os.makedirs(OUT, exist_ok=True)
 
-# ---------------------------------------------------------------- constants
-IMG_BASE   = 0x44C10          # first byte of the sound window (reset_sound_chip)
-IMG_END    = 0x53250          # end of the program image = end of the last sample
-DUMP_END   = len(D)           # 0x50000 — our capture stops here
-TRACK_TBL  = 0x44F08
-N_TRACKS   = 29
+# ------------------------------------------------------------- dump select
+# Prefer the complete 1 MB capture if present. NOTE: that capture has the game
+# loaded at a DIFFERENT base address than atari_ram.bin (delta -0x2054), so every
+# address is resolved dynamically rather than hard-coded. All *reference* addresses
+# below are stated in atari_ram.bin's numbering, which is what the rest of re/ and
+# the Ghidra project use.
+CANDIDATES = ["atari_ram_1M.bin", "atari_ram.bin"]
+for name in CANDIDATES:
+    path = os.path.join(HERE, name)
+    if os.path.exists(path):
+        DUMP = name
+        D = open(path, "rb").read()
+        break
+else:
+    sys.exit("no memory dump found in re/")
 
-FN_RESET   = 0x44C10          # reset_sound_chip
-FN_PLAY    = 0x44CCE          # play_music(d0 = track, d1 = variant)
-FN_TICK    = 0x44E0C          # music_tick  (called once per 50 Hz frame)
-FN_TIMERA  = 0x45006          # setup_timer_a  — required for PCM
-FN_SILENCE = 0x45528          # silence_all_channels — clears the 3 channel-active
-                              # flags (0x45454/0x4546E/0x45488) and zeroes PSG volumes
+# Reference addresses, in atari_ram.bin numbering
+REF_RESET   = 0x44C10         # reset_sound_chip
+REF_PLAY    = 0x44CCE         # play_music(d0 = track, d1 = variant)
+REF_TICK    = 0x44E0C         # music_tick (once per 50 Hz frame)
+REF_TIMERA  = 0x45006         # setup_timer_a  — required for PCM
+REF_SILENCE = 0x45528         # silence_all_channels — clears stale channel state
+REF_TRACKS  = 0x44F08         # music_track_table
+REF_IMG_END = 0x53250         # end of the program image
+N_TRACKS    = 29
+
+# reset_sound_chip opens by poking the PSG through absolute hardware addresses, which
+# do not relocate — so its byte pattern is a position-independent anchor.
+ANCHOR = bytes.fromhex("13fc0007ffff88000039003fffff8802")
+
+def find_delta():
+    hits, i = [], 0
+    while True:
+        i = D.find(ANCHOR, i)
+        if i < 0:
+            break
+        hits.append(i); i += 1
+    if not hits:
+        sys.exit(f"{DUMP}: could not locate reset_sound_chip — is this a Rick Dangerous dump?")
+    # music_tick contains a similar PSG-init run; reset_sound_chip is the lower one.
+    delta = hits[0] - REF_RESET
+    # Self-check: the track table must look sane at this delta.
+    tt = REF_TRACKS + delta
+    for k in range(N_TRACKS):
+        ty = struct.unpack_from(">h", D, tt + k * 8)[0]
+        if ty not in (0, 1, 2):
+            sys.exit(f"{DUMP}: delta {delta:#x} rejected — track {k} has type {ty}")
+    return delta
+
+DELTA = find_delta()
+rel   = lambda a: a + DELTA                  # reference address -> this dump
+
+IMG_BASE   = rel(REF_RESET)
+IMG_END    = rel(REF_IMG_END)
+TRACK_TBL  = rel(REF_TRACKS)
+FN_RESET   = rel(REF_RESET)
+FN_PLAY    = rel(REF_PLAY)
+FN_TICK    = rel(REF_TICK)
+FN_TIMERA  = rel(REF_TIMERA)
+FN_SILENCE = rel(REF_SILENCE)
+DUMP_END   = len(D)
 
 # ENCODINGS — each verified against a real instruction in atari_ram.bin
 MOVEM_PUSH = 0x48E7FFFE       # movem.l d0-a6,-(sp)      (as at 0x4B032)
@@ -74,10 +121,12 @@ be16 = lambda v: struct.pack(">H", v & 0xFFFF)
 be32 = lambda v: struct.pack(">I", v & 0xFFFFFFFF)
 
 # ------------------------------------------------------------- the image
-have  = D[IMG_BASE:DUMP_END]                    # what the capture actually holds
-full  = IMG_END - IMG_BASE                      # what the engine really spans
-blob  = have + b"\x00" * (full - len(have))     # zero-fill the uncaptured tail
-assert len(blob) == full and full % 4 == 0
+full  = IMG_END - IMG_BASE                      # what the engine spans
+have  = D[IMG_BASE:min(DUMP_END, IMG_END)]      # what this capture holds
+blob  = have + bytes(full - len(have))          # zero-fill any short tail
+if len(blob) % 4:
+    blob += bytes(4 - len(blob) % 4)
+full = len(blob)
 missing = full - len(have)
 
 # ---------------------------------------------------------------- header
@@ -173,9 +222,14 @@ path = os.path.join(OUT, "rick_dangerous.sndh")
 open(path, "wb").write(sndh)
 
 # ---------------------------------------------------------------- report
+print(f"dump           {DUMP}  ({len(D)} bytes)")
+print(f"relocation     {DELTA:+#x} vs atari_ram.bin numbering")
 print(f"sound window   0x{IMG_BASE:05X}..0x{IMG_END-1:05X}  ({full} bytes)")
 print(f"  captured     {len(have)} bytes")
-print(f"  zero-filled  {missing} bytes  (uncaptured tail 0x{DUMP_END:05X}..0x{IMG_END-1:05X})")
+if missing:
+    print(f"  ZERO-FILLED  {missing} bytes — capture is short; some samples will be silent")
+else:
+    print(f"  complete     nothing zero-filled")
 print(f"header {len(hdr)}B, stub {len(code)}B, blob at +0x{blob_off:X}")
 print(f"entry points: init=+0x{init_off:X} exit=+0x{exit_off:X} play=+0x{play_off:X}")
 print(f"\nwrote {path}  ({len(sndh)} bytes, {N_TRACKS} subtunes)\n")
