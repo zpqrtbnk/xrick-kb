@@ -153,24 +153,16 @@ one major format never checked by rendering — and yields a visual map of the w
 game. *Effort:* small; extends `extract_assets.py`. *Risk:* if rooms come out garbled,
 the tilemap decode has a bug worth finding now rather than during a rewrite.
 
-**T2. Verify the audio decode against a reference rip.** *(Re-scoped 2026-08-28.)*
-The original framing — write a YM2149 emulator and render WAVs — is the expensive
-path and validates nothing on its own. Better options, cheapest first:
-
-1. **Compare against the SNDH Archive's existing Rick Dangerous rip.** Someone has
-   already ripped this properly from a complete image, so it is an *independent
-   reference* to check our sequence-opcode and instrument-table decoding against —
-   far stronger validation than listening to our own output.
-2. **Just run the game in Hatari** (`disks/chaos43.msa` is in the repo) to hear the
-   originals in context.
-3. **Build our own SNDH** only if a self-contained artifact from *our* analysis is
-   wanted. Two obstacles: (a) the player is **position-dependent** — it uses absolute
-   addressing throughout (`jsr 0x44CCE.l`, data at `0x45720`/`0x46932`/`0x4DF86`), so
-   a carved-out blob cannot simply be loaded at an arbitrary address the way SNDH
-   players do; it needs a stub that copies the image back to its original addresses.
-   (b) two of the three PCM samples are truncated by our capture, so a rip made today
-   would have broken digi sounds — this is the one place where the wider memory
-   capture (T5) is actually a prerequisite rather than a nicety.
+**T2. Audio.** ✅ **DONE 2026-08-28** — packaged as
+`re/assets/audio/rick_dangerous.sndh` by `re/build_sndh.py`: 29 subtunes covering
+every `music_track_table` entry (music, SFX and PCM). Carries the game's original
+replay code and runs it under the player's 68000 emulator, so nothing is
+re-synthesised. A hand-assembled relocating stub copies the self-contained sound
+window (`0x44C10`–`0x5324F`) back to its fixed address, then calls `reset_sound_chip`
+→ `setup_timer_a` → `play_music`; the Timer-A call is what makes the digidrums sound.
+Structurally verified (encodings cross-checked against real instructions in the
+binary; all displacements decoded and confirmed) but **playback untested** — no SNDH
+player here. Two samples are zero-filled pending T5. See `assets-manifest.md`.
 
 ### Tier 2 — needs Hatari (currently unavailable)
 
@@ -249,6 +241,7 @@ work and are untouched by it; either document their role in `rick.md` or archive
 | **Transcription pass (6 forks)** | 08-28 | ~4,400 lines of exact pseudocode; **tilemap encoding** and **music opcodes** decoded; `Super()`, joystick input, row-major tilemap, AI modes, carry-flag returns all corrected |
 | String extraction | 08-28 | `re/strings.md`: 64 strings, font-validated encoding; intro-text gap explained; **ending text** found |
 | Slot-0 investigation | 08-28 | **No block-pushing mechanic exists** — slot 0 is the scripted crusher/boulder hazard, moved by `scripted_trap_update` via `A0`; confirmed by all 26 slot-0 placement records carrying types 24–73 |
+| SNDH packaging | 08-28 | Sound engine lifted into a 29-subtune SNDH with a hand-assembled relocating stub; all opcodes and displacements verified |
 | Room rendering + data typing | 08-28 | All 47 rooms rendered (validates the tilemap decode end-to-end); hard-bounded data regions given array types and labels in Ghidra |
 | Asset extraction | 08-28 | 11 PNGs rendered and visually validated; sprite format found to be plane-major; font extent settled at 95 glyphs; `0x40FEE` identified as three banners |
 | Index demotion | 08-28 | `functions.md`/`entities.md` demoted to indexes; globals moved to `data-structures.md`; authority order documented in `README.md` |

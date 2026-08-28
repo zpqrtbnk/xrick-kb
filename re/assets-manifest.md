@@ -102,10 +102,7 @@ blob that no table references; those would need a linear sweep to find.
 
 ## Not extracted
 
-- **Music and sound.** The PSG sequence data and the three PCM samples are *located*
-  and their formats decoded (`algo-music.md`), but nothing has been rendered to audio.
-  Two of the three samples are also partly outside the RAM capture (see
-  `memory_map.md`).
+- ~~Music and sound~~ — ✅ **packaged as SNDH**, see below.
 - ~~Per-room level maps~~ — ✅ **DONE**, see below.
 - **Any frames not referenced by an animation table**, as noted above.
 
@@ -173,3 +170,68 @@ predicted from the raw byte stream. Both tile banks were checked in context (cav
 castle). The entity overlay is a further cross-check: markers land in open passages
 rather than inside solid rock, and the type 22/23 escape-timer triggers sit at a
 passage entrance and exit, which is where a timed challenge belongs.
+
+
+---
+
+## Audio — `assets/audio/rick_dangerous.sndh`
+
+Built by [`build_sndh.py`](build_sndh.py). **29 subtunes — every entry in
+`music_track_table`**, which covers music, sound effects and PCM samples alike, since
+all three go through `play_music` with a track index.
+
+This is not a re-synthesis. SNDH players (sc68, sndh-player, ZXTune) contain a 68000
+emulator, so the file carries the game's **original replay code** and runs it verbatim
+— including the digidrums, because `timer_a_music_isr` executes exactly as it does in
+the game. No emulator was written and no audio was rendered.
+
+### How it is built
+
+| Step | Detail |
+|---|---|
+| Lift | Bytes `0x44C10`–`0x5324F` (58,944) — the whole sound subsystem in one window |
+| Relocate | The replay code is position-dependent, so a hand-assembled stub copies the image back to `0x44C10` before calling anything |
+| Init | `reset_sound_chip` → **`setup_timer_a`** → `play_music(d0 = subtune − 1, d1 = 0)` |
+| Play | `music_tick`, called at 50 Hz (`TC50`) |
+| Exit | `reset_sound_chip` |
+
+**`setup_timer_a` in `init` is what makes PCM work.** Samples are driven by the MFP
+Timer-A interrupt, not the 50 Hz tick; omit that call and the tracked music still
+plays while every digidrum is silent.
+
+### Why the sound window is self-contained
+
+An audit of every global the engine touches: code `0x44C10`–`0x45720`, state and
+tables `0x44F08`–`0x46B66`, song data in `0x45720`–`0x48F15`, samples at `0x4DF86` /
+`0x4FCF2` / `0x50DA8`. Nothing below `0x44C10`, nothing in the graphics blob, no calls
+into game code. That containment is what makes the lift possible at all.
+
+### Track map
+
+| Subtunes | Type | Contents |
+|---|---|---|
+| 1–8, 28 | 0 | one-shot sound effects |
+| 10, 12–19, 21–27, 29 | 1 | retrigger-style tracked music |
+| 9, 11, 20 | 2 | **PCM samples** (`0x4DF86`, `0x4FCF2`, `0x50DA8`) |
+
+### Verification status
+
+**Structurally verified, playback untested** — there is no SNDH player in this
+environment. What *was* checked: every opcode encoding in the stub matches an
+identical instruction found elsewhere in the same binary; all three branch targets
+resolve correctly; the PC-relative `lea` lands exactly on the blob; the `dbf` loop
+returns to the copy instruction; the copy count covers the blob exactly; the blob is
+longword-aligned and its first bytes match the dump at `0x44C10`.
+
+### Known limitations
+
+1. **Two samples are incomplete.** Subtune 11's sample runs past the capture boundary
+   and subtune 20's lies entirely beyond it. The uncaptured tail is **zero-filled**, so
+   these fail as silence rather than as noise. A wider Hatari dump fixes both — swap
+   the blob and rebuild.
+2. **Copy-target collision.** If a player loads the file into `0x44C10`–`0x5324F` the
+   stub overwrites itself. sc68 and sndh-player normally load low with ≥512 KB
+   emulated, so this should be clear, but it is the most likely first failure.
+3. **Header tag conventions vary slightly between players.** If a player rejects the
+   file, the tags are the first thing to adjust; the entry points and code are the
+   part that has been verified.
