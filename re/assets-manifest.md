@@ -106,9 +106,7 @@ blob that no table references; those would need a linear sweep to find.
   and their formats decoded (`algo-music.md`), but nothing has been rendered to audio.
   Two of the three samples are also partly outside the RAM capture (see
   `memory_map.md`).
-- **Per-room level maps.** The tilemap *encoding* is decoded (`algo-level.md`) and the
-  blocks are extracted here, so rendering whole rooms is now straightforward — it just
-  hasn't been done.
+- ~~Per-room level maps~~ — ✅ **DONE**, see below.
 - **Any frames not referenced by an animation table**, as noted above.
 
 
@@ -153,3 +151,25 @@ So completing a level is pure pointer arithmetic:
 
 All loading happened **once**, before this snapshot's entry point, during the outer
 loader/HPack decompression stage described in `rick.md`.
+
+
+---
+
+## Room maps (`assets/rooms/`, produced by `render_rooms.py`)
+
+All **47 rooms** rendered, named `roomNN_L<level>_<name>.png`. Pass `--overlay` for a
+second set with entity spawn points marked (`_ents.png`, 462 placements).
+
+Every room is **8 blocks = 256 px wide**; heights range from 9 to 73 block-rows
+(288–2336 px). Room 8 is the tallest — a 2336 px vertical shaft at the end of level 0.
+
+Each room's block-index stream extent is the distance to the next room's `pTileMap` in
+address order; the last runs to `block_defs`.
+
+**This validated the tilemap decode end-to-end** — the one major format that had never
+been checked by rendering its output. Every room comes out as coherent level geometry,
+and room 0 opens with five block-rows of solid rock exactly as `algo-level.md`
+predicted from the raw byte stream. Both tile banks were checked in context (cave and
+castle). The entity overlay is a further cross-check: markers land in open passages
+rather than inside solid rock, and the type 22/23 escape-timer triggers sit at a
+passage entrance and exit, which is where a timed challenge belongs.

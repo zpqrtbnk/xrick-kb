@@ -21,9 +21,9 @@ identical behaviour*. Everything below is assessed against that bar.
 | Ghidra project / program | `ghidra.xrick` → `xrick`, single program `atari_ram.bin` |
 | Source artifact | Hatari RAM snapshot, 327,680 bytes (`0x00000`–`0x4FFFF`) |
 | Functions | **133**, all named; every non-trivial one transcribed |
-| Structs defined & applied | 9 |
+| Structs defined & applied | 9, plus typed arrays over all hard-bounded data regions |
 | Entity dispatch types | **74/74** characterised |
-| Knowledge base | 14 files in `re/`, ~6,300 lines, + 11 extracted PNGs |
+| Knowledge base | 15 files in `re/`, + 11 asset PNGs + 47 room maps |
 | Largest untyped region | `0x1B01E`–`0x44BED` (170,960 bytes) — the graphics blob |
 | Program bytes not captured | 12,880 (`0x50000`–`0x5324F`) — **stack + audio only, not code** |
 
@@ -145,7 +145,7 @@ Ordered by value. Nothing here blocks anything else except where noted.
 
 ### Tier 1 — unblocked, high value
 
-**T1. Render every room to PNG.** All prerequisites now exist: the tilemap encoding
+**T1. Render every room to PNG.** ✅ **DONE 2026-08-28** — All prerequisites now exist: the tilemap encoding
 (`algo-level.md`), block/tile graphics (`assets/`), and `RoomHeader[47]`. Produce one
 image per room (47 total), optionally with entity placements overlaid from
 `placement_table`. *Why it matters:* it end-to-end validates the tilemap decode — the
@@ -159,7 +159,7 @@ everything else has been seen or heard. *Effort:* medium — needs a small YM214
 emulation (tone/noise/envelope, 3 channels). *Caveat:* samples for tracks 10 and 19
 are truncated by the capture (Gap B), so expect two to cut short.
 
-**T3. Type the identified-but-untyped data regions in Ghidra.** Several regions are
+**T3. Type the identified-but-untyped data regions in Ghidra.** ✅ **DONE 2026-08-28** — Several regions are
 *known* but still raw bytes, so the database understates what we know:
 `note_period_table` `0x45720` (`word[84]`), the instrument table `0x46932` (stride 6),
 the arpeggio table `0x46B66`, the animation-frame tables `0x46B96`–`0x46D3A`, the two
@@ -244,6 +244,7 @@ work and are untouched by it; either document their role in `rick.md` or archive
 | **Transcription pass (6 forks)** | 08-28 | ~4,400 lines of exact pseudocode; **tilemap encoding** and **music opcodes** decoded; `Super()`, joystick input, row-major tilemap, AI modes, carry-flag returns all corrected |
 | String extraction | 08-28 | `re/strings.md`: 64 strings, font-validated encoding; intro-text gap explained; **ending text** found |
 | Slot-0 investigation | 08-28 | **No block-pushing mechanic exists** — slot 0 is the scripted crusher/boulder hazard, moved by `scripted_trap_update` via `A0`; confirmed by all 26 slot-0 placement records carrying types 24–73 |
+| Room rendering + data typing | 08-28 | All 47 rooms rendered (validates the tilemap decode end-to-end); hard-bounded data regions given array types and labels in Ghidra |
 | Asset extraction | 08-28 | 11 PNGs rendered and visually validated; sprite format found to be plane-major; font extent settled at 95 glyphs; `0x40FEE` identified as three banners |
 | Index demotion | 08-28 | `functions.md`/`entities.md` demoted to indexes; globals moved to `data-structures.md`; authority order documented in `README.md` |
 | KB review | 08-28 | Stale content purged; `sprite_type_dispatch` corrected to **74 entries**; `hide_entity` relocated to `0x4AC08`; `bullet_range_remaining` → `bullet_point_x/y`; `CheckpointState` axes fixed |
