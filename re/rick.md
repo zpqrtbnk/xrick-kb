@@ -46,7 +46,7 @@ Rick Dangerous on Chaos #43 is not the original Core Design release. It is a cra
 
 - **Entity/object system**: resolved. `sprite_list` is a fixed **13-slot** array
   (not open-ended), struct fully mapped (`re/data-structures.md`). Reserved slots:
-  `[0]`=solid block, `[1]`=player, `[2]`/`[3]`=bullet/dynamite, `[4..8]`/`[9..11]`=level
+  `[0]`=scripted moving hazard (crusher/boulder), `[1]`=player, `[2]`/`[3]`=bullet/dynamite, `[4..8]`/`[9..11]`=level
   entities, `[12]`=decorative sprite.
 - **Type dispatch table**: fully resolved. All **74 entries enumerated *and*
   behaviourally characterised** (`re/entities.md`): type 1 player, 2/3
@@ -64,12 +64,15 @@ Rick Dangerous on Chaos #43 is not the original Core Design release. It is a cra
   `0x01/0x02/0x04/0x08/0x80`. Control scheme is FIRE+direction: FIRE+L/R = stick jab,
   FIRE+UP = shoot, FIRE+DOWN = dynamite. Keyboard codes are used only for ESC, P and
   SPACE.
-- **Level loading**: cannot be resolved from this binary. Exhaustive search
-  found exactly one GEMDOS trap in the whole snapshot (`Super(0x5324C)`, supervisor
-  entry — not file I/O) — no
-  `Fopen`/`Fread`/`Fclose` anywhere. Loading either uses raw BIOS/XBIOS disk access
-  (unlocated) or happens before this snapshot's entry point. Don't re-attempt this
-  search without a different/earlier RAM capture.
+- **Level loading**: resolved — **there is none at runtime**. The whole program
+  contains exactly two traps (`Super`, `Setscreen`); no GEMDOS, BIOS or XBIOS
+  file/sector call exists anywhere, so the code cannot touch the disk. All four
+  levels are already resident: 47 room headers, every tilemap in one contiguous 8 KB
+  region, 523 placement records, five intro texts, and **only two tile banks** shared
+  pairwise (bank 0 = South America + Egypt, bank 1 = Castle + Missile Base).
+  Completing a level is pointer arithmetic through `level_start_info`. Loading
+  happened once, before this snapshot, in the outer loader stage. A reimplementation
+  needs no loader at all.
 - **HUD**: resolved, with a correction. There are only **3 counters** (not 4) —
   the old "lives, bullets, dynamite sticks, and one other (keys?)" guess was wrong.
   Now fully pinned down and renamed: `bLives`, `bBullets`, `bDynamite` (the
@@ -95,7 +98,7 @@ appendix in `reverse-plan.md`. **`reverse-plan.md` is now the authoritative gap
 register**; the summary below just orients you.
 
 The goal is a knowledge base sufficient to *mechanically re-code the game with
-identical behaviour*. Measured against that bar we are roughly **85%** there.
+identical behaviour*. Measured against that bar we are roughly **95%** there.
 
 **The code itself is fully reversed.** Every function is named and every non-trivial
 one is transcribed to exact pseudocode in `re/algo-*.md`. The tilemap encoding and
@@ -104,10 +107,11 @@ the music sequence opcodes — the last two undecoded formats — were closed by
 
 What remains:
 
-1. **Assets not extracted** *(deferred by decision)*. The 171 KB blob holds the
-   graphics, tilemaps and music data. Formats and anchor addresses are documented
-   (`re/data-structures.md`), but nothing has been exported or visually verified.
-   This is now the bulk of the remaining distance to a working reimplementation.
+1. **Audio is decoded but not rendered.** Graphics are done — extracted to
+   `re/assets/` and visually validated (`assets-manifest.md`). The PSG sequence data
+   and the three PCM samples have documented formats (`algo-music.md`) but have never
+   been synthesised to audio. Two of the three samples are also partly outside the
+   RAM capture.
 
 2. **The incomplete capture is no longer a blocker.** `0x50000`–`0x5324F` (12,880
    bytes) is missing, but a reachability analysis proved it contains **supervisor
@@ -115,9 +119,11 @@ What remains:
    stack grows down into it, and three sample tracks point there. A wider capture
    would recover two sound samples; nothing else. See `re/memory_map.md`.
 
-3. **A short list of behavioural details** wanting a live run — most notably the
-   **slot-0 block pushing logic**, which is read as solid everywhere but whose writer
-   no pass has located. Full list in `reverse-plan.md` Gap D.
+3. **A short list of behavioural details** wanting a live run — remaining
+   tile-attribute bits, the POOKY easter egg's full effect, and matching enemy sprite
+   variants to on-screen creatures. Full list in `reverse-plan.md` Gap D. (The
+   long-standing "slot-0 block pushing" question is closed: there is no pushing
+   mechanic — slot 0 is the scripted crusher/boulder hazard.)
 
 ## Do Not Do
 

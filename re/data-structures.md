@@ -339,8 +339,10 @@ left/right playfield edge. Links are bidirectional (each room lists its way back
 
 `pIntroText` identifies the previously-unexplained gap `0x4B8FE`–`0x4BE1F`: it is the
 **level intro/story text**, `0xFF`-terminated ASCII lines with `0xFE` ending the text.
-A 5th pointer (`0x4BD14`) follows the 4th entry, so a 5th entry may exist —
-unconfirmed.
+A **5th** pointer (`0x4BD14`) follows the 4th entry. Its target has been decoded and
+is the **game-ending text** ("...BARFIAN EMPIRE... WHAT WILL RICK DO NEXT ... ?"), not
+a 5th level — see `strings.md`. Whether the array is formally 5 entries or the 5th
+pointer is separate adjacent data is still unconfirmed, but the *content* is known.
 
 ### Effect callbacks (the formerly untraced A2 pointers)
 

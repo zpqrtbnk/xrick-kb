@@ -19,13 +19,9 @@ Source: `re/atari_ram.bin` — Hatari RAM snapshot, 327,680 bytes (first 320 KB 
 
 The snapshot cuts off at `0x4FFFF`. The game's text segment nominally ends at `0x53250`, just past the snapshot boundary; the last ~12 KB of the text segment is not captured.
 
-**Update (2026-08-27 pass)**: the last 8,314 bytes actually inside the snapshot,
-`0x4DF86`–`0x4FFFF`, were spot-checked and found to be mostly all-zero or
-byte-values clustering around `0x7B`–`0x89` — consistent with **8-bit PCM audio
-sample data**, not code, though this is unconfirmed (only spot-checked, not
-byte-diffed against a known sample format). `find_code_gaps` confirms no orphaned
-instructions there. Whether the missing ~12KB past `0x4FFFF` is more of the same
-kind of data or genuinely-missing code was not determined this pass.
+The in-snapshot tail `0x4DF86`–`0x4FFFF` (8,314 bytes) is **PCM sample data** —
+confirmed, not merely suspected: `music_track_table` track 8 points at `0x4DF86`
+exactly, and track 10 at `0x4FCF2`. See the resolution below.
 
 **✅ Resolved (2026-08-28 reachability analysis)**: the missing region is exactly
 **`0x50000`–`0x5324F` = 12,880 bytes** (`p_tbase 0x1B018` + `p_tlen 0x38238` =
@@ -123,43 +119,65 @@ The sprite object list is at `0x4A702` inside the game's text segment (within th
 
 ---
 
-## Level Loading — GEMDOS Search Result (2026-08-27 pass)
+## Level Loading — resolved: there is none at runtime
 
-`search_instructions(mnemonic=trap)` across the entire 320KB snapshot found only
-**two** TRAP instructions total: one `TRAP #14` (XBIOS, in `xbios_setscreen`) and
-exactly **one** `TRAP #1` (GEMDOS), at `0x4DC34` inside `main_init_and_loop`'s init
-sequence — which disassembles to **`Super(0x5324C)`** (GEMDOS 0x20, supervisor-mode
-entry with `0x5324C` as the supervisor stack pointer; earlier notes misread this as
-`Mshrink`, which is 0x4A), not file
-I/O. **There is no `Fopen`/`Fread`/`Fclose` anywhere in this captured image.** Either
-level/`.HNK` data is loaded via raw BIOS/XBIOS disk sector access (not located this
-pass), or loading happens entirely before this text segment's entry point, during the
-outer loader/decompression stage described in `rick.md` (which this snapshot does not
-capture). This closes out `rick.md`'s old step 4 as "answered: not resolvable from
-this binary" rather than leaving it as an open TODO.
+`search_instructions(mnemonic=trap)` across the entire snapshot finds only **two**
+TRAP instructions: one `TRAP #14` (XBIOS `Setscreen`) and one `TRAP #1` (GEMDOS),
+the latter at `0x4DC34` being **`Super(0x5324C)`** — supervisor-mode entry, with
+`0x5324C` as the supervisor stack pointer. (Earlier notes misread this as `Mshrink`,
+which is function `0x4A`.) There is no `Fopen`/`Fread`/`Fclose`, no BIOS `Rwabs` and
+no XBIOS `Floprd` anywhere: **the code cannot touch the disk at all.**
+
+That is not a gap — it is the answer. **All four levels are already resident**:
+
+- 47 `RoomHeader`s covering every level (entry rooms 0, 9, 20, 38)
+- every room tilemap, in one contiguous ~8 KB region (`0x2101E`–`0x22F76`)
+- 523 `PlacementRecord`s spanning all levels
+- five intro texts (four levels plus the ending) and all four level names
+- **only two tile banks**, shared pairwise: bank 0 (`0x1D01E`) serves South America
+  and Egypt, bank 1 (`0x1F01E`) serves the Castle and Missile Base
+
+Completing a level is pure pointer arithmetic: `process_level_transition_point` sees
+`pNextRoomHeader == -1`, bumps `level_index`, and `start_level` reads the next entry
+room from `level_start_info`. No I/O, no decompression, no load pause.
+
+All loading happened **once**, before this snapshot's entry point, during the outer
+loader/HPack decompression stage described in `rick.md`. **A reimplementation needs
+no loader at all** — just the resident tables.
 
 ---
 
 ## The 171KB Undefined Data Region (0x1B01E–0x44BED)
 
-Coarse-mapped (not exhaustively) in the 2026-08-27 pass. See `re/data-structures.md`
-for the font table. Key findings:
+**Now largely mapped** (asset-extraction pass, 2026-08-28). Every region below was
+confirmed by decoding it and looking at the result — see `re/assets-manifest.md`.
 
-- **Font table** confirmed at `0x1B01E`, 32 bytes/glyph, first 32 glyphs typed. True
-  glyph count still unconfirmed.
-- **`0x23FEE`**: the static title-screen bitmap (32768 bytes), confirmed via
-  `draw_title_picture`'s only caller (`attract_mode_loop`).
-- **`0x22FEE`**: tile-graphics table (16 bytes/tile, 4 de-interleaved bitplane
-  longword arrays), confirmed via `decode_level_tiles_to_cache`.
-- **`0x40FEE`**: a title/menu bitmap image, confirmed via `enter_highscore_name`'s
-  full-screen blit call.
-- Roughly `0x1D800`–`0x33800`: dense non-zero planar-bitmap-looking data
-  interspersed with zero stretches — not uniform, likely alternating sprite/tile
-  sheets and padding. Hypothesized (not confirmed) correspondence to the DOS
-  version's `RCH#SET.DAT` sprite-sheet files in `attempt.0/rd2/`.
-- Roughly `0x33800`–`0x44BED`: mostly all-zero — consistent with an unpopulated
-  level/graphics buffer at snapshot time (can't distinguish "not yet loaded" from
-  "genuinely unused" from a single static snapshot).
+| Range | Size | Contents |
+|---|---|---|
+| `0x1B01E`–`0x1BBFD` | 3,040 | **Font**: 95 glyphs × 32 bytes (8×8, 4 planes, byte-per-plane) |
+| `0x1BBFE`–`0x1D01D` | ~5 KB | Not identified |
+| `0x1D01E`–`0x1F01D` | 8,192 | **Tile bank 0**: 256 × 32-byte tiles — levels 0–1 |
+| `0x1F01E`–`0x2101D` | 8,192 | **Tile bank 1**: 256 × 32-byte tiles — levels 2–3 |
+| `0x2101E`–`0x22FED` | ~8 KB | **Room tilemaps**, all 47 rooms, contiguous |
+| `0x22FEE`–`0x23FED` | 4,096 | **Block definitions**: 256 × 16 bytes (4×4 tile indices) |
+| `0x23FEE`–`0x2BB2D` | 32,000 | **Title screen** (320×200, standard ST screen format) |
+| ~`0x2C000`–`0x34000` | ~32 KB | **Sprite frames**, `0x150` bytes each, plane-major |
+| `0x34000`–`0x40FED` | ~52 KB | Largely zero — see note below |
+| `0x40FEE`–`0x44BED` | 15,360 | **Three 320×32 banners** (5120 bytes each) |
+
+The banner block ends at exactly `0x44BEE`, which is the first byte of code
+(`blit_image_5120`) — a hard boundary confirming there are exactly three banners.
+
+**About the zero regions:** an earlier pass could not tell "not yet loaded" from
+"genuinely unused". That is now settled — since the program performs **no disk I/O at
+all** and every level's data is already resident, nothing is waiting to be loaded.
+The zero stretches are padding or runtime scratch, not unfilled asset buffers.
+
+⚠️ Two earlier entries here were wrong and are corrected above: `0x22FEE` is the
+**block-definition** table (16 bytes = a 4×4 grid of tile *indices*), not tile
+graphics — the tile bitmaps live at `0x1D01E`/`0x1F01E` at 32 bytes each; and
+`0x40FEE` is banner artwork, not a full-screen bitmap.
+
 - No embedded code found anywhere in this range (`find_code_gaps` confirms no
   orphaned instructions; spot-checks found nothing that looked like 68000 opcodes).
 

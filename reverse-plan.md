@@ -45,10 +45,9 @@ alone:
 - HUD, score, lives, per-room checkpointing, game-over/respawn, attract mode
 - All in-game text and the font/character encoding
 
-**What is not yet in `re/`: the asset bytes.** Graphics, tilemaps and music data are
-located and their formats documented, but nothing has been extracted or visually
-validated. That is the bulk of the remaining distance to a working reimplementation,
-and it is **deferred by decision**.
+**Graphics are extracted and visually validated** (`re/assets/`, 11 PNGs;
+`assets-manifest.md`). **Audio is decoded but not rendered** — the PSG sequences and
+three PCM samples have documented formats but have never been synthesised.
 
 **Verdict: ~95% of a reimplementation spec.** Code fully reversed; graphics extracted
 and visually validated. What remains is audio rendering, room-map rendering (both

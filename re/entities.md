@@ -76,36 +76,20 @@ and frame tables: [`algo-entities.md`](algo-entities.md).**
 (scanned by `entity_touches_hazard_or_block`) · `[9..11]` more level entities ·
 `[12]` decorative sprite (type 70).
 
-## What's still open (next-pass priorities)
+## What's still open
 
-1. ~~**Level object-placement record format**~~ — ✅ **DONE (placement-format pass,
-   2026-08-27)**: `PlacementRecord` (6 bytes), `RoomHeader` (14 bytes),
-   `TransitionWaypoint` (10 bytes) all decoded, typed in Ghidra, and validated
-   against raw table bytes — see `re/data-structures.md` "Level Data Structures".
-   The A2 effect callbacks are also resolved (they come from `lea` loads in the
-   type wrappers, not from the placement record): types 16/17 = dynamite/ammo
-   refill crates, types 22/23 = escape-timer start / stop-and-bank-bonus.
-   Also resolved: the "523×6-byte mystery table" at `0x481E4` IS the master
-   placement table (`revive_all_placements`, ex `reset_block_hit_flags`, clears
-   its DEAD bits at new game), slot-0 blocks spawn from placement flag bit 1, and
-   `0x4B586` is the **level index** (4 levels), not a lives/attempt counter.
-2. ~~**The 16-byte object-type-definition table at `0x47D34`**~~ — ✅ **DONE
-   (type-table pass, 2026-08-28)**: typed as `ObjectTypeDef[75]` (entry count is a
-   hard fit — it ends exactly at `placement_table`). Indexed by *raw* type, not
-   `type−1`. Bonus finding: the field previously called `wTypeFlags` is really a
-   **sound track id**, with bit 7 = "replay at end of animation" — renamed
-   `wTriggerSound` in both `ObjectTypeDef` and `SpriteEntity`. Table contents
-   independently corroborate the handler analysis (enemies carry no anim/path
-   tables because `enemy_ai_update` hardcodes them; trigger zones have a 0×0
-   hitbox with a 32×32 trigger box). The former caveat about entries 71–73 having no
-   handler is **resolved**: the dispatch table is 74 entries, so they map to
-   `scripted_trap_update` like the rest of the 24–73 range.
-3. **Slot-0 block behavior** — spawning is now understood (placement flag bit 1);
-   how the block *moves* (pushing logic, presumably in `player_controller`) is not.
-4. **Tile-attribute bit map** — bits 0x40/0x10/0x80/0x04/0x02 are known; the
-   remaining bits of the `tile_attr_table_ptr` LUT entries are not.
-5. **`LevelStartInfo.wParam/pData1/pData2`** — per-level values captured, meaning
-   unconfirmed (likely intro config / level story text).
-6. Dynamic verification (needs Hatari): trigger-bit semantics in live play, the
-   `player_touched_hazard` consumer site, and which visual variant maps to which
-   on-screen enemy per level.
+The placement-record format, the object-type table, the dispatch-table extent and the
+slot-0 question have all been resolved — see `reverse-plan.md`'s appendix for that
+history rather than keeping strikethroughs here. Genuinely open:
+
+1. **Tile-attribute bits beyond the known set.** Known: `0x02` ladder, `0x04` lethal,
+   `0x10` one-way, `0x20` landable floor, `0x40` solid, `0x80` ladder-top
+   (blocked = `& 0xD0`). The remaining bits of the 256-byte LUT, and the `0x6F`
+   intermediate mask used inside the probe routines, are not accounted for.
+2. **Which visual enemy variant maps to which on-screen creature per level.** The
+   four sprite banks and three AI modes are known; matching them to what the player
+   actually sees needs a live run or a per-level placement survey.
+3. **Trigger-bit semantics in live play** — the bit meanings are read off the code
+   with confidence, but no bit has been observed firing in a running game.
+4. `ObjectTypeDef` entries with no placement record referencing them — unused content
+   versus types only reachable via paths not yet traced.

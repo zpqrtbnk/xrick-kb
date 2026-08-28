@@ -177,9 +177,10 @@ Addresses are Atari ST physical addresses = offsets into `atari_ram.bin`.
 - **Memory map, hardware registers, capture limits**: [`memory_map.md`](memory_map.md)
 - **Open questions and plan**: [`../reverse-plan.md`](../reverse-plan.md)
 
-## Level loading — unresolved
+## Level loading — resolved: there is none
 
-The only `TRAP #1` in the program is `Super(0x5324C)`; there is no `Fopen`/`Fread`/
-`Fclose` anywhere. All level data is already resident in the snapshot, so a
-reimplementation likely does not need this at all. Details in `memory_map.md`.
-**Do not re-run the GEMDOS search** — the answer is "absent", not "not yet found".
+The program contains exactly two traps (`Super`, `Setscreen`) and no file or sector
+call of any kind, so it cannot touch the disk. All four levels are already resident,
+sharing just two tile banks. A reimplementation needs no loader. Details in
+`memory_map.md`. **Do not re-run the GEMDOS search** — the answer is "absent", not
+"not yet found".
