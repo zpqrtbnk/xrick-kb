@@ -95,11 +95,15 @@ available, so this is now straightforward).
 
 → A wider Hatari capture would recover two sound samples. Not on the critical path.
 
-### C. Level loading
-Unresolved and possibly moot. The only GEMDOS trap is `Super()`; there is no file
-I/O in the snapshot. Either raw BIOS/XBIOS sector access (never searched for) or it
-happened before the snapshot. All level data is already resident, so a
-reimplementation may not need this at all.
+### C. Level loading — moot, and now demonstrably so
+There is no runtime disk access: the whole program contains exactly two traps
+(`Super`, `Setscreen`) — no GEMDOS, BIOS or XBIOS file/sector call anywhere.
+**All four levels are fully resident**: 47 room headers, all tilemaps in one
+contiguous 8 KB region, 523 placement records, five intro texts, and — crucially —
+**only two tile banks**, shared pairwise (bank 0 = South America + Egypt, bank 1 =
+Castle + Missile Base). Level completion is pure pointer arithmetic through
+`level_start_info`. Loading happened once, before this snapshot, in the outer
+loader stage. A reimplementation needs no loader at all.
 
 ### D. Behavioural details wanting a live run
 - The `"POOKY9999"` easter egg's full effect (flag `0x498C4` is set in

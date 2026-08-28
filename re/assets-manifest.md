@@ -53,10 +53,10 @@ right 8 px blank).
 |---|---|---|---|
 | `palette.png` | 256×16 | `0x4DEE2` | The 16 colours as swatches |
 | `font.png` | 95 glyphs | `0x1B01E` | See "Font" below |
-| `tiles_bank0.png` | 256 × 8×8 | `0x1D01E` | Tile bank 0 |
-| `tiles_bank1.png` | 256 × 8×8 | `0x1F01E` | Tile bank 1 |
-| `blocks_bank0.png` | 256 × 32×32 | `0x22FEE` + bank 0 | Blocks assembled from 4×4 tile grids |
-| `blocks_bank1.png` | 256 × 32×32 | `0x22FEE` + bank 1 | Same definitions, bank-1 tiles |
+| `tiles_bank0.png` | 256 × 8×8 | `0x1D01E` | Tile bank 0 — **levels 0–1** (South America, Egypt) |
+| `tiles_bank1.png` | 256 × 8×8 | `0x1F01E` | Tile bank 1 — **levels 2–3** (Castle, Missile Base) |
+| `blocks_bank0.png` | 256 × 32×32 | `0x22FEE` + bank 0 | Blocks assembled from 4×4 tile grids — stone/temple |
+| `blocks_bank1.png` | 256 × 32×32 | `0x22FEE` + bank 1 | Same definitions, bank-1 tiles — castle/industrial |
 | `sprites.png` | 124 × 32×21 | animation tables | All frames reachable from `ObjectTypeDef` + the hard-coded player/enemy/projectile tables |
 | `title.png` | 320×200 | `0x23FEE` | The title screen |
 | `banner_congratulations.png` | 320×32 | `0x40FEE` | "CONGRATULATIONS!" |
@@ -110,3 +110,46 @@ blob that no table references; those would need a linear sweep to find.
   blocks are extracted here, so rendering whole rooms is now straightforward — it just
   hasn't been done.
 - **Any frames not referenced by an animation table**, as noted above.
+
+
+---
+
+## The whole game is resident — nothing is loaded from disk during play
+
+A natural question on seeing the tile sheets is whether only level 1's graphics are in
+the snapshot, with the rest streamed from disk as the player progresses. **They are
+not.** Everything for all four levels is already in memory:
+
+| Data | Extent | Covers |
+|---|---|---|
+| `room_headers` | 47 entries, `0x47620`–`0x478B1` | all 4 levels (entry rooms 0, 9, 20, 38) |
+| Tilemaps | `0x2101E`–`0x22F76`, contiguous | all 47 rooms |
+| `placement_table` | 523 records | all 4 levels |
+| Tile graphics | **only 2 banks** | shared pairwise across the 4 levels |
+| Intro texts | 5 (4 levels + ending) | all |
+| Level names | 4 | all |
+
+**There are only two tilesets in the entire game**, selected by
+`RoomHeader.wTileBankVariant`:
+
+| Bank | Address | Levels | Character |
+|---|---|---|---|
+| 0 | `0x1D01E` | 0 South America, 1 Egypt | ancient stone: temple blocks, ladders, carved faces, torches |
+| 1 | `0x1F01E` | 2 Schwarzendumpf Castle, 3 Missile Base | castle stone and barred windows, then pipes, rockets, hazard stripes, grating |
+
+Pairing the levels this way is what makes two banks sufficient — the two "ancient"
+levels share an art style, as do the two "modern" ones.
+
+**The decisive evidence that no disk access occurs**: the entire 133-function program
+contains exactly **two** trap instructions — one `TRAP #1` (`Super`) and one
+`TRAP #14` (`Setscreen`). There is no GEMDOS `Fopen`/`Fread`, no BIOS `Rwabs`, no
+XBIOS `Floprd` anywhere. The code physically cannot touch the disk.
+
+So completing a level is pure pointer arithmetic:
+`process_level_transition_point` sees a `TransitionWaypoint` with
+`pNextRoomHeader == -1`, increments `level_index`, and calls `start_level`, which reads
+`level_start_info[level_index]` for the next entry room and hands off to
+`init_screen_pointers` → `render_new_screen`. No I/O, no decompression, no waiting.
+
+All loading happened **once**, before this snapshot's entry point, during the outer
+loader/HPack decompression stage described in `rick.md`.
