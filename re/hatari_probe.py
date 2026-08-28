@@ -1,24 +1,25 @@
 #!/usr/bin/env python3
 """
-Rick Dangerous (Atari ST) — Hatari dynamic-verification driver.
+Rick Dangerous (Atari ST) — Hatari dynamic-verification harness.
 
-Run from WSL. See re/hatari.md for the architecture; the short version is that
-hconsole binds a Unix socket, Hatari connects back to it, commands go OUT over the
-socket and results come BACK via the debugger log file.
+Run from WSL.  See re/hatari.md for the architecture.  In short: hconsole binds a Unix
+socket, Hatari connects back to it, commands go OUT over the socket, and results come
+BACK only via the debugger log file.
 
-Boot sequence for disks/rd.st (a Fuzion cracktro compilation, not a bare game disk):
+    python3 re/hatari_probe.py <probe> [args...]
 
-    cracktro menu   F1 CHASE HQ / F2 RICK / F3 SUPER SPRINT / F4 QUARTZ
-    trainer prompt  "TRAINER (Y/N) ?"  -> ALWAYS answer N
+Probes are registered in PROBES at the bottom.  Every probe gets a booted, rebased
+machine: the harness drives the cracktro menu, declines the trainer, dumps RAM and
+measures the relocation delta before the probe body runs.
 
-Answering Y patches the game code (infinite lives etc.), which would invalidate every
-comparison against the transcriptions in algo-*.md. N is not optional for this work.
+Two invariants, both learned the hard way (re/hatari.md §3, §4):
 
-Pass 0 (this file): boot to the title screen, dump RAM, and measure the relocation
-delta. The delta is NOT stable across boots -- it must be re-measured every session
-and applied to every address before use.
-
-    python3 re/hatari_probe.py [disk] [play_seconds]
+  * The trainer must always be declined -- it patches game code, which would
+    invalidate any comparison against algo-*.md.
+  * The relocation delta is deterministic per boot STAGE, but the game relocates
+    0x178 bytes between the trainer prompt and the title screen.  A breakpoint armed
+    before a stage transition is silently stale afterwards.  Measure at the stage the
+    probe runs in, re-measure after any transition, and never hardcode.
 """
 
 import sys, os, time, struct
@@ -31,24 +32,33 @@ TOS  = "/mnt/d/d/reverse/atari/emutos-512k-1.4/etos512us.img"
 OUT  = os.path.join(REPO, "re", "hatari")
 os.makedirs(OUT, exist_ok=True)
 
-disk = sys.argv[1] if len(sys.argv) > 1 else "disks/rd.st"
-wait = float(sys.argv[2]) if len(sys.argv) > 2 else 25.0
-
-MENU_WAIT = 14.0
-MENU_KEY  = "0x3c"            # F2 = RICK  (Atari F1..F4 = 0x3B..0x3E)
+# --- boot chain timings (disks/rd.st is a Fuzion cracktro, not a bare game disk) ---
+MENU_WAIT    = 14.0
+MENU_KEY     = "0x3c"          # F2 = RICK   (Atari F1..F4 = 0x3B..0x3E)
 TRAINER_WAIT = 12.0
+TITLE_WAIT   = 20.0
 
 # reset_sound_chip pokes the PSG through absolute hardware addresses, so its byte
-# pattern does not relocate -- a position-independent anchor. Kept in sync with
-# build_sndh.py's find_delta(), which is the canonical implementation.
+# pattern does not relocate -- a position-independent anchor.  build_sndh.py's
+# find_delta() is the canonical implementation; this mirrors it.
 ANCHOR     = bytes.fromhex("13fc0007ffff88000039003fffff8802")
-REF_RESET  = 0x44C10          # reset_sound_chip,     atari_ram.bin numbering
-REF_TRACKS = 0x44F08          # music_track_table
+REF_RESET  = 0x44C10           # reset_sound_chip,  atari_ram.bin numbering
+REF_TRACKS = 0x44F08           # music_track_table
 N_TRACKS   = 29
+
+# Reference addresses used by probes, all in atari_ram.bin numbering.
+REF = {
+    "reset_sound_chip": 0x44C10,
+    "play_music":       0x44CCE,
+    "music_tick":       0x44E0C,
+    "setup_timer_a":    0x45006,
+    "silence_channels": 0x45528,
+    "music_tracks":     0x44F08,
+}
 
 
 def measure_delta(path):
-    """Return the relocation delta of this dump vs atari_ram.bin numbering."""
+    """Relocation delta of this dump vs atari_ram.bin numbering, with a self-check."""
     D = open(path, "rb").read()
     hits, i = [], 0
     while True:
@@ -66,46 +76,146 @@ def measure_delta(path):
     return delta, "track-table self-check PASS"
 
 
-dbglog = os.path.join(OUT, "dbg.log")
-ram    = os.path.join(OUT, "ram-boot.bin")
-for f in (dbglog, ram):
-    if os.path.exists(f):
-        os.unlink(f)
+class Session:
+    """A booted, rebased Hatari running the game."""
 
-args = ["--tos", TOS,
-        "--machine", "st", "--memsize", "1",   # matches hatari.sh and the 1 MB dump
-        "--sound", "off",
-        "--fast-forward", "on",
-        "--log-file", os.path.join(OUT, "hatari.log"),
-        os.path.join(REPO, disk)]
+    def __init__(self, disk="disks/rd.st", extra_args=None, auto=True):
+        self.log = os.path.join(OUT, "dbg.log")
+        self.ram = os.path.join(OUT, "ram-boot.bin")
+        for f in (self.log, self.ram):
+            if os.path.exists(f):
+                os.unlink(f)
 
-print(f"booting {disk} ...")
-h = hconsole.Hatari(args)
-h.debug_command(f"logfile {dbglog}")
+        args = ["--tos", TOS,
+                "--machine", "st", "--memsize", "1",
+                "--sound", "off",
+                "--fast-forward", "on",
+                "--log-file", os.path.join(OUT, "hatari.log"),
+                os.path.join(REPO, disk)]
+        if extra_args:
+            args = extra_args + args
 
-time.sleep(MENU_WAIT)
-print(f"cracktro menu -> F2 (RICK), scancode {MENU_KEY}")
-h.insert_event(f"keypress {MENU_KEY}")
+        print(f"[boot] {disk}")
+        self.h = hconsole.Hatari(args)
+        self.cmd(f"logfile {self.log}")
+        self.delta = None
+        if auto:
+            self.to_title()
 
-time.sleep(TRAINER_WAIT)
-print('trainer prompt -> N (never Y: it patches the code)')
-h.send_string("n")
+    # -- boot stages (separable, so a probe can sample between them) -------------
+    def to_menu(self):
+        time.sleep(MENU_WAIT)
 
-time.sleep(wait)
-h.debug_command(f"savebin {ram} 0 0x100000")
-time.sleep(4)
-h.trigger_shortcut("screenshot")
-time.sleep(1)
-h.kill_hatari()
-time.sleep(1)
+    def select_game(self):
+        print("[boot] cracktro menu -> F2 (RICK)")
+        self.h.insert_event(f"keypress {MENU_KEY}")
+        time.sleep(TRAINER_WAIT)
 
-if os.path.exists(ram):
-    print(f"\nRAM dump: {os.path.getsize(ram):,} bytes -> {ram}")
-    delta, note = measure_delta(ram)
-    if delta is None:
-        print(f"RELOCATION: FAILED -- {note}")
-    else:
-        print(f"RELOCATION DELTA = {delta:+#x} ({delta:+d})   {note}")
-        print(f"  a documented address A is live at A {delta:+#x}")
-else:
-    print("\nNO RAM DUMP produced.")
+    def answer_trainer(self):
+        print("[boot] trainer prompt -> N (never Y: it patches the code)")
+        self.h.send_string("n")
+        time.sleep(TITLE_WAIT)
+
+    def to_title(self):
+        self.to_menu(); self.select_game(); self.answer_trainer()
+        self.delta = self.rebase()
+
+    # -- plumbing ---------------------------------------------------------------
+    def cmd(self, c):
+        self.h.debug_command(c)
+
+    def dump_ram(self, path=None):
+        path = path or self.ram
+        self.cmd(f"savebin {path} 0 0x100000")
+        time.sleep(4)
+        return path
+
+    def rebase(self, tag=""):
+        self.dump_ram()
+        delta, note = measure_delta(self.ram)
+        if delta is None:
+            print(f"[rebase] {tag} FAILED -- {note}")
+            return None
+        print(f"[rebase] {tag} delta = {delta:+#x} ({delta:+d})   {note}")
+        return delta
+
+    def addr(self, name):
+        """A documented address, rebased into this session's live layout."""
+        return REF[name] + self.delta
+
+    def shot(self, tag=""):
+        self.h.trigger_shortcut("screenshot")
+        time.sleep(1)
+        print(f"[shot] screenshot taken {tag}")
+
+    def finish(self, tail=6000):
+        try:
+            self.h.kill_hatari()
+        except Exception:
+            pass
+        time.sleep(1)
+        if os.path.exists(self.log):
+            print(f"\n===== {self.log} (tail) =====")
+            print(open(self.log, errors="replace").read()[-tail:])
+        else:
+            print("(no debugger log produced)")
+
+
+# ================================ probes ====================================
+
+def probe_syntax(s):
+    """Capture this build's exact debugger syntax, and prove breakpoints fire."""
+    for c in ["help", "help b", "help breakpoint", "help trace", "help memdump",
+              "help memwrite", "help evaluate", "help info", "help history"]:
+        s.cmd(c)
+        time.sleep(0.3)
+
+    # music_tick runs at 50 Hz, so a working breakpoint must accumulate hits fast.
+    tick = s.addr("music_tick")
+    print(f"[syntax] arming trace breakpoint on music_tick @ {tick:#x}")
+    s.cmd(f"b pc = ${tick:x} :trace")
+    time.sleep(3)
+    s.cmd("b")                      # list breakpoints + hit counts
+    time.sleep(1)
+
+
+def probe_boot(s):
+    """Just boot, rebase and screenshot -- the smoke test."""
+    s.shot("(title screen)")
+
+
+def probe_relocation(s):
+    """Is the relocation delta stable? Sample it at every boot stage.
+
+    An earlier reading suggested the delta varied between boots, but those two
+    samples were taken at DIFFERENT stages. This separates the two hypotheses:
+    stage-dependent relocation vs. genuinely non-deterministic loading.
+    """
+    s.to_menu()
+    s.select_game()
+    print(f"[stage] trainer prompt: {s.rebase('trainer-prompt')}")
+    s.answer_trainer()
+    print(f"[stage] title: {s.rebase('title')}")
+    time.sleep(20)
+    print(f"[stage] title+20s (attract?): {s.rebase('title+20s')}")
+    s.shot("(after attract wait)")
+
+
+PROBES = {
+    "boot":       probe_boot,
+    "syntax":     probe_syntax,
+    "relocation": probe_relocation,
+}
+
+# Probes that drive the boot themselves rather than starting from the title screen.
+MANUAL_BOOT = {"relocation"}
+
+if __name__ == "__main__":
+    name = sys.argv[1] if len(sys.argv) > 1 else "boot"
+    if name not in PROBES:
+        sys.exit(f"unknown probe {name!r}; known: {', '.join(sorted(PROBES))}")
+    sess = Session(auto=(name not in MANUAL_BOOT))
+    try:
+        PROBES[name](sess)
+    finally:
+        sess.finish()

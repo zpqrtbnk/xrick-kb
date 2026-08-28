@@ -102,20 +102,31 @@ Rick Dangerous is a GEMDOS program, so TOS chooses its load address; a different
 version or RAM size relocates the entire image and every documented address becomes
 wrong by a constant.
 
-**Measured result: the delta is real, and it is not stable across boots.**
+**Measured result: the delta is deterministic per boot *stage*, but the game
+relocates during startup.**
 
-Two runs of the *identical* command, same disk and same config, produced:
+Sampled across four boots (probe `relocation`):
 
-| Run | Delta vs `atari_ram.bin` |
-|---|---|
-| 1 (stopped at the trainer prompt) | `-0x70FE` |
-| 2 (through to the title screen) | `-0x7276` |
+| Stage | Delta vs `atari_ram.bin` | Reproducible |
+|---|---|---|
+| trainer prompt | `-0x70FE` | yes, every boot |
+| title screen | `-0x7276` | yes, every boot |
+| title + 20 s (attract) | `-0x7276` | unchanged |
 
-A 0x178-byte difference between otherwise identical boots. The cracktro loader does
-not place the game deterministically, so **the delta can never be hardcoded, cached,
-or carried between sessions.** Every probe run must measure it first and rebase every
-address before use. `hatari_probe.py` does this automatically and refuses to report a
-delta that fails its self-check.
+The game **moves 0x178 bytes between the trainer prompt and the title screen** — the
+cracktro loader evidently discards or compacts something once the Y/N answer is in.
+Loading itself is deterministic; an earlier reading of "unstable across boots" was a
+misdiagnosis, comparing two samples taken at *different stages*.
+
+The practical hazard is therefore sharper than mere nondeterminism would be:
+
+> **A breakpoint armed at one boot stage is silently stale after the next stage
+> transition.** It does not error — it just points 376 bytes into the wrong code.
+
+So: measure at the stage where the probe will actually run, re-measure after any
+stage transition, and never hardcode. `hatari_probe.py` measures automatically and
+refuses to report a delta that fails its self-check. Whether gameplay entry triggers a
+further relocation is **not yet tested** — assume it might until shown otherwise.
 
 The measurement anchors on `reset_sound_chip`'s absolute PSG pokes — position-
 independent by construction — and validates the candidate against the music track
@@ -193,3 +204,10 @@ prompt, and that the trainer must be declined. Automated the boot chain in
 - **Never hardcode the relocation delta** — see §4. Measure, self-check, then rebase.
 - The `screenshot` shortcut writes `grabNNNN.png` into Hatari's working directory, not
   into `re/hatari/`. Dumps and screenshots are gitignored (large, regenerable).
+- **Collect results from stdout, not the debugger `logfile`.** Despite `logfile`
+  reporting the file opened, breakpoint/trace output arrived on Hatari's stdout and
+  the log file was empty at kill (buffered and lost). Run probes with stdout captured:
+  `python3 re/hatari_probe.py <probe> 2>&1 | tee run.log`.
+- `--fast-forward on` runs roughly **48x realtime** (measured: 7,331 `music_tick` hits
+  in ~3 wall-clock seconds against a 50 Hz tick). Turn it off for any probe where
+  emulated timing matters.
