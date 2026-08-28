@@ -100,8 +100,6 @@ a few plausible strides. Both extend `extract_assets.py` by a few lines.
   mis-disassembled as code. *Strategy:* clear the flow, or leave; harmless.
 - `analyze_function_completeness` / `analyze_global_completeness` have never been run.
   *Strategy:* run once to replace the estimated coverage figure with a measured one.
-- `attempt.0/`, `attempt.1/`, `disks/` predate this work and are untouched by it.
-  *Strategy:* a paragraph in `rick.md` explaining their role, or archive them.
 
 ---
 
@@ -115,6 +113,7 @@ a few plausible strides. Both extend `extract_assets.py` by a few lines.
 | Missing 12,880 bytes | Recovered via `atari_ram_1M.bin`; was stack + PCM, never code. |
 | Re-basing onto the 1 MB dump | **No.** `atari_ram.bin` numbering stays authoritative; convert with `1M_address = doc_address − 0x2054`. `build_sndh.py` bridges the two automatically. |
 | Pixel-diffing rooms vs Hatari | **No.** The user validates renders visually and has confirmed them correct. |
+| `attempt.0/`, `attempt.1/`, `disks/` | **Stay exactly where they are.** Earlier-phase material, deliberately kept in place. Do not move, archive or reorganise. |
 | `ghidra.xrick2` | Permanently out of scope. |
 
 ---
