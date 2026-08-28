@@ -208,11 +208,36 @@ into game code. That containment is what makes the lift possible at all.
 
 ### Track map
 
-| Subtunes | Type | Contents |
-|---|---|---|
-| 1–8, 28 | 0 | one-shot sound effects |
-| 10, 12–19, 21–27, 29 | 1 | retrigger-style tracked music |
-| 9, 11, 20 | 2 | **PCM samples** (`0x4DF86`, `0x4FCF2`, `0x50DA8`) |
+Recovered by scanning every `jsr play_music` call site for the literal track number
+loaded into `D0` beforehand, then attributing it to the enclosing function. Subtune =
+track + 1 (SNDH subtunes are 1-based).
+
+| Subtune | Track | Type | Triggered by | Sound |
+|---|---|---|---|---|
+| 9 | 8 | **PCM** `0x4DF86` | `player_controller` (fire path, after decrementing `bBullets`) | **gunshot** — *intact* |
+| 10 | 9 | 1 | `player_controller` (fire path when `bBullets == 0`); `player_dynamite_update` fuse | out-of-ammo click / fuse tick |
+| 11 | 10 | **PCM** `0x4FCF2` | `player_dynamite_update`; `destructible_pickup_update` | **explosion** — *runs past the capture* |
+| 12 | 11 | 1 | `player_controller` | — |
+| 13, 14 | 12, 13 | 1 | `player_select_anim_frame` | footstep / climb cues |
+| 15, 16 | 14, 15 | 1 | `player_controller` | jump / land cues |
+| 17 | 16 | 1 | `destructible_pickup_update` | crate collected (refill) |
+| 18 | 17 | 1 | `treasure_pickup_update` | treasure pickup |
+| 19 | 18 | 1 | `effect_start_escape_timer` | escape-timer music |
+| **20** | **19** | **PCM** `0x50DA8` | **`kill_player`** and `kill_enemy` | **the death "waaaaa"** — *entirely uncaptured* |
+
+Remaining subtunes (1–8, 21–29) have no literal call site in the code — they are
+selected indirectly or are level/menu music.
+
+Two details worth noting. `kill_player` passes `D1 = 1` and `kill_enemy` passes
+`D1 = 0`, but `play_music`'s type-2 branch ignores `D1` entirely, so **Rick's death and
+an enemy's death play the same digitised sample**. And all three PCM samples turn out
+to be the game's three "punchy" effects — gunshot, explosion, death — which is exactly
+what a 1989 ST title would spend its sample budget on.
+
+⚠️ **The death sound is the one asset we do not have.** Track 19's sample lives at
+`0x50DA8`, entirely inside the uncaptured `0x50000`–`0x5324F` region, so **subtune 20
+plays silence**. The explosion (subtune 11) is partially truncated. Only the gunshot
+is complete. A wider Hatari dump fixes both — rebuild and the samples appear.
 
 ### Verification status
 

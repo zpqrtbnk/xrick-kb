@@ -172,7 +172,11 @@ which enemy sprite variant is which creature per level; trigger-bit behaviour in
 play; the landing-rebound `nVelY = 0xFE - nVelY`; the four name-entry control glyphs.
 
 **T5. Wider memory capture.** `savebin` over `0x1B018`–`0x53250` (or a full 1 MB dump)
-to recover the two truncated PCM samples. Only worth doing alongside T2/T4.
+to recover the two incomplete PCM samples. **Now higher value than it looked:** the
+sound map shows the missing sample at `0x50DA8` is the **death "waaaaa"**, played by
+both `kill_player` and `kill_enemy` — the game's most recognisable sound effect, and
+currently silent in the SNDH. The partially-truncated one at `0x4FCF2` is the
+explosion. Only the gunshot is intact.
 
 ### Tier 3 — completeness, low urgency
 
