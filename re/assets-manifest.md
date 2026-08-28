@@ -57,7 +57,8 @@ right 8 px blank).
 | `tiles_bank1.png` | 256 × 8×8 | `0x1F01E` | Tile bank 1 — **levels 2–3** (Castle, Missile Base) |
 | `blocks_bank0.png` | 256 × 32×32 | `0x22FEE` + bank 0 | Blocks assembled from 4×4 tile grids — stone/temple |
 | `blocks_bank1.png` | 256 × 32×32 | `0x22FEE` + bank 1 | Same definitions, bank-1 tiles — castle/industrial |
-| `sprites.png` | 124 × 32×21 | animation tables | All frames reachable from `ObjectTypeDef` + the hard-coded player/enemy/projectile tables |
+| `sprites.png` | **185** × 32×21 | frame grid sweep | The complete frame grid, `0x2BFEE`–`0x3BA9E`, stride `0x150` |
+| `scenery_tiles.png` | 161 × 8×8 | `0x1BBFE` | Unreferenced scenery artwork (see below) |
 | `title.png` | 320×200 | `0x23FEE` | The title screen |
 | `banner_congratulations.png` | 320×32 | `0x40FEE` | "CONGRATULATIONS!" |
 | `banner_hall_of_fame.png` | 320×32 | `0x423EE` | "HALL OF FAME" |
@@ -89,14 +90,33 @@ what `blit_image_5120` copies, which explains that function's otherwise odd size
 Earlier notes calling `0x40FEE` "a title/menu bitmap" were half right: it is banner
 artwork, not a screen.
 
-### Sprite coverage
-124 unique frames were reached by walking every animation table in
-`ObjectTypeDef[75]` plus the hard-coded player, dynamite and enemy tables, and adding
-the computed treasure frames (`type*0x150 + 0x2F70E`) and the eight enemy sprite
-banks. The sheet shows Rick in several poses, guards, bats, boulders, barrels,
-dynamite, explosions and the "SCORE GATE" signs — i.e. the reachable set looks
-complete for the entity types in use. There may be further frames in the graphics
-blob that no table references; those would need a linear sweep to find.
+### Sprite coverage — the complete grid (revised 2026-08-28)
+Frames sit on **one regular grid**: stride `0x150`, every frame aligned to
+**110 mod 0x150** — verified across all 124 table-referenced frames without exception.
+Sweeping that grid from `0x2BFEE` to `0x3BA9E` yields **192 slots, 185 non-empty**,
+and the extractor now renders all of them.
+
+The earlier table-walk found only 124. The gap is not orphaned content: treasures
+(`type*0x150 + 0x2F70E`) and the eight enemy sprite banks (`frame + bank`) are reached
+by **computed** addresses that never exist as stored pointers, so neither a table walk
+nor a program-wide pointer scan can see them — a pointer scan finds just 118. The grid
+sweep sidesteps the question entirely and is the right method here.
+
+All 185 were inspected and every one is genuine artwork: Rick in many poses, guards,
+bats, boulders, barrels, dynamite, explosions, spikes, statues, the "SCORE GATE"
+signs and a "500" score popup. Nothing is noise.
+
+### The 5 KB after the font is scenery artwork — with no consumer
+`0x1BBFE`–`0x1D01D` (5,152 bytes, immediately after the 95-glyph font and immediately
+before tile bank 0) holds **161 cells in the standard 8×8 four-plane format**
+depicting sky, clouds, pyramids/mountains, sand dunes, buildings and greenery. It is
+plainly real artwork, rendered to `scenery_tiles.png`.
+
+**Nothing in the program references it.** A scan for longwords pointing into the range
+returns 10 hits, all round numbers (`0x1C000`, `0x1D000`) occurring inside sprite pixel
+data — coincidence, not pointers. No code and no table addresses it. So it is either
+cut content, or artwork consumed by the loader/intro stage that ran before the
+snapshot was taken. Identified, but its use is unresolved.
 
 ---
 

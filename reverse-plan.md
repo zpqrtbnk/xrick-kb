@@ -22,10 +22,10 @@ identical behaviour*. Everything below is assessed against that bar.
 | Primary artifact | `re/atari_ram.bin` — 327,680 byte Hatari snapshot. **Authoritative for all addresses.** |
 | Secondary artifact | `re/atari_ram_1M.bin` — complete 1 MB capture, used only as the source of the full PCM samples. Loads the game **−0x2054** lower; not interchangeable |
 | Functions | **133**, all named; every non-trivial one transcribed |
-| Structs applied | 9, plus typed arrays over every hard-bounded data region |
+| Structs applied | 10, plus typed arrays over every hard-bounded data region |
 | Entity dispatch types | **74/74** characterised |
 | Knowledge base | 14 documents + 3 scripts in `re/` |
-| Extracted assets | 11 graphic PNGs, 47 room maps (+47 entity overlays), 1 playable SNDH |
+| Extracted assets | 12 graphic PNGs, 47 room maps (+47 entity overlays), 1 playable SNDH |
 | Largest untyped region | `0x1B01E`–`0x44BED` — the graphics blob, now mostly mapped (see `memory_map.md`) |
 
 ---
@@ -58,8 +58,9 @@ structural, nothing blocking.
 
 ## 3. Remaining gaps, and how to close them
 
-Only genuinely open items appear here. Resolved work lives in the appendix; settled
-decisions are in §4.
+**G1 is the only gap left.** G2 and G3 were closed 2026-08-28 and are kept here
+briefly, with their findings, rather than moved to the appendix — because each ended
+in a conclusion worth not rediscovering.
 
 ### G1. Behavioural details that need a live run — *the only substantive gap*
 Each is inferred from static reading with good confidence but has never been observed.
@@ -83,23 +84,37 @@ joystick decode end-to-end; step `scripted_trap_update` on a known trap to see a
 trigger bit fire. Everything needed is already labelled in Ghidra, so this is
 observation, not analysis. *Hatari is available — the 1 MB dump came from it.*
 
-### G2. Completeness of the asset sweep — *low value, cheap*
-124 sprite frames were found by walking animation tables; frames referenced by nothing
-would not appear. `0x1BBFE`–`0x1D01D` (~5 KB, between font and tile bank 0) is the last
-unidentified region in the graphics blob.
+### G2. Asset-sweep completeness — ✅ CLOSED 2026-08-28
+Sprite frames sit on one regular grid (stride `0x150`, all aligned 110 mod `0x150`).
+`extract_assets.py` now sweeps the grid instead of walking animation tables and renders
+**185 frames** rather than 124; all were inspected and every one is real artwork. The
+shortfall was not orphaned content — treasures and enemy banks use *computed*
+addresses that no table walk or pointer scan can see.
 
-**Strategy.** Linear sweep of `0x2C000`–`0x34000` on the `0x150` stride, rendering each
-candidate and eyeballing for real artwork versus noise; same trick for the 5 KB gap at
-a few plausible strides. Both extend `extract_assets.py` by a few lines.
+The last unidentified region, `0x1BBFE`–`0x1D01D` (5,152 bytes between the font and
+tile bank 0), is **161 scenery tiles** in the standard 8×8 four-plane format — sky,
+pyramids, sand, buildings. Rendered to `scenery_tiles.png`. **Nothing in the program
+references it**, so it is cut content or loader-stage artwork; identified, use
+unresolved. No further sweep is worthwhile.
 
-### G3. Minor loose ends — *cosmetic*
-- A 5th `level_start_info`-adjacent pointer exists and its target is known (the ending
-  text); whether it is a formal array member or adjacent data is unconfirmed.
-  *Strategy:* check whether any code indexes the table with 4 as a bound.
-- Orphaned-instruction regions at `0x492E6`, `0x48F48`, `0x4DF86`+ — data
-  mis-disassembled as code. *Strategy:* clear the flow, or leave; harmless.
-- `analyze_function_completeness` / `analyze_global_completeness` have never been run.
-  *Strategy:* run once to replace the estimated coverage figure with a measured one.
+### G3. Minor loose ends — ✅ CLOSED 2026-08-28
+- **`level_start_info` has 5 entries, not 4.** Hard boundary: entry 5 would begin at
+  `0x4B586`, which *is* `level_index`. `start_level` indexes the table with **no bounds
+  check**, and `process_level_transition_point` lets `level_index` reach 4 on
+  completion — so entry 4 is a deliberate "game complete" pseudo-level that displays
+  the ending text and returns to attract mode without ever loading a room. A
+  `LevelStartInfo` struct now exists and the full explanation is on the plate comment
+  at `0x4B522`. *(The array type could not be applied: an auto-generated pointer label
+  inside the range blocks it, and Ghidra rightly refuses to evict a named global.
+  Cosmetic only.)*
+- **Completeness metrics are not fit for purpose here.**
+  `analyze_function_completeness` emits **no score at all** — it reports conformance to
+  a plate-comment template (Algorithm / Parameters / Returns / Source-file sections)
+  that this project deliberately does not use, our comments being evidence-and-
+  correction narratives instead. It cannot produce a coverage number, so the ~98%
+  figure stays an explicit estimate. Do not re-run it expecting a metric.
+- **Orphaned-instruction regions** (`0x492E6`, `0x48F48`, `0x4DF86`+) are data
+  mis-disassembled as code. Harmless; left as-is deliberately.
 
 ---
 
@@ -174,5 +189,6 @@ a few plausible strides. Both extend `extract_assets.py` by a few lines.
 | Index demotion | 08-28 | `functions.md`/`entities.md` demoted to indexes; globals moved to `data-structures.md`; authority order documented in `README.md` |
 | Audio complete | 08-28 | Rebuilt SNDH from the 1 MB capture: all three PCM samples intact incl. the death sample; **confirmed by listening**. Superimposed-'ding' defect fixed (`silence_all_channels` + interrupt-masked copy) |
 | Room render fix | 08-28 | Rooms were cut short at the bottom: only each room's own block-index stream was drawn, but the player sees one further screenful from the next stream. Added a 6-block-row margin; renderer verified free of off-by-one |
+| G2 + G3 closure | 08-28 | Sprite extraction switched to a grid sweep (124 → **185** frames); the 5 KB post-font gap identified as **161 unreferenced scenery tiles**; `level_start_info` proven to have **5** entries (entry 4 = the game-complete pseudo-level); completeness metrics found unfit for purpose |
 | Plan/KB consistency | 08-28 | Gap register refactored to genuinely open items only; settled decisions collected into a do-not-re-open table; stale audio/capture claims purged from `rick.md` and `memory_map.md` |
 | KB review | 08-28 | Stale content purged; `sprite_type_dispatch` corrected to **74 entries**; `hide_entity` relocated to `0x4AC08`; `bullet_range_remaining` → `bullet_point_x/y`; `CheckpointState` axes fixed |

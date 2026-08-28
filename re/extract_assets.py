@@ -161,49 +161,31 @@ for bank, base in enumerate((0x1D01E, 0x1F01E)):
                    f"256 blocks of 32x32 (4x4 tiles) from 0x{BLOCKS:05X}, bank {bank}"))
 
 # ------------------------------------------------------------- sprites
-# Collect frame pointers from every animation table we can reach.
-OBJDEF = 0x47D34
-anim_tables = set()
-for t in range(75):                                    # ObjectTypeDef[75]
-    a = u32(OBJDEF + t * 16 + 6)
-    if 0x1B018 <= a < 0x50000:
-        anim_tables.add(a)
-# Hard-coded tables named in the transcriptions
-anim_tables |= {0x46B96, 0x46B9E, 0x46BAA, 0x46BB2, 0x46BBA, 0x46BC2,   # player
-                0x46BDA, 0x46BE6,
-                0x46BF2, 0x46C3E,                                        # dynamite
-                0x46C6A, 0x46C7E, 0x46C92}                               # enemies
-
-frames = set()
-for tbl in sorted(anim_tables):
-    for i in range(64):                                # -1 terminated
-        v = u32(tbl + i * 4)
-        if v == 0xFFFFFFFF:
-            break
-        if 0x1B018 <= v < 0x50000 - 0x150:
-            frames.add(v)
-        else:
-            break
-# Treasure sprites are computed, not tabled: type*0x150 + 0x2F70E
-for t in range(18, 22):
-    frames.add(t * 0x150 + 0x2F70E)
-# Enemy banks: walk/chase/die tables give offsets that are ADDED to a bank base.
-for bank in (0x0, 0xD20, 0x1A40, 0x2760, 0x8B20, 0x95A0, 0xA020, 0xAAA0):
-    for tbl in (0x46C6A, 0x46C7E, 0x46C92):
-        for i in range(16):
-            v = u32(tbl + i * 4)
-            if v == 0xFFFFFFFF:
-                break
-            a = v + bank
-            if 0x1B018 <= a < 0x50000 - 0x150:
-                frames.add(a)
-
-frames = sorted(frames)
+# Frames sit on a single regular grid: stride 0x150, all aligned to 110 mod 0x150
+# (verified across every table-referenced frame). Sweeping the grid is strictly
+# better than walking animation tables, because treasures and enemy variants are
+# reached by COMPUTED addresses (type*0x150 + base, frame + bank) that never appear
+# as stored pointers -- a table walk or a pointer scan both miss them.
+FRAME_LO, FRAME_HI, STRIDE, FRAME_ALIGN = 0x2BFEE, 0x3BA9E + 0x150, 0x150, 110
+grid = [a for a in range(FRAME_LO, FRAME_HI, STRIDE)]
+frames = [a for a in grid if sum(1 for b in D[a:a + STRIDE] if b) > STRIDE * 0.10]
 cells = [sprite_frame(f) for f in frames]
 cells = [c for c in cells if len(c) == 21]
 n = "sprites.png"
-report.append((n, *save(sheet(cells, 32, 21, 16, PAL, transparent0=True), n),
-               f"{len(cells)} unique 32x21 sprite frames reached from animation tables"))
+report.append((n, *save(sheet(cells, 32, 21, 20, PAL, transparent0=True), n),
+               f"{len(cells)} sprite frames — the complete 32x21 frame grid "
+               f"(0x{FRAME_LO:05X}-0x{grid[-1]:05X}, stride 0x150)"))
+
+# --------------------------------------------------- unreferenced scenery tiles
+# 0x1BBFE-0x1D01D, immediately after the font: 161 cells in the same 8x8 4-plane
+# format, depicting sky, clouds, pyramids, sand and buildings. No code or table in
+# the program references it (the only longwords pointing here are round numbers
+# occurring inside sprite pixel data). Real artwork with no located consumer.
+SCENERY_LO, SCENERY_HI = 0x1BBFE, 0x1D01E
+scenery = [cell_8x8(SCENERY_LO + i * 32) for i in range((SCENERY_HI - SCENERY_LO) // 32)]
+n = "scenery_tiles.png"
+report.append((n, *save(sheet(scenery, 8, 8, 32, PAL), n),
+               f"{len(scenery)} unreferenced 8x8 scenery tiles at 0x{SCENERY_LO:05X}"))
 
 # ------------------------------------------------------------- screens
 # Title: a genuine full-screen 320x200 (32000 bytes).
@@ -249,7 +231,7 @@ report.append(("palette.png", *save(pimg, "palette.png"),
 # -------------------------------------------------------------- report
 print(f"palette @0x{PALETTE_ADDR:05X}: " +
       " ".join("#%02X%02X%02X" % c for c in PAL))
-print(f"anim tables reached: {len(anim_tables)}   unique sprite frames: {len(cells)}")
+print(f"frame grid: {len(grid)} slots, {len(cells)} non-empty rendered")
 print()
 for name, fname, size, desc in report:
     print(f"  {fname:22s} {str(size):12s} {desc}")
