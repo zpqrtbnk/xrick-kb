@@ -153,19 +153,24 @@ one major format never checked by rendering — and yields a visual map of the w
 game. *Effort:* small; extends `extract_assets.py`. *Risk:* if rooms come out garbled,
 the tilemap decode has a bug worth finding now rather than during a rewrite.
 
-**T2. Render audio.** Synthesise the PSG sequences and the three PCM samples to WAV
-using `algo-music.md`. *Why:* audio is the only subsystem never validated by output;
-everything else has been seen or heard. *Effort:* medium — needs a small YM2149
-emulation (tone/noise/envelope, 3 channels). *Caveat:* samples for tracks 10 and 19
-are truncated by the capture (Gap B), so expect two to cut short.
+**T2. Verify the audio decode against a reference rip.** *(Re-scoped 2026-08-28.)*
+The original framing — write a YM2149 emulator and render WAVs — is the expensive
+path and validates nothing on its own. Better options, cheapest first:
 
-**T3. Type the identified-but-untyped data regions in Ghidra.** ✅ **DONE 2026-08-28** — Several regions are
-*known* but still raw bytes, so the database understates what we know:
-`note_period_table` `0x45720` (`word[84]`), the instrument table `0x46932` (stride 6),
-the arpeggio table `0x46B66`, the animation-frame tables `0x46B96`–`0x46D3A`, the two
-256-byte tile-attribute LUTs `0x49F1E`/`0x4A01E`, `room_tile_map` `0x4A17E`
-(`byte[44][32]`), and `level_intro_texts` `0x4B8FE`. *Effort:* small. *Why:* makes the
-Ghidra database self-describing and closes most remaining `find_code_gaps` noise.
+1. **Compare against the SNDH Archive's existing Rick Dangerous rip.** Someone has
+   already ripped this properly from a complete image, so it is an *independent
+   reference* to check our sequence-opcode and instrument-table decoding against —
+   far stronger validation than listening to our own output.
+2. **Just run the game in Hatari** (`disks/chaos43.msa` is in the repo) to hear the
+   originals in context.
+3. **Build our own SNDH** only if a self-contained artifact from *our* analysis is
+   wanted. Two obstacles: (a) the player is **position-dependent** — it uses absolute
+   addressing throughout (`jsr 0x44CCE.l`, data at `0x45720`/`0x46932`/`0x4DF86`), so
+   a carved-out blob cannot simply be loaded at an arbitrary address the way SNDH
+   players do; it needs a stub that copies the image back to its original addresses.
+   (b) two of the three PCM samples are truncated by our capture, so a rip made today
+   would have broken digi sounds — this is the one place where the wider memory
+   capture (T5) is actually a prerequisite rather than a nicety.
 
 ### Tier 2 — needs Hatari (currently unavailable)
 
