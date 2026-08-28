@@ -40,10 +40,17 @@ exactly, and track 10 at `0x4FCF2`. See the resolution below.
   with no trailing padding, consistent with a sample running right up to the boundary.
 
 **Consequence:** the program's *code* is fully captured and fully reversible from this
-snapshot. A wider capture (`savebin` over `0x1B018`–`0x53250`, or simply a full 1 MB
-dump) is still wanted to recover **two sound samples**, but it is not a blocker. The
-runtime buffers (`0x63800`+, screen buffers `0x70000`/`0x78000`) are likewise outside
-the capture but derivable from code.
+snapshot.
+
+✅ **The two truncated sound samples were recovered 2026-08-28** from
+`re/atari_ram_1M.bin`, a complete 1 MB capture. ⚠️ That dump loads the game at a
+**different base address** — everything shifted by **−0x2054** — so it is *not* a
+drop-in replacement. This file and the whole knowledge base use `atari_ram.bin`
+numbering; **decided: we do not re-base**. Convert with
+`1M_address = doc_address − 0x2054`.
+
+The runtime buffers (`0x63800`+, screen buffers `0x70000`/`0x78000`) are outside both
+captures but derivable from code.
 
 ---
 

@@ -107,23 +107,25 @@ the music sequence opcodes — the last two undecoded formats — were closed by
 
 What remains:
 
-1. **Audio is decoded but not rendered.** Graphics are done — extracted to
-   `re/assets/` and visually validated (`assets-manifest.md`). The PSG sequence data
-   and the three PCM samples have documented formats (`algo-music.md`) but have never
-   been synthesised to audio. Two of the three samples are also partly outside the
-   RAM capture.
+1. **A short list of behavioural details** wanting a live Hatari run — remaining
+   tile-attribute bits and the `0x6F` probe mask, the POOKY easter egg's effect,
+   which enemy sprite variant is which creature per level, trigger-bit behaviour in
+   play, the landing rebound `nVelY = 0xFE - nVelY`, and four name-entry glyphs.
+   Full list in `reverse-plan.md`.
 
-2. **The incomplete capture is no longer a blocker.** `0x50000`–`0x5324F` (12,880
-   bytes) is missing, but a reachability analysis proved it contains **supervisor
-   stack plus PCM sample data, not code** — the game calls `Super(0x5324C)`, so the
-   stack grows down into it, and three sample tracks point there. A wider capture
-   would recover two sound samples; nothing else. See `re/memory_map.md`.
+2. **Optional completeness work** — sprite frames no animation table references, the
+   ~5 KB gap between the font and tile bank 0, and whether `level_start_info` is
+   formally 5 entries.
 
-3. **A short list of behavioural details** wanting a live run — remaining
-   tile-attribute bits, the POOKY easter egg's full effect, and matching enemy sprite
-   variants to on-screen creatures. Full list in `reverse-plan.md` Gap D. (The
-   long-standing "slot-0 block pushing" question is closed: there is no pushing
-   mechanic — slot 0 is the scripted crusher/boulder hazard.)
+Everything else is done: graphics extracted and visually validated, all 47 room maps
+rendered, and the sound engine packaged as a playable SNDH — confirmed by ear, with
+all three PCM samples complete (including the death "waaaaa"). The 1 MB capture
+`atari_ram_1M.bin` supplied the samples the original dump was missing.
+
+> ⚠️ `atari_ram_1M.bin` loads the game at a **different base address** (everything
+> shifted by **−0x2054**). All addresses in `re/` and Ghidra use `atari_ram.bin`
+> numbering. **Decided: we do not re-base.** Convert instead:
+> `1M_address = doc_address − 0x2054`.
 
 ## Do Not Do
 
