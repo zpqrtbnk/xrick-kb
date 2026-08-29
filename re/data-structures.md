@@ -243,7 +243,14 @@ world-row band scrolls into view.
 
 The master table covers **all 4 levels** (`0x481E4`–`0x48E25`, ending exactly at the
 high-score table). Per-room sub-lists are terminated by a sentinel record with
-`wSpawnBand == 0x00FF`. This table was previously the "523×6-byte mystery table"
+`wSpawnBand == 0x00FF`.
+
+✅ **The 523 reconciles exactly** (checked 2026-08-29): walking all 47 rooms' lists to
+their terminators yields **476 real records + 47 per-room terminators = 523 slots**,
+which is precisely what the DEAD-bit clear loop covers (`move.w #0x20a,D0` + `dbf`).
+Independent confirmation of both the table size and the room-walk.
+
+This table was previously the "523×6-byte mystery table"
 cleared by `reset_block_hit_flags` — that function is now renamed
 **`revive_all_placements`** (it clears the DEAD bits at new game).
 

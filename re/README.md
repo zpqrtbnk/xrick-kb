@@ -9,8 +9,9 @@ behaviour*. Current estimate against that bar: **~98%**. The code is fully rever
 (every function named, every non-trivial one transcribed); graphics are extracted and
 visually validated; all 47 room maps render; and the sound engine is packaged as a
 playable SNDH, confirmed by ear with every PCM sample intact. What remains is a short
-list of behavioural details wanting a live Hatari run — see `hatari.md` for the
-harness and probe plan. `../reverse-plan.md` is the authoritative gap register.
+short list of behavioural details wanting a live Hatari run: **7 of those 8 are now
+closed** (2026-08-29) — see `hatari.md` for the harness, the evidence and what is
+left. `../reverse-plan.md` is the authoritative gap register.
 
 ## Authority order
 
@@ -33,7 +34,7 @@ behavioural detail to an index file** — put it in the owning document and link
 | `rick.md` | Project narrative: what this binary is, how it was obtained, what's known, what's left |
 | `memory_map.md` | Atari ST memory layout, hardware registers, exception vectors, **capture limits** |
 | `functions.md` | All 133 functions by subsystem, with behaviour and confidence |
-| `data-structures.md` | All 9 structs, the level-data model, and the sprite frame format |
+| `data-structures.md` | All 10 structs, the level-data model, tile-attribute bits, and the sprite frame format |
 | `entities.md` | The 74-entry entity dispatch table and the collision/interaction suite |
 | `strings.md` | All in-game text, the character encoding, and the font mapping |
 | `assets-manifest.md` | Extracted graphics: formats, palette, and what's in `assets/` |
