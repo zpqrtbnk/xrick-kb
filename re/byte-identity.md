@@ -152,15 +152,62 @@ Both probes' block-bounds tests use **signed** `bge`/`blt`.
 **Audit 4 is now closed** — there are no remaining deliberately-non-literal
 transcriptions.
 
+## Audit 5 — struct-field access widths ✅ DONE
+
+**Method.** Same as Audit 1, for `(d16,An)` forms: scan the entity/player code, decode
+each access's size and displacement, group by displacement, diff against the documented
+entity struct.
+
+**Result: the entity struct is clean — 29 fields observed, 0 defects.** Every field's
+access width matches its documented type.
+
+One addition: **displacement `+0x07` sees 4 byte-wide accesses** and is not a struct
+field — it is the **low byte of `nPosY`**, written directly for the tile-grid snap
+(`(lo & 0xF8) | 3`). That is arithmetically identical to the word form (`~7` = `0xFFF8`
+leaves the high byte alone), but the access is byte-wide and should be emitted as such.
+
+⚠️ **Methodological limit, worth recording.** Widening the scan to `A1`/`A2` produced 12
+apparent "MIXED width" defects. **They are all false.** Small displacements alias across
+different structs — `RoomHeader` is 14 bytes, `ObjectTypeDef` 16, plus path tables and
+channel state — so `(0x4,A1)` is not `nPosX`. Verified: the long-width `(0x4,A1)` access
+at `0x4D2D8` is `move.l (0x4,A1),D1; cmp.l #-1,D1`, walking a **path table with a `-1`
+sentinel**. This audit is only sound when scoped to a register with known provenance
+(`A0` = entity, by convention in the entity handlers). Do not "fix" anything from the
+widened scan.
+
+## Audit 8 — sign-extension / immediate signedness ✅ DONE
+
+**Method.** Enumerate every `ext.w`/`ext.l` in the code image. Each one marks a value
+deliberately widened **with sign** — precisely where a reimplementation using a wider
+type, or an unsigned one, diverges.
+
+**Result: only 7 sites program-wide**, all now accounted for.
+
+| Site | What is widened | Status |
+|---|---|---|
+| `0x4C0CC`, `0x4C85C` | player `nVelY` (word) → long, then `lsl.l #8` | 8.8 fixed-point integration — already transcribed as `(i32)(i16)nVelY << 8` ✅ |
+| `0x4D520`, `0x4D664` | entity `nVelY` (word) → long, then `lsl.l #8` | same, in `enemy_ai_update` ✅ |
+| `0x45302` | `(note + transpose + 12)` byte → word | the transpose defect, **fixed** ✅ |
+| `0x4542A` | channel `+0x17` byte → word, indexes `note_period_table` (`lea 0x2F0,PC` = `0x45720`) | **channel `+0x17` is a SIGNED byte** — corrected |
+| `0x452A0` | signed byte → word index into the word table at `0x45B00` | same signed-index convention |
+
+**Generalisation of the transpose finding:** the music engine's stored note index
+(channel `+0x17`) and transpose (`+0x13`) are **signed bytes**, and *every* lookup
+sign-extends before doubling into a word table. Both were documented as plain `byte`;
+both are corrected. An unsigned reimplementation indexes far past `note_period_table`.
+
+That only 7 sites exist is itself the useful result: sign-extension is rare in this
+program, so this class of defect is now **exhaustively** closed rather than sampled.
+
 ## Outstanding audits
 
 | # | Audit | Status |
 |---|---|---|
-| 5 | Struct-field access widths (same method as Audit 1, for `(d16,An)` forms) | not run |
+| 5 | Struct-field access widths | ✅ **done — entity struct clean** |
 | 6a | Literal transcription of `probe_player_tile_collision` | ✅ **done — 2 defects** |
 | 6b | Literal transcription of `probe_entity_tile_collision` | ✅ **done — same shape, same tail asymmetry** |
 | 7 | `dbf` loop bounds (`dbf` iterates N+1; also `dbf D3w` at `0x491E2` tests the *word*) | partially done |
-| 8 | Immediate-operand signedness (e.g. music transpose — **already found one**, `algo-music.md`) | one found, not swept |
+| 8 | Sign-extension / immediate signedness | ✅ **done — 7 sites, exhaustive; 2 more defects fixed** |
 | 9 | Instructions the decompiler hides (`lea`-loaded callbacks — a documented past error class) | not swept |
 
 **Precedent for #8:** the music transpose was documented as

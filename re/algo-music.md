@@ -81,11 +81,11 @@ the four bytes land on `8800/8801/8802/8803`. So `#0x05000000` = "register 5 := 
 | +0x0A | long | Current pattern position |
 | +0x0E | long | Instrument pointer |
 | +0x12 | byte | Pattern repeat counter |
-| +0x13 | byte | Transpose |
+| +0x13 | **int8 (signed)** | Transpose. Signed: every consumer sign-extends — see Audit 8 |
 | +0x14 | byte | "Need new pattern" flag (0xFF = pattern ended) |
 | +0x15 | byte | Note duration counter |
 | +0x16 | byte | Channel-active flag (0 = finished) |
-| +0x17 | byte | Current note number |
+| +0x17 | **int8 (signed)** | Current note number. **Signed** — both lookup sites (`0x4542A`, and `0x45302` which writes it) do `ext.w` before indexing `note_period_table`. Storing it unsigned indexes past the table |
 | +0x18 | byte | Mixer enable nibble for this channel |
 | +0x1A | long | Envelope segment data pointer |
 | +0x1E | byte | Envelope step delay |

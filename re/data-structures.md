@@ -34,7 +34,7 @@ Confirmed via `render_sprites`, `blit_backgrounds`, `clear_sprite_flags`,
 | 0x00 | `wType` | undefined2 | confirmed | Entity type; `0xFFFF` = sentinel (end of list), `0` = free slot |
 | 0x02 | `nDirection` | short | confirmed | Facing/direction (0 vs nonzero). Selects mirrored sprite bank (+0xFC0) for the player; walk direction for enemies; X drift ±3 for the player's death tumble |
 | 0x04 | `nPosX` | short | confirmed | X (horizontal); despawn threshold `<-8` or `>=0xF1` |
-| 0x06 | `nPosY` | short | confirmed | Y (vertical); despawn threshold `<0` or `>=0x143`; world-Y range with visible window 0x40–0x100 |
+| 0x06 | `nPosY` | short | confirmed | Y (vertical). ⚠️ Its **low byte is also accessed directly at `+0x07`** (4 byte-wide sites) for the tile-grid snap `(lo & 0xF8) \| 3`; equivalent to the word form here, but emit the byte access. Despawn threshold `<0` or `>=0x143`; world-Y range with visible window 0x40–0x100 |
 | 0x08 | `nVelY` | short | confirmed | Vertical velocity, 8.8 fixed point (whole part). Gravity: +0xC4/frame for enemies (terminal 0x800), +0x80 for the dead player; `kill_player`/`kill_enemy` set −0x300 upward launch |
 | 0x0A | `nPosYFrac` | short | confirmed | Fractional (low) byte pair of the Y position for the 8.8 velocity integration |
 | 0x0C | `nSpawnX` | short | confirmed | Spawn X; `scripted_trap_update` resets `nPosX` from here when the entity re-idles |
