@@ -79,21 +79,19 @@ and frame tables: [`algo-entities.md`](algo-entities.md).**
 ## What's still open
 
 The placement-record format, the object-type table, the dispatch-table extent and the
-slot-0 question have all been resolved — see `reverse-plan.md`'s appendix for that
+slot-0 question have all been resolved — see `../PLAN.md`'s appendix for that
 history rather than keeping strikethroughs here. Genuinely open:
 
-1. **Tile-attribute bits beyond the known set.** Known: `0x02` ladder, `0x04` lethal,
-   `0x10` one-way, `0x20` landable floor, `0x40` solid, `0x80` ladder-top
-   (blocked = `& 0xD0`). The remaining bits of the 256-byte LUT, and the `0x6F`
-   intermediate mask used inside the probe routines, are not accounted for.
-2. ~~**Which visual enemy variant maps to which on-screen creature per level.**~~
-   ✅ **Resolved 2026-08-29** — see the table below. *(original note kept for context)*
-   The four sprite banks and three AI modes are known; matching them to what the player
-   actually sees needs a live run or a per-level placement survey.
-3. **Trigger-bit semantics in live play** — the bit meanings are read off the code
-   with confidence, but no bit has been observed firing in a running game.
-4. `ObjectTypeDef` entries with no placement record referencing them — unused content
-   versus types only reachable via paths not yet traced.
+1. **Trigger-bit semantics in live play** — the bit meanings are read off the code with
+   confidence and the census below shows every bit is exercised in shipped data, but no
+   bit has been observed firing in a running game. (`PLAN.md` O2.)
+2. `ObjectTypeDef` entries with no placement record referencing them — unused content
+   versus types only reachable via paths not yet traced. (`PLAN.md` O3.)
+
+Two former entries here are now **resolved** and have moved to their owning documents:
+the full **tile-attribute bit set**, including the `0x6F` row-filter mask and the
+correction of `0x20` from "landable floor" to **bounce surface**, is in
+`data-structures.md`; the **enemy-variant → creature mapping** is in the table below.
 
 
 ---

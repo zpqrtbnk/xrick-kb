@@ -1,40 +1,39 @@
-# Rick Dangerous (Atari ST) — Reverse Engineering: State & Plan
+# Rick Dangerous (Atari ST) — State & Plan
 
-**Last reviewed: 2026-08-28.** Current state and remaining work only. Completed work
-is condensed into the appendix; the knowledge itself lives in `re/` and in Ghidra
-plate comments.
+**Snapshot: 2026-08-29.** Where the project stands, what is still open, and what happens
+next. Project rules, settled decisions and method lessons are in `MEMORY.md`; the game
+knowledge itself is in `re/` and in Ghidra plate comments.
 
-**Target bar:** `re/` should be complete enough to *mechanically re-code the game with
-identical behaviour*. Everything below is assessed against that bar.
-
-> **⚠️ `ghidra.xrick2` / `xrick2-prg` is an untracked leftover and must never be
-> considered, opened, or referenced by this analysis, in this session or any future
-> one.** Do not `connect_instance`/`open_project` against it, do not read files under
-> `ghidra.xrick2/` or `mac/ghidra.xrick2/`, and do not cite it as a source of truth.
+**Bar:** `re/` complete enough to *mechanically re-code the game with identical
+behaviour*. Everything below is measured against that.
 
 ---
 
-## 1. Current state (measured 2026-08-28)
+## 1. State
 
 | Metric | Value |
 |---|---|
-| Ghidra project / program | `ghidra.xrick` → `xrick`, single program `atari_ram.bin` |
-| Primary artifact | `re/atari_ram.bin` — 327,680 byte Hatari snapshot. **Authoritative for all addresses.** |
-| Secondary artifact | `re/atari_ram_1M.bin` — complete 1 MB capture, used only as the source of the full PCM samples. Loads the game **−0x2054** lower; not interchangeable |
 | Functions | **133**, all named; every non-trivial one transcribed |
-| Structs applied | 10, plus typed arrays over every hard-bounded data region |
-| Entity dispatch types | **74/74** characterised |
-| Knowledge base | 14 documents + 3 scripts in `re/` |
-| Extracted assets | 12 graphic PNGs, 47 room maps (+47 entity overlays), 1 playable SNDH |
-| Largest untyped region | `0x1B01E`–`0x44BED` — the graphics blob, now mostly mapped (see `memory_map.md`) |
+| Structs applied | **10**, plus typed arrays over every hard-bounded data region |
+| Entity dispatch types | **74 / 74** characterised |
+| Placement table | 523 slots = 476 real records + 47 per-room terminators (reconciled) |
+| Knowledge base | **16 documents + 4 scripts** in `re/` |
+| Extracted assets | 12 graphic PNG sheets (185 sprite frames among them), 47 room maps + 47 entity overlays, 1 playable SNDH |
+| Byte-identity audits | **9 of 9 complete** — 15 defects found and fixed |
+| Dynamic-verification probes | **7 of 8 resolved**; the 8th reduced to a nice-to-have |
+| Hatari harness | **Working** — boots the analysed build unattended, Rick driveable under script |
+
+**Coverage against the bar: ~98%.** This is an explicit judgement, not a measurement —
+no tool here can produce a coverage number (see `MEMORY.md` §7). Converting it into a
+measurement is exactly what O1 below is for.
 
 ---
 
-## 2. Coverage against the reimplementation bar
+## 2. Complete
 
-**The code is fully reversed.** Every function is named, and every non-trivial one is
-transcribed to exact pseudocode in `re/algo-*.md` (constants as literals, branch order
-preserved, register conventions documented). Re-codable from `re/` alone:
+**The code is fully reversed.** Every function is named and every non-trivial one is
+transcribed to exact pseudocode in `re/algo-*.md` — constants as literals, branch order
+preserved, register conventions documented. Re-codable from `re/` alone:
 
 - Frame loop, timing, double buffering, VBlank/Timer-A interrupts, supervisor entry
 - Player controller — movement, jump/gravity, climb, crouch, attacks, death
@@ -45,155 +44,83 @@ preserved, register conventions documented). Re-codable from `re/` alone:
 - HUD, score, lives, per-room checkpointing, game-over/respawn, attract mode
 - All in-game text and the font/character encoding
 
-**All assets are extracted and validated by observation, not inference:** graphics
-render as recognisable artwork, all 47 room maps render as coherent level geometry
-(visually confirmed), the 64 strings decode, and the SNDH plays — music, effects and
-all three digidrums.
+**All assets are extracted and validated by observation, not inference.** Graphics
+render as recognisable artwork; all 47 room maps render as coherent level geometry
+(visually confirmed); the 64 strings decode; the SNDH plays — music, effects and all
+three digidrums, confirmed by ear.
 
-**Verdict: ~98% of a reimplementation spec.** What remains is a short list of
-behavioural details wanting a live run, plus optional completeness work. Nothing
-structural, nothing blocking.
+**Fidelity is audited, not assumed.** `re/byte-identity.md` is the standing record: nine
+mechanical audits derived facts from the binary and diffed them against the documents.
+Fifteen defects were found and fixed, notably both tile probes transcribed literally
+(the previous "equivalent" formulation would have broken ladder detection on 8-pixel
+column boundaries), six global width errors, the music engine's note index and transpose
+proven **signed**, and four off-by-one loop counts. Two audits came back clean: the
+entity struct's field widths, and the decompiler-hidden-dispatch class.
+
+**Seven of the eight dynamic-verification probes are resolved.** These behavioural
+details were inferred statically and flagged as wanting a live run; `re/hatari.md` §6
+holds the evidence for each — tile-attribute bits and the `0x6F` row-filter mask, the
+`POOKY9999` easter egg, the four name-entry glyphs, `player_touched_hazard`'s single
+reader, the per-level enemy banks, the landing rebound as a bounce-surface special case,
+and the song-0 transpose. The eighth (trigger-bit semantics) is O2 below.
 
 ---
 
-## 3. Remaining gaps, and how to close them
+## 3. Open
 
-**G1 is the only gap left.** G2 and G3 were closed 2026-08-28 and are kept here
-briefly, with their findings, rather than moved to the appendix — because each ended
-in a conclusion worth not rediscovering.
+Four items. None of them blocks a reimplementation; the knowledge base is not known to
+be missing anything structural.
 
-### G1. Behavioural details that need a live run — *the only substantive gap*
+### O1. Build the reimplementation and diff it against the live game — **the next step**
 
-> **Harness: see `re/hatari.md`.** Environment verified 2026-08-28 — WSL2 Debian 13,
-> Hatari 2.5.0 with `--control-socket`, WSLg display, and `hconsole.py` packaged and
-> importable as a Python module. Nothing needs installing. First run must re-establish
-> the address relocation delta before any probe result is trusted.
-Each is inferred from static reading with good confidence but has never been observed.
+Static auditing has reached diminishing returns: the last three audits found four
+defects between them, all in prose rather than in transcribed logic. The remaining
+verification is a *test*, not a read.
 
-**Seven of the eight closed 2026-08-29**, the eighth reduced to a nice-to-have — see `re/hatari.md` §6 for the evidence.
+The Hatari harness in `re/hatari.md` is the instrument. Boot `disks/chaos43/RICK.PRG`
+from a GEMDOS drive, re-measure the address delta (expect `-0x2054`, never hardcode),
+then breakpoint each major function, log register state, and diff against what
+`algo-*.md` predicts. That turns the ~98% estimate into a measurement.
 
-| Item | Status |
-|---|---|
-| Tile-attribute bits | ✅ `0x6F` = `~(0x10\|0x80)`, a row filter so one-way/ladder-top register only at the feet; bits `0x01`/`0x08` are background classes **no reader tests** |
-| `POOKY9999` easter egg | ✅ sets `menu_enabled`; with `max_level_reached` it opens the game's own SELECT LEVEL screen — observed |
-| Name-entry glyphs | ✅ `0x36` = ◄ RUBOUT; `0x37`/`0x3A`/`0x3B` = `E`,`N`,`D` |
-| `player_touched_hazard` | ✅ single reader, `player_controller` @ `0x4C06A` — the entry was stale, `algo-player.md` had it right |
-| Enemy variants | ✅ bank per level established from a 476-record placement scan and each bank rendered: tribesman / white-robed fez guard / two green soldiers (Castle+Missile share both). AI modes within a triple are visually identical |
-| Trigger bits | ⚪ **all 8 bits exercised** in shipped data across all 4 levels (census in `re/entities.md`), so no path is unreachable. Semantics still rest on the code transcription; a dynamic spot-check remains nice-to-have |
-| *(new)* Music transpose signedness | ✅ found during the consistency pass: transpose is **byte-wide then sign-extended**, and negative transposes are used throughout. Full census: 1012 note events, indices 11–67, no out-of-range read |
-| *(new)* Unknown pattern opcodes | ✅ full scan of all 55 patterns: `0xC0`/`0xC1`/`0xC3`–`0xFE`, `0x7E` and `0x89`–`0xBF` occur **zero times** |
-| Landing rebound | ✅ not the normal landing path — gated on attribute `0x20`, which only 4 tiles carry; these are **bounce surfaces**, max rebound `-0x702` |
-| Song 0 transpose | ✅ targets pattern 8 (a single note `b=6`) → index 46, ≈466 Hz; a deliberate high closing accent, no overflow |
+### O2. Trigger-bit dynamic spot-check — *optional*
 
-**Strategy.** One Hatari session, batched — they share setup and none needs more than
-a breakpoint plus a memory watch. Concretely: break on `probe_player_tile_collision`
-and log `player_collision_flags` against known terrain to finish the attribute bits;
-set the POOKY flag by hand and observe; watch `0x4922B` while playing to confirm the
-joystick decode end-to-end; step `scripted_trap_update` on a known trap to see a
-trigger bit fire. Everything needed is already labelled in Ghidra, so this is
-observation, not analysis. *Hatari is available — the 1 MB dump came from it.*
+All 8 trigger bits are exercised in shipped data across all 4 levels (census in
+`re/entities.md`), so no transcribed path is unreachable. The *semantics* still rest on
+the code transcription alone. A spot-check — step `scripted_trap_update` on a known trap
+and watch a bit fire — would promote them from "transcribed" to "observed". Worth doing
+opportunistically during O1, not on its own.
 
-### G2. Asset-sweep completeness — ✅ CLOSED 2026-08-28
-Sprite frames sit on one regular grid (stride `0x150`, all aligned 110 mod `0x150`).
-`extract_assets.py` now sweeps the grid instead of walking animation tables and renders
-**185 frames** rather than 124; all were inspected and every one is real artwork. The
-shortfall was not orphaned content — treasures and enemy banks use *computed*
-addresses that no table walk or pointer scan can see.
+### O3. Two minor unanswered questions
 
-The last unidentified region, `0x1BBFE`–`0x1D01D` (5,152 bytes between the font and
-tile bank 0), is **161 scenery tiles** in the standard 8×8 four-plane format — sky,
-pyramids, sand, buildings. Rendered to `scenery_tiles.png`. **Nothing in the program
-references it**, so it is cut content or loader-stage artwork; identified, use
-unresolved. No further sweep is worthwhile.
+Both are curiosities about *observable* behaviour, not holes in the specification.
 
-### G3. Minor loose ends — ✅ CLOSED 2026-08-28
-- **`level_start_info` has 5 entries, not 4.** Hard boundary: entry 5 would begin at
-  `0x4B586`, which *is* `level_index`. `start_level` indexes the table with **no bounds
-  check**, and `process_level_transition_point` lets `level_index` reach 4 on
-  completion — so entry 4 is a deliberate "game complete" pseudo-level that displays
-  the ending text and returns to attract mode without ever loading a room. A
-  `LevelStartInfo` struct now exists and the full explanation is on the plate comment
-  at `0x4B522`. *(The array type could not be applied: an auto-generated pointer label
-  inside the range blocks it, and Ghidra rightly refuses to evict a named global.
-  Cosmetic only.)*
-- **Completeness metrics are not fit for purpose here.**
-  `analyze_function_completeness` emits **no score at all** — it reports conformance to
-  a plate-comment template (Algorithm / Parameters / Returns / Source-file sections)
-  that this project deliberately does not use, our comments being evidence-and-
-  correction narratives instead. It cannot produce a coverage number, so the ~98%
-  figure stays an explicit estimate. Do not re-run it expecting a metric.
+- **The name-entry commit loop at `0x491E2` over-runs the name field.** `dbf D3w` tests
+  the full word while `move.b (A2)+,D3` writes only the low byte, so the iteration count
+  depends on entry state as well as on the characters typed. A reimplementation just
+  emits `dbf D3w` and is correct by construction — the object code is the specification
+  — but *what the player actually sees* has never been characterised. Model the loop in
+  Python and confirm one case live. See `re/algo-system.md`.
+- **Some `ObjectTypeDef` entries have no placement record referencing them.** Unused
+  content, or types reachable only by paths not yet traced? Unresolved. See
+  `re/entities.md`.
+
+### O4. Accepted as-is
+
+Known, understood, and deliberately not being fixed:
+
+- **161 scenery tiles at `0x1BBFE`–`0x1D01D`** (standard 8×8 four-plane format, rendered
+  to `scenery_tiles.png`) are referenced by **nothing in the program** — cut content or
+  loader-stage artwork. Identified; use unresolved. No further asset sweep is worthwhile.
+- **The `LevelStartInfo` array type cannot be applied in Ghidra**: an auto-generated
+  pointer label inside the range blocks it and Ghidra rightly refuses to evict a named
+  global. The struct exists and the full explanation is on the plate comment at
+  `0x4B522`. Cosmetic only.
 - **Orphaned-instruction regions** (`0x492E6`, `0x48F48`, `0x4DF86`+) are data
-  mis-disassembled as code. Harmless; left as-is deliberately.
+  mis-disassembled as code. Harmless; left alone.
 
 ---
 
-## 3b. Byte-identity audit (opened 2026-08-29)
-
-`re/byte-identity.md` is the standing record. **All nine audits complete, 15 defects
-found and fixed.** Highlights: both tile probes now transcribed literally (the previous
-"equivalent" formulation would have broken ladder detection on 8-pixel column
-boundaries); six global width errors; the music engine's note index and transpose proven
-**signed**; four off-by-one loop counts.
-
-Two audits came back **clean** — the entity struct's field widths, and the
-decompiler-hidden-dispatch class (only 4 register-indirect transfers exist, all
-documented). Nothing further is known to block a reimplementation; the next step is to
-build one and diff it against the live game with the Hatari harness.
-
----
-
-## 4. Settled — do not re-open
-
-| Question | Decision |
-|---|---|
-| Level loading | **There is none at runtime.** Two traps total (`Super`, `Setscreen`); all four levels resident. Do not re-search for GEMDOS/BIOS I/O. |
-| ASCII string search | Done — 64 strings in `strings.md`. The old "text isn't ASCII" advice was wrong and is retracted. |
-| Slot-0 block pushing | **No such mechanic exists.** Slot 0 is the scripted crusher/boulder hazard, moved by `scripted_trap_update` through `A0`. |
-| Missing 12,880 bytes | Recovered via `atari_ram_1M.bin`; was stack + PCM, never code. |
-| Re-basing onto the 1 MB dump | **No.** `atari_ram.bin` numbering stays authoritative; convert with `1M_address = doc_address − 0x2054`. `build_sndh.py` bridges the two automatically. |
-| Pixel-diffing rooms vs Hatari | **No.** The user validates renders visually and has confirmed them correct. |
-| `attempt.0/`, `attempt.1/`, `disks/` | **Stay exactly where they are.** Earlier-phase material, deliberately kept in place. Do not move, archive or reorganise. |
-| `ghidra.xrick2` | Permanently out of scope. |
-
----
-
-## 5. Method notes worth keeping
-
-- **Verify agent work before trusting reports.** Two of five forks in the multi-agent
-  pass reported "done" after producing incoherent, self-referential output without
-  doing any work; caught only by checking live Ghidra state. Both recovered when told
-  plainly "you are not the orchestrator; do the work yourself; do not call Agent".
-- **Prefer disassembly over decompiler output.** Four documented errors came from
-  trusting the decompiler: `RoomHeader.pPlacements` (+0xA, not +5); the `lea`-loaded
-  A2 effect callbacks it hid entirely; the `move.b #n,D0` AI-mode arguments it dropped
-  as dead stores; and `probe_entity_tile_collision`'s carry-flag return read as a `D0`
-  value.
-- **Cross-check structures against raw bytes.** The `SpriteEntity` X/Y axis swap and
-  the `LevelStartInfo` 4-byte base error both survived multiple passes because prose
-  was never checked against the table contents.
-- **Beware tables cut short by spurious functions.** `sprite_type_dispatch` was
-  recorded as 70 entries for several passes because a bogus `hide_entity` function had
-  been created inside it. The real count is 74 — which also explained an "impossible"
-  discrepancy in `ObjectTypeDef`.
-- **An empty address-based search does not mean the code is absent.** The slot-0
-  "block mover" was hunted across several passes and never found, because both the
-  spawn and the motion write through address registers (`A1`, `A0`) rather than
-  absolute addresses — so no xref or operand search could ever match. When a
-  program-wide search for writes to a known global comes up empty, ask whether the
-  access is register-indirect before concluding the logic is missing or elsewhere.
-- **A RAM snapshot captures a *running* state, not a clean one.** Code lifted out of
-  it inherits whatever the program happened to be doing — here the snapshot was taken
-  with the title music mid-play, and every routine that assumed prior initialisation
-  misbehaved until the state was explicitly cleared. When re-hosting lifted code,
-  reset the subsystem with its *own* init/cleanup routines rather than trusting the
-  captured values.
-- **Ghidra analyzer defaults can hide data.** The ASCII Strings analyzer had *Require
-  Null Termination* enabled, so it reported zero strings for a game whose text is
-  entirely `0xFF`-terminated ASCII. Check analyzer options before concluding "absent".
-
----
-
-## Appendix — completed work log (condensed)
+## Appendix — work log
 
 | Pass | Date | Outcome |
 |---|---|---|
@@ -203,16 +130,18 @@ build one and diff it against the live game with the Hatari harness.
 | Entity-handler pass | 08-27 | All dispatch types characterised; **axis correction** (4=X, 6=Y); `player_dying`; bullets/dynamite resolved |
 | Placement-format pass | 08-27 | Placement/room/transition/level-start formats decoded; `0x481E4` identified; effect callbacks found |
 | Type-table pass | 08-28 | `ObjectTypeDef[75]`; `wTypeFlags` → `wTriggerSound` |
-| Reachability analysis | 08-28 | Missing 12,880 bytes proven to be stack + PCM, not code |
+| Reachability analysis | 08-28 | The missing 12,880 bytes proven to be stack + PCM, not code |
 | **Transcription pass (6 forks)** | 08-28 | ~4,400 lines of exact pseudocode; **tilemap encoding** and **music opcodes** decoded; `Super()`, joystick input, row-major tilemap, AI modes, carry-flag returns all corrected |
-| String extraction | 08-28 | `re/strings.md`: 64 strings, font-validated encoding; intro-text gap explained; **ending text** found |
-| Slot-0 investigation | 08-28 | **No block-pushing mechanic exists** — slot 0 is the scripted crusher/boulder hazard, moved by `scripted_trap_update` via `A0`; confirmed by all 26 slot-0 placement records carrying types 24–73 |
-| SNDH packaging | 08-28 | Sound engine lifted into a 29-subtune SNDH with a hand-assembled relocating stub; all opcodes and displacements verified |
-| Room rendering + data typing | 08-28 | All 47 rooms rendered (validates the tilemap decode end-to-end); hard-bounded data regions given array types and labels in Ghidra |
-| Asset extraction | 08-28 | 11 PNGs rendered and visually validated; sprite format found to be plane-major; font extent settled at 95 glyphs; `0x40FEE` identified as three banners |
-| Index demotion | 08-28 | `functions.md`/`entities.md` demoted to indexes; globals moved to `data-structures.md`; authority order documented in `README.md` |
-| Audio complete | 08-28 | Rebuilt SNDH from the 1 MB capture: all three PCM samples intact incl. the death sample; **confirmed by listening**. Superimposed-'ding' defect fixed (`silence_all_channels` + interrupt-masked copy) |
-| Room render fix | 08-28 | Rooms were cut short at the bottom: only each room's own block-index stream was drawn, but the player sees one further screenful from the next stream. Added a 6-block-row margin; renderer verified free of off-by-one |
-| G2 + G3 closure | 08-28 | Sprite extraction switched to a grid sweep (124 → **185** frames); the 5 KB post-font gap identified as **161 unreferenced scenery tiles**; `level_start_info` proven to have **5** entries (entry 4 = the game-complete pseudo-level); completeness metrics found unfit for purpose |
-| Plan/KB consistency | 08-28 | Gap register refactored to genuinely open items only; settled decisions collected into a do-not-re-open table; stale audio/capture claims purged from `rick.md` and `memory_map.md` |
-| KB review | 08-28 | Stale content purged; `sprite_type_dispatch` corrected to **74 entries**; `hide_entity` relocated to `0x4AC08`; `bullet_range_remaining` → `bullet_point_x/y`; `CheckpointState` axes fixed |
+| String extraction | 08-28 | `re/strings.md`: 64 strings, font-validated encoding; ending text found |
+| Slot-0 investigation | 08-28 | **No block-pushing mechanic exists** — slot 0 is the scripted crusher/boulder hazard |
+| SNDH packaging | 08-28 | Sound engine lifted into a 29-subtune SNDH with a hand-assembled relocating stub |
+| Room rendering + data typing | 08-28 | All 47 rooms rendered (validates the tilemap decode end-to-end); hard-bounded data regions typed and labelled |
+| Asset extraction | 08-28 | PNGs rendered and visually validated; sprite format found to be plane-major; font extent settled at 95 glyphs |
+| Index demotion | 08-28 | `functions.md`/`entities.md` demoted to indexes; authority order documented in `re/README.md` |
+| Audio complete | 08-28 | SNDH rebuilt from the 1 MB capture: all three PCM samples intact incl. the death sample; **confirmed by listening**; superimposed-'ding' defect fixed |
+| Room render fix | 08-28 | Rooms were cut short at the bottom; added the 6-block-row margin the player actually sees |
+| Asset + loose-end closure | 08-28 | Sprite extraction switched to a grid sweep (124 → **185** frames); the 5 KB post-font gap identified as 161 unreferenced scenery tiles; `level_start_info` proven to have **5** entries (entry 4 = the game-complete pseudo-level) |
+| KB review + consistency pass | 08-28 | Stale content purged; `sprite_type_dispatch` corrected to **74** entries; `hide_entity` relocated; `CheckpointState` axes fixed |
+| Hatari harness | 08-28/29 | Commissioned, then switched to the analysed build (`chaos43/RICK.PRG`); `-0x2054` delta reproduced; gameplay driven under script by poking `joystick1_state` |
+| Dynamic-probe pass | 08-29 | 7 of 8 items resolved — several by Ghidra xref census rather than by watching |
+| **Byte-identity audit (9 audits)** | 08-29 | 15 defects found and fixed; both tile probes transcribed literally; signedness of the music engine established; struct widths and hidden dispatches proven clean |

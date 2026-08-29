@@ -189,4 +189,4 @@ graphics — the tile bitmaps live at `0x1D01E`/`0x1F01E` at 32 bytes each; and
   orphaned instructions; spot-checks found nothing that looked like 68000 opcodes).
 
 Most of this region is still raw, untyped bytes — this was a coarse pass, not a
-full mapping. See `reverse-plan.md`'s "Remaining gaps" section.
+full mapping. The asset sweep is nonetheless considered complete; see `../PLAN.md` §3.

@@ -328,7 +328,7 @@ left/right playfield edge. Links are bidirectional (each room lists its way back
 | +4 | `pNextRoomHeader` | Destination room, or **−1 = end of level** (advances `level_index`; after level 4: game complete) |
 | +8 | `wEntryRow` | `world_row_base −= wRow − wEntryRow` on transition |
 
-### LevelStartInfo (20 bytes × 4 at **0x4B522**)
+### LevelStartInfo (20 bytes × 5 at **0x4B522**)
 
 > ⚠️ **Corrected 2026-08-28.** The base is `0x4B522`, **not** `0x4B526` — the earlier
 > version started 4 bytes late and mislabeled every field. Verified: the longword at
@@ -346,10 +346,17 @@ left/right playfield edge. Links are bidirectional (each room lists its way back
 
 `pIntroText` identifies the previously-unexplained gap `0x4B8FE`–`0x4BE1F`: it is the
 **level intro/story text**, `0xFF`-terminated ASCII lines with `0xFE` ending the text.
-A **5th** pointer (`0x4BD14`) follows the 4th entry. Its target has been decoded and
-is the **game-ending text** ("...BARFIAN EMPIRE... WHAT WILL RICK DO NEXT ... ?"), not
-a 5th level — see `strings.md`. Whether the array is formally 5 entries or the 5th
-pointer is separate adjacent data is still unconfirmed, but the *content* is known.
+**The array has 5 entries, not 4 — settled 2026-08-28.** The 5th `pIntroText`
+(`0x4BD14`) points at the **game-ending text** ("...BARFIAN EMPIRE... WHAT WILL RICK DO
+NEXT ... ?"), not a 5th level — see `strings.md`. The boundary is hard: entry 5 would
+begin at `0x4B586`, which *is* `level_index`. `start_level` indexes the table with **no
+bounds check**, and `process_level_transition_point` lets `level_index` reach 4 on
+completion — so entry 4 is a deliberate **"game complete" pseudo-level** that displays
+the ending text and returns to attract mode without ever loading a room. Full
+explanation on the plate comment at `0x4B522`.
+
+*(The array type cannot be applied in Ghidra: an auto-generated pointer label inside the
+range blocks it and Ghidra rightly refuses to evict a named global. Cosmetic only.)*
 
 ### Effect callbacks (the formerly untraced A2 pointers)
 

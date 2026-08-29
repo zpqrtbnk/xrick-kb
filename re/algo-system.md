@@ -150,8 +150,8 @@ do {
   high byte is inherited from whatever `D3` held and then mutates on borrow. So the
   iteration count depends on the entry state as well as the characters typed, and the
   copy generally over-runs the 10-byte name field. The observable result is **not yet
-  characterised** — see `../reverse-plan.md`; the plan is to model the loop exactly in
-  Python and confirm one case live.
+  characterised** (`../PLAN.md` O3); the plan is to model the loop exactly in Python and
+  confirm one case live. A reimplementation is correct without that: emit `dbf D3w`.
 - Character grid `0x48FA1`, 6 cols × 5 rows: `ABCDEF` / `GHIJKL` / `MNOPQR` / `STUVWX`
   / `Y Z \ (blank) DEL END`, where `0x36`=DEL and `0x37`=END.
 - The easter egg requires the buffer to read `POOKY` followed by five untouched `9`
@@ -711,16 +711,15 @@ for (D0 = 0x3FF; D0 >= 0; D0--) {
    **Consequence for the missing-memory question:** the supervisor stack grows
    *downward from `0x5324C`* — i.e. into the uncaptured `0x50000`–`0x5324F` region.
    That region is therefore **stack space as well as sample data**, which independently
-   explains why nothing points into its upper end. `reverse-plan.md` Gap A and
-   `re/functions.md` both describe this call as "Mshrink / memory-block shrink" and
-   should be corrected.
+   explains why nothing points into its upper end. (Earlier notes described this call as
+   "Mshrink / memory-block shrink"; that was wrong and has been corrected.)
 
 2. **Input is a JOYSTICK, not the keyboard.** `keyboard_isr` decodes IKBD joystick
    packets. `0x4922B` (`joystick1_state`) is the player input byte with the standard
    Atari bits UP/DOWN/LEFT/RIGHT/FIRE = 0x01/0x02/0x04/0x08/0x80. This closes the
    "exact keyboard-scancode-to-action mapping for `player_input_bitmask`" item listed
-   as **needs dynamic verification** in `reverse-plan.md` Gap G — it is now resolved
-   statically. Suggest renaming `player_input_bitmask` → `joystick1_state`. Keyboard
+   once as **needing dynamic verification** — it is now resolved statically. Suggest
+   renaming `player_input_bitmask` → `joystick1_state`. Keyboard
    scancodes are used only for ESC (0x01), P (0x19) and SPACE (0x39).
 
 3. **Game text IS ASCII**, merely `0xFF`-terminated rather than NUL-terminated, and the

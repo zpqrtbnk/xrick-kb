@@ -7,11 +7,13 @@ Ghidra (project `ghidra.xrick`, program `atari_ram.bin`).
 **Goal:** become complete enough to *mechanically re-code the game with identical
 behaviour*. Current estimate against that bar: **~98%**. The code is fully reversed
 (every function named, every non-trivial one transcribed); graphics are extracted and
-visually validated; all 47 room maps render; and the sound engine is packaged as a
-playable SNDH, confirmed by ear with every PCM sample intact. What remains is a short
-short list of behavioural details wanting a live Hatari run: **7 of those 8 are now
-closed** (2026-08-29) — see `hatari.md` for the harness, the evidence and what is
-left. `../reverse-plan.md` is the authoritative gap register.
+visually validated; all 47 room maps render; the sound engine is packaged as a playable
+SNDH, confirmed by ear with every PCM sample intact; and nine byte-identity audits have
+been run to completion. The eight behavioural details that wanted a live Hatari run are
+**7 resolved, 1 optional** — see `hatari.md` for the harness and the evidence.
+
+**`../PLAN.md` is the authoritative record of what is still open.** Project-level rules,
+settled decisions and method lessons are in `../MEMORY.md`.
 
 ## Authority order
 
@@ -43,8 +45,8 @@ behavioural detail to an index file** — put it in the owning document and link
 | `entities.md` | The 74-entry entity dispatch table and the collision/interaction suite |
 | `strings.md` | All in-game text, the character encoding, and the font mapping |
 | `assets-manifest.md` | Extracted graphics: formats, palette, and what's in `assets/` |
-| `hatari.md` | **Dynamic verification**: the Hatari harness, how we drive it, and the G1 probe plan |
-| `byte-identity.md` | **Fidelity audit** — mechanical checks that the KB corresponds byte-for-byte to the original, the defects found, and the audits still outstanding. **Read before reimplementing.** |
+| `hatari.md` | **Dynamic verification**: the Hatari harness, how we drive it, and the eight behavioural probes |
+| `byte-identity.md` | **Fidelity audit** — mechanical checks that the KB corresponds byte-for-byte to the original; all nine complete, 15 defects found and fixed. **Read before reimplementing.** |
 
 ### Transcriptions (`algo-*.md`) — exact, re-codable pseudocode
 
@@ -84,7 +86,7 @@ verified against bytes).
   wrong.** The game's text *is* ASCII; it is merely **`0xFF`-terminated instead of
   NUL-terminated**, and Ghidra's ASCII analyzer had *Require Null Termination*
   enabled, so it found nothing. A scan for `0xFF`-terminated printable runs recovers
-  **63 strings**: high-score names, the level names (`SOUTH AMERICA`, `EGYPT`,
+  **64 strings**: high-score names, the level names (`SOUTH AMERICA`, `EGYPT`,
   `SCHWARZENDUMPF CASTLE`, `MISSILE BASE`), the name-entry grid, and the full level
   intro stories at `0x4B8FE`+. Note the character remapping: `^` = space,
   `\` = `.`, `[` = `,`, `]` = `?`. The font at `0x1B01E` is indexed by the raw

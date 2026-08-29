@@ -175,7 +175,7 @@ Addresses are Atari ST physical addresses = offsets into `atari_ram.bin`.
 - **Struct, table and global layouts**: [`data-structures.md`](data-structures.md)
 - **In-game text and font encoding**: [`strings.md`](strings.md)
 - **Memory map, hardware registers, capture limits**: [`memory_map.md`](memory_map.md)
-- **Open questions and plan**: [`../reverse-plan.md`](../reverse-plan.md)
+- **Open questions and plan**: [`../PLAN.md`](../PLAN.md)
 
 ## Level loading — resolved: there is none
 

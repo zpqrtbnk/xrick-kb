@@ -40,7 +40,7 @@ Rick Dangerous on Chaos #43 is not the original Core Design release. It is a cra
    **corrected** along the way — notably the `SpriteEntity` X/Y axes were swapped,
    `0x4BF18` is `player_dying` not "game_running", and `0x4B586` is the level index
    not a lives counter. See `re/functions.md`, `re/data-structures.md`,
-   `re/entities.md`, and `reverse-plan.md` for full detail.
+   `re/entities.md`, and `../PLAN.md` for full detail.
 
 ## What We Now Know (resolved since the last pass)
 
@@ -90,37 +90,27 @@ Rick Dangerous on Chaos #43 is not the original Core Design release. It is a cra
   **per-room** (not per-level): `save_checkpoint_state`/`restore_checkpoint_state`
   round-trip the player's position every time Rick enters a new room.
 
-## What We Still Need To Do
+## Where We Stand
 
-Items 1–3 and 6 of the previous list (entity handlers, the remaining
-`FUN_xxxxxxxx` functions, and the placement-table format) are **all done** — see the
-appendix in `reverse-plan.md`. **`reverse-plan.md` is now the authoritative gap
-register**; the summary below just orients you.
+**`../PLAN.md` is the authoritative record of current state and open work**; this is
+just the orientation.
 
 The goal is a knowledge base sufficient to *mechanically re-code the game with
-identical behaviour*. Measured against that bar we are roughly **95%** there.
+identical behaviour*. Measured against that bar we are roughly **98%** there.
 
 **The code itself is fully reversed.** Every function is named and every non-trivial
 one is transcribed to exact pseudocode in `re/algo-*.md`. The tilemap encoding and
 the music sequence opcodes — the last two undecoded formats — were closed by the
-2026-08-28 transcription pass.
+2026-08-28 transcription pass. Graphics are extracted and visually validated, all 47
+room maps render, and the sound engine is packaged as a playable SNDH — confirmed by
+ear, with all three PCM samples complete (including the death "waaaaa"). The 1 MB
+capture `atari_ram_1M.bin` supplied the samples the original dump was missing.
 
-What remains:
-
-1. **A short list of behavioural details** wanting a live Hatari run — remaining
-   tile-attribute bits and the `0x6F` probe mask, the POOKY easter egg's effect,
-   which enemy sprite variant is which creature per level, trigger-bit behaviour in
-   play, the landing rebound `nVelY = 0xFE - nVelY`, and four name-entry glyphs.
-   Full list in `reverse-plan.md`.
-
-2. **Optional completeness work** — sprite frames no animation table references, the
-   ~5 KB gap between the font and tile bank 0, and whether `level_start_info` is
-   formally 5 entries.
-
-Everything else is done: graphics extracted and visually validated, all 47 room maps
-rendered, and the sound engine packaged as a playable SNDH — confirmed by ear, with
-all three PCM samples complete (including the death "waaaaa"). The 1 MB capture
-`atari_ram_1M.bin` supplied the samples the original dump was missing.
+Since then, two further passes closed the remaining doubt. The eight behavioural
+details that wanted a live Hatari run are **7 resolved, 1 optional** (`re/hatari.md`),
+and nine **byte-identity audits** ran to completion, finding and fixing 15 defects
+(`re/byte-identity.md`). What is left is not analysis but a test: build the
+reimplementation and diff it against the live game.
 
 > ⚠️ `atari_ram_1M.bin` loads the game at a **different base address** (everything
 > shifted by **−0x2054**). All addresses in `re/` and Ghidra use `atari_ram.bin`
@@ -135,7 +125,7 @@ all three PCM samples complete (including the death "waaaaa"). The 1 MB capture
 - ~~**Don't re-run ASCII string search.**~~ **RETRACTED 2026-08-28 — the advice was
   wrong and cost us the game text for several passes.** Text *is* ASCII, but
   `0xFF`-terminated rather than NUL-terminated, and Ghidra's analyzer required NUL
-  termination. Scanning for `0xFF`-terminated printable runs yields 63 strings
+  termination. Scanning for `0xFF`-terminated printable runs yields 64 strings
   (level names, high-score table, intro stories at `0x4B8FE`+). `^`=space, `\`=`.`,
   `[`=`,`, `]`=`?`.
 - **Don't re-search for GEMDOS Fopen/Fread.** Already done exhaustively (see "What We
@@ -146,14 +136,17 @@ all three PCM samples complete (including the death "waaaaa"). The 1 MB capture
 
 | File | Purpose |
 |------|---------|
-| `re/atari_ram.bin` | RAM snapshot from Hatari — primary analysis artifact (incomplete, see blocker above) |
+| `re/atari_ram.bin` | RAM snapshot from Hatari — primary analysis artifact |
 | `re/memory_map.md` | Technical: Atari ST physical memory layout, capture limits |
 | `re/functions.md` | Technical: complete catalog of all **133** functions (all named) |
-| `re/data-structures.md` | Technical: all 9 structs, the level-data model, sprite frame format |
+| `re/data-structures.md` | Technical: all 10 structs, the level-data model, sprite frame format |
 | `re/entities.md` | Technical: the 74-entry dispatch table and entity behaviour map |
 | `re/strings.md` | Technical: all in-game text, character encoding, font mapping |
 | `re/algo-*.md` | **Exact re-codable pseudocode** for every non-trivial function (6 files) |
-| `reverse-plan.md` | **Authoritative** current state, gap register, and next steps |
+| `re/byte-identity.md` | The nine fidelity audits and the defects they found |
+| `re/hatari.md` | The dynamic-verification harness and the eight behavioural probes |
+| `../PLAN.md` | **Authoritative** current state, open work, and next steps |
+| `../MEMORY.md` | Project rules, settled decisions, method lessons |
 
 Note: `re/decompress_rick.py`, referenced by earlier versions of this file, is **not
 present** in the repo. The Layer-1 decompressor work described above produced it at

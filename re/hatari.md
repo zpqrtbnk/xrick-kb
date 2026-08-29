@@ -1,13 +1,14 @@
 # Dynamic verification with Hatari
 
-The static analysis is done. What remains (**G1** in `../reverse-plan.md`) is a short
-list of behavioural details that cannot be settled by reading bytes — they need the
-game *running*. This document is the standing record of how we talk to Hatari, what
-has been verified about the setup, and the state of each probe.
+The static analysis is done. This document is the standing record of how we talk to
+Hatari, what has been verified about the setup, and the state of the eight behavioural
+probes (§6) that were flagged as needing the game *running*.
 
 **Status: harness fully working 2026-08-29.** The correct build boots unattended to
 gameplay, the address base reproduces the Ghidra dump exactly, and Rick is driveable
-under script. No G1 probe run yet, but nothing is blocking one.
+under script. Of the eight probes, **7 are resolved and 1 is optional** — several fell
+to Ghidra xref censuses rather than to watching. The harness's remaining job is
+validating the transcriptions against the running game (`../PLAN.md` O1).
 
 ---
 
@@ -138,7 +139,7 @@ with `:file <cmds>` that pokes the byte on every frame. Not yet needed.
 Save states (`savemem` + `--memstate`) remain useful as fixtures for deep-level work if
 F4 turns out to patch code.
 
-## 6. Probe plan — the G1 items
+## 6. The eight behavioural probes
 
 | # | Item | Outcome | Status |
 |---|---|---|---|
@@ -153,7 +154,7 @@ F4 turns out to patch code.
 
 Items 2 and 6 end in screenshots — **visual verification is the user's call**.
 
-### Beyond G1
+### Beyond the probes
 
 The higher-value use of the harness is **validating the transcriptions**: breakpoint
 each major function, log register state, diff against what `algo-*.md` predicts. That
@@ -173,7 +174,7 @@ breakpoint's *silence* across many falls was the confirming evidence, not a fail
 Item 8 needed only decoding the pattern the transpose actually applies to. Items 3 and
 4 (enemy variants, trigger bits) remain — both need watching the game play.
 
-**2026-08-29 (later) — four G1 items resolved.** Level select reached by setting the
+**2026-08-29 (later) — four probe items resolved.** Level select reached by setting the
 POOKY flag plus `max_level_reached`, with **no code patching** — the cracktro's F4 is
 not needed. Items 1, 6 and 7 fell to static work once Ghidra was back: enumerating the
 readers of a global is decisive in a way that reading transcriptions is not. Items 3,
