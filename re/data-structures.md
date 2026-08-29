@@ -526,12 +526,25 @@ Values are **mutually exclusive** apart from `0x60` (floor+solid) and `0x82`
 or bit 3.** A reimplementation may copy the LUTs verbatim and never inspect those bits;
 they exist to give every tile a non-zero classification.
 
-**The `0x6F` intermediate mask is a row filter, not a bit-meaning puzzle.**
-`0x6F` = `~(0x10 | 0x80)`. Both probes OR tile attributes across up to four rows and
-apply `&= 0x6F` after the upper rows, so **one-way (`0x10`) and ladder-top (`0x80`) can
-only be contributed by the final, bottom row** — those two attributes are detected at
-the player's feet and nowhere else. Without it a ledge at head height would read as
-standable. The same mask serves the identical purpose in `probe_entity_tile_collision`.
+**The `0x6F` intermediate mask is a row filter.** `0x6F` = `~(0x10 | 0x80)`, applied
+after the upper rows, so **one-way (`0x10`) and ladder-top (`0x80`) can only be
+contributed by the final, bottom row** — detected at the player's feet and nowhere
+else. Without it a ledge at head height would read as standable.
+
+⚠️ **That is only half the rule — refined 2026-08-29 from the literal transcription.**
+In the **3-wide** variants (player *not* on an 8px column boundary) the probe keeps two
+accumulators: `D0` for the outer left/right tiles and `D1` for the **middle** tile. The
+tail is `bclr #7,D0; bclr #1,D0; D0 |= D1`, which strips ladder-top *and* ladder from
+the outer columns entirely before merging the middle one. Net effect:
+
+- **ladder (`0x02`) is detected only in the centre tile column**, any row;
+- **ladder-top (`0x80`) only in the centre column of the bottom row**;
+- the outer columns contribute solid/lethal/one-way/floor but never ladder bits.
+
+In the **2-wide** variants (`(x+4) & 7 == 0`) there is no centre column: `D1` is never
+written and the tail is absent, so ladder and ladder-top come from **either** sampled
+tile. `0x80` is still bottom-row-only because the `0x6F` mask clears it from the upper
+rows, but `0x02` survives from any row. The two cases genuinely behave differently.
 
 
 ### Bit `0x20` is a bounce surface, not "landable floor" (corrected 2026-08-29)

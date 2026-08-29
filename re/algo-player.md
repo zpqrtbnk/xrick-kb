@@ -845,33 +845,56 @@ D3 = (D7 & 0xF8) * 4;                      // tile row offset
 A1 += D2 + D3;
 D5 = D6 & 7;
 
-// ---- Variant selection ------------------------------------------------
-//  D5 != 0  -> 3 tiles wide, advance A1 by 0x1E after each triple
-//  D5 == 0  -> 2 tiles wide, advance A1 by 0x1F after each pair
-//  (D7 & 4) -> selects the 4-row sampling; otherwise 3 rows (+ an extra
-//              masked row).  All four variants share the shape below.
+// ---- Variant selection -- LITERAL, transcribed 2026-08-29 --------------
+// The four variants are NOT the same shape. They differ in tile count per row,
+// stride, ROW COUNT, and — critically — in their tail. Transcribed instruction by
+// instruction from 0x4CDB4-0x4CF70.
+//
+//   D5 = (x+4) & 7 ;  bit2 of D7 = y & 4
+//   A: D5!=0, y&4!=0  -> 3 tiles, stride 0x1E, 4 rows, mask after row 3, tail YES
+//   B: D5!=0, y&4==0  -> 3 tiles, stride 0x1E, 3 rows, mask after row 2, tail YES
+//   C: D5==0, y&4!=0  -> 2 tiles, stride 0x1F, 4 rows, mask after row 3, tail NO
+//   D: D5==0, y&4==0  -> 2 tiles, stride 0x1F, 3 rows, mask after row 2, tail NO
 
-// Row 1: OR attributes into D0 (outer tiles) and D1 (middle tile)
-D4 = *A1++;  D0 |= A0[D4];
-D4 = *A1++;  D1 |= A0[D4];                 // (3-wide variants only)
-D4 = *A1;    D0 |= A0[D4];
-A1 += 0x1E;                                // (or 0x1F in the 2-wide variants)
+#define TRIPLE  D4=*A1++; D0|=A0[D4];  D4=*A1++; D1|=A0[D4];  D4=*A1; D0|=A0[D4];
+#define PAIR    D4=*A1++; D0|=A0[D4];                         D4=*A1; D0|=A0[D4];
 
-// ---- crouch: head-level solid is recorded, not enforced ---------------
-if (crouching) {
-    D5 = (D0 | D1) & 0x40;
-    ceiling_flag = D5;                     // remember "something solid overhead"
-    D0 &= ~0x40;  D1 &= ~0x40;             // bclr #6
-    D0 &= ~0x04;  D1 &= ~0x04;             // bclr #2  (also drop lethal)
+// crouch block, emitted after row 1 in every variant. NOTE: the 3-wide variants
+// clear D1 as well; the 2-wide variants touch only D0 (they never write D1).
+#define CROUCH3 if (crouching) { D5=(D0|D1)&0x40; ceiling_flag=D5;                                                 D0&=~0x40; D1&=~0x40; D0&=~0x04; D1&=~0x04; }
+#define CROUCH2 if (crouching) { D5=(D0|D1)&0x40; ceiling_flag=D5;                                                 D0&=~0x40;            D0&=~0x04;            }
+
+if (D5 != 0) {                 // ---- 3 tiles wide, stride 0x1E ----
+    if (y & 4) {                                   /* VARIANT A  0x4CDB4 */
+        TRIPLE A1+=0x1E;  CROUCH3
+        TRIPLE A1+=0x1E;
+        TRIPLE A1+=0x1E;
+        D0 &= 0x6F;  D1 &= 0x6F;                   // 0x4CE1C
+        TRIPLE                                     // row 4, no advance
+    } else {                                       /* VARIANT B  0x4CE44 */
+        TRIPLE A1+=0x1E;  CROUCH3
+        TRIPLE A1+=0x1E;
+        D0 &= 0x6F;  D1 &= 0x6F;                   // 0x4CE96
+        TRIPLE                                     // row 3, no advance
+    }
+    D0 &= ~0x80;                                   // bclr #7   <- 3-wide ONLY
+    D0 &= ~0x02;                                   // bclr #1   <- 3-wide ONLY
+    D0 |= D1;                                      //           <- 3-wide ONLY
+} else {                       // ---- 2 tiles wide, stride 0x1F ----
+    if (y & 4) {                                   /* VARIANT C  0x4CEC4 */
+        PAIR A1+=0x1F;  CROUCH2
+        PAIR A1+=0x1F;
+        PAIR A1+=0x1F;
+        D0 &= 0x6F;                                // 0x4CF12 -- D0 only
+        PAIR                                       // row 4, no advance
+    } else {                                       /* VARIANT D  0x4CF24 */
+        PAIR A1+=0x1F;  CROUCH2
+        PAIR A1+=0x1F;
+        D0 &= 0x6F;                                // 0x4CF62 -- D0 only
+        PAIR                                       // row 3, no advance
+    }
+    // NO bclr #7, NO bclr #1, NO "D0 |= D1" here. D1 stays 0 throughout.
 }
-
-// Row 2: same shape
-// Row 3: same shape, then
-D0 &= 0x6F;  D1 &= 0x6F;                   // keep bits 0,1,2,3,5,6
-// Row 4: same shape, then
-D0 &= ~0x80;                               // bclr #7
-D0 &= ~0x02;                               // bclr #1
-D0 |= D1;
 
 // ---- the pushable block counts as solid ------------------------------- 0x4CF72
 if (sprite_list[0].wType != 0) {
@@ -898,13 +921,23 @@ if ((D0 & 0xD0) != 0) { pop; set_carry();   return; }   // bits 7,6,4 = blocked
 ```
 
 **Notes / uncertainties**
-- The four variants differ only in tile count per row (2 vs 3) and stride
-  (`0x1F` vs `0x1E`) — the two must sum to `0x20`, the row stride. The `Y & 4` split
-  selects how many rows are sampled before the `0x6F` mask is applied.
-- The exact row count per variant is faithfully reproduced in the disassembly at
-  `0x4CDB4`–`0x4CF70`; a reimplementation can equivalently OR the attributes of every
-  tile intersecting the player's 24×21 box, applying the crouch and mask steps in the
-  same order. **This equivalence has not been proven** — if bit-exactness matters,
+- ✅ **The four variants were transcribed literally 2026-08-29** (above). The earlier
+  claim that they "differ only in tile count and stride" was **wrong**, and so was the
+  note that all four share one shape. They differ in three ways, the last of which is
+  behavioural:
+  1. tile count per row (2 vs 3) and stride (`0x1F` vs `0x1E`) — these sum to `0x20`;
+  2. **row count** — 4 rows when `y & 4`, 3 rows otherwise, with the `0x6F` mask always
+     applied before the final row;
+  3. **the tail**: the 3-wide variants finish with `bclr #7,D0` / `bclr #1,D0` /
+     `or.b D1,D0`; the **2-wide variants do none of that** — they never write `D1` at
+     all. A reimplementation that applies the documented tail unconditionally clears
+     ladder (`0x02`) and ladder-top (`0x80`) in the x-aligned case where the original
+     preserves them.
+- ⚠️ **Do not use the "OR every tile intersecting the player's 24×21 box"
+  formulation.** It was never proven equivalent and is now known not to be: it cannot
+  express the D0/D1 split, and the split is load-bearing (see the derived semantics
+  below). The literal transcription above is the specification. Retained history: the
+  old text read —
   follow the four literal variants.
 - `collision_mask` is the mechanism behind one-way platforms: `player_controller`
   clears bits 4 and 7 while `nVelY < 0`, so upward motion passes through them.

@@ -94,6 +94,42 @@ side effect** (`tile_probe_result`, `player_collision_flags`). A reimplementatio
 turns these into plain `bool` functions and drops the global write will break exactly
 those call sites — and the failure will look like unrelated collision misbehaviour.
 
+## Audit 6 — literal transcription of `probe_player_tile_collision` ✅ DONE
+
+**Method.** Disassemble `0x4CD70`–`0x4D006` in full and transcribe every variant
+instruction by instruction, rather than describing an equivalent.
+
+**Result: the previous transcription was wrong in a way that changes behaviour.** It
+presented one shape and stated "all four variants share the shape below". They do not.
+
+| Variant | `(x+4)&7` | `y&4` | tiles/row | stride | rows | mask after | tail |
+|---|---|---|---|---|---|---|---|
+| A `0x4CDB4` | ≠0 | set | 3 | `0x1E` | **4** | row 3 | **yes** |
+| B `0x4CE44` | ≠0 | clear | 3 | `0x1E` | **3** | row 2 | **yes** |
+| C `0x4CEC4` | =0 | set | 2 | `0x1F` | **4** | row 3 | **no** |
+| D `0x4CF24` | =0 | clear | 2 | `0x1F` | **3** | row 2 | **no** |
+
+Two defects, the second serious:
+
+1. **Row count varies with `y & 4`** (4 rows vs 3). The old prose mentioned this but the
+   pseudocode showed only the 4-row form.
+2. **The 2-wide variants have no tail.** The 3-wide variants end with
+   `bclr #7,D0; bclr #1,D0; or.b D1,D0`; the 2-wide variants never write `D1` and
+   execute none of it. **A reimplementation applying the documented tail
+   unconditionally would clear ladder (`0x02`) and ladder-top (`0x80`) whenever the
+   player sits exactly on an 8-pixel column boundary, where the original preserves
+   them** — i.e. intermittent, position-dependent failure to grab ladders.
+
+The literal transcription also yields the real semantics of the `D0`/`D1` split, which
+the "OR every tile in the box" formulation structurally cannot express: in the 3-wide
+case ladder is detected **only in the centre tile column** and ladder-top only in the
+centre column of the bottom row, because the tail strips both bits from the outer
+columns before merging the middle accumulator. `data-structures.md` is updated.
+
+**Still open: `probe_entity_tile_collision` (`0x4DA40`)**, whose per-shape sequences at
+`0x4DA7E`–`0x4DBB2` remain "outline only". Given what the player probe turned out to
+hide, assume nothing about it.
+
 ## Audit 4 — transcriptions that are deliberately *not* literal
 
 One known case, and it is the highest remaining risk to byte-identity:
@@ -115,7 +151,8 @@ disassembly and an exhaustive differential test against the current formulation.
 | # | Audit | Status |
 |---|---|---|
 | 5 | Struct-field access widths (same method as Audit 1, for `(d16,An)` forms) | not run |
-| 6 | Literal transcription of both tile-probe sampling shapes | not run — see Audit 4 |
+| 6a | Literal transcription of `probe_player_tile_collision` | ✅ **done — 2 defects, see above** |
+| 6b | Literal transcription of `probe_entity_tile_collision` (`0x4DA7E`–`0x4DBB2`) | not run — **blocks reimplementation** |
 | 7 | `dbf` loop bounds (`dbf` iterates N+1; also `dbf D3w` at `0x491E2` tests the *word*) | partially done |
 | 8 | Immediate-operand signedness (e.g. music transpose — **already found one**, `algo-music.md`) | one found, not swept |
 | 9 | Instructions the decompiler hides (`lea`-loaded callbacks — a documented past error class) | not swept |
