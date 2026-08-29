@@ -184,8 +184,8 @@ value is `0xFF00`. Reimplement as a byte store or the word test still succeeds.
 ```c
 /* ---------- DYING ---------- */
 if (e->bDying != 0) {
-    if (e->nDirection == 0) e->nPosX -= 1;
-    else                    e->nPosY += 1;   /* sic — see notes */
+    if (e->nDirection == 0) e->nPosX -= 1;   /* subi.w #1,(0x4,A0) */
+    else                    e->nPosY += 1;   /* addi.w #1,(0x6,A0) */
     i32 fixed = (e->nPosY << 16) | e->nPosYFrac;
     fixed += (i32)(i16)e->nVelY << 8;
     e->nPosY     = fixed >> 16;
@@ -322,9 +322,29 @@ else {
 **Notes / uncertainties.**
 - The frame offset is **added** to `gfx_data`, which the wrapper preset to a bank
   base — so `gfx_data` is `bank + frame_offset`, not a plain pointer.
-- The dying-drift asymmetry (`nPosX -= 1` vs `nPosY += 1`) is transcribed
-  faithfully. It looks like an original-source typo (`0x6` where `0x4` was meant);
-  **needs dynamic verification** to confirm the on-screen effect.
+- ✅ **Dying-drift branch verified against disassembly 2026-08-29.** The two arms
+  really do act on different axes, and the transcription is byte-faithful:
+
+  ```
+  4D4F4  tst.b  (0x49,A0)        ; bDying
+  4D4F8  beq.w  4D542            ; not dying -> damage checks
+  4D4FC  tst.w  (0x2,A0)         ; nDirection
+  4D500  bne.b  4D50A
+  4D502  subi.w #0x1,(0x4,A0)    ; nPosX -= 1   (nDirection == 0)
+  4D508  bra.b  4D510
+  4D50A  addi.w #0x1,(0x6,A0)    ; nPosY += 1   (nDirection != 0)
+  ```
+
+  `+0x04` is `nPosX` and `+0x06` is `nPosY` (both *confirmed* in
+  `data-structures.md`), so `subi.w` on one axis and `addi.w` on the other is exactly
+  what the program does. Reproduce it literally. No claim is made about authorial
+  intent — the object code is the specification.
+
+  The rest of the dying block is likewise byte-faithful: the 8.8 integration builds
+  `D1 = (nPosY << 16) | nPosYFrac` via `moveq #0 / move.w / swap / move.w`, adds
+  `ext.l`-sign-extended `nVelY << 8`, and splits the result back across `+0x06`/`+0x0A`;
+  gravity is `addi.w #0xc4,(0x8,A0)` with **no terminal clamp**, and the frame index is
+  `addi.w #0x1,(0x2a,A0)`.
 - `tile_probe_result` bit meanings used here: `0x02` = ledge/edge, `0x04` = lethal
   tile, `0x80` = chase-enabling tile. ✅ **Remaining bits resolved 2026-08-29**:
   `0x01` and `0x08` are inert background classes tested by no reader, `0x20` is the
@@ -684,7 +704,8 @@ These contradict current `re/` docs. I did **not** edit those files.
   `0x6F` = `~(0x10|0x80)`, a **row filter**: applied after the upper rows so one-way
   and ladder-top can only be contributed by the bottom row (feet). Bits `0x01`/`0x08`
   are inert. See `data-structures.md` → *Tile attribute bits*.
-- The dying-enemy `nPosY += 1` asymmetry (suspected original typo) — **needs
-  dynamic verification**.
+- ~~The dying-enemy `nPosY += 1` asymmetry~~ ✅ **verified against disassembly
+  2026-08-29** — `subi.w #1,(0x4,A0)` / `addi.w #1,(0x6,A0)`, transcription is
+  byte-faithful. Reproduce literally.
 - `0x4BF12`, `0x4BF13`, `0x4BF15`, `0x4BF1C` are cleared by `reset_player_state`
   but not read anywhere in my ranges; they belong to `algo-player.md`.

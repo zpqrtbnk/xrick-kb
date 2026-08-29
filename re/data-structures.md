@@ -442,7 +442,7 @@ entries in the old copy were stale; all below are current.
 | `0x4BF24`/`0x4BF26` | `bullet_point_x`/`_y` | word | Bullet leading-edge probe. **No range budget** |
 | `0x4BF28` | `explosion_active` | byte | `0xFF` during blast frames 0–6 |
 | `0x4BF2A`/`0x4BF2C` | `explosion_x`/`_y` | word | Blast centre |
-| `0x4BF2E` | `player_touched_hazard` | byte | Set on any lethal overlap. ✅ **Single consumer**: `player_controller` @ `0x4C06A` (Ghidra xrefs: 6 writers, 1 reader) |
+| `0x4BF2E` | `player_touched_hazard` | **word** | Set on any lethal overlap. ✅ **Single consumer**: `player_controller` @ `0x4C06A` (Ghidra xrefs: 6 writers, 1 reader). ⚠️ **Word, not byte** — corrected 2026-08-29: *every* access is word-width (`clr.w` at `0x4BF30`, `tst.w` at `0x4C06A`, `move.w #0xff` at `0x4CBC6`/`0x4D0D2`/`0x4D17C`/`0x4D290`/`0x4D800`), so it occupies `0x4BF2E`–`0x4BF2F` and a "set" leaves `00 FF`, not `FF`. A byte-typed reimplementation would put `0xFF` at the wrong address |
 
 ### Level, rooms and scrolling
 | Address | Name | Type | Meaning |

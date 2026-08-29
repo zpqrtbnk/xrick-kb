@@ -137,16 +137,21 @@ do {
     D3 = *A2++;                                       // byte -> D3.b
     if (D3 == 0x39) D3 = 0x5E;                        // placeholder -> blank
     *A1++ = D3;
-} while (--D3.w != -1);        // <-- see BUG note
+} while (--D3.w != -1);        // dbf D3w -- see the note below
 ```
 
 **Notes / uncertainties.**
-- **Probable original-game bug at `0x491E2`:** the commit loop ends with `dbf D3w`,
-  but `D3` holds the *character just copied*, not the counter `D2` that was set to 9
-  immediately before. A faithful reimplementation must reproduce `dbf D3w` if
-  byte-identical behaviour is wanted. Effect depends on the entered characters, so the
-  copy usually over-runs the 10-byte name field. **Needs dynamic verification** to
-  characterise the observable result.
+- **`0x491E2` — the commit loop ends with `dbf D3w`.** `D3` holds the *character just
+  copied*, not the counter `D2` that was set to 9 immediately before. Reproduce
+  `dbf D3w` literally; the object code is the specification.
+
+  Note the loop control is subtler than "counts down from the character": `move.b
+  (A2)+,D3` writes only the **low byte**, while `dbf` tests the **full word**, whose
+  high byte is inherited from whatever `D3` held and then mutates on borrow. So the
+  iteration count depends on the entry state as well as the characters typed, and the
+  copy generally over-runs the 10-byte name field. The observable result is **not yet
+  characterised** — see `../reverse-plan.md`; the plan is to model the loop exactly in
+  Python and confirm one case live.
 - Character grid `0x48FA1`, 6 cols × 5 rows: `ABCDEF` / `GHIJKL` / `MNOPQR` / `STUVWX`
   / `Y Z \ (blank) DEL END`, where `0x36`=DEL and `0x37`=END.
 - The easter egg requires the buffer to read `POOKY` followed by five untouched `9`
