@@ -745,9 +745,14 @@ the table stride exactly, confirming the format.
   engine ignores. No occurrence was found in the two streams decoded here.
   **Needs dynamic verification** (or a full scan of all pattern data) to confirm they
   never appear.
-- The order-list transpose `0x1C` (28) at the end of song 0 channel 0 is unusually
-  large. It decodes consistently, but the musical result is unverified.
-  **Needs dynamic verification.**
+- ✅ **Resolved 2026-08-29 by decoding the target pattern.** The transpose `0x1C`
+  applies to **pattern 8**, which is `80 06 10 FF` — select instrument slot 0, then a
+  *single* note `b = 6` of duration `0x10`, then end. Index = `6 + 28 + 12 = 46`, well
+  inside the 84-entry `note_period_table`, giving period `0x010C` ≈ **466 Hz**. So the
+  unusually large transpose is deliberate and benign: song 0 channel 0 ends on one high
+  closing accent, roughly two octaves and four semitones above the pattern's written
+  pitch. **No out-of-range read occurs** — the theoretical maximum note (`0x7D`) would
+  overflow at this transpose, but the shipped data never goes near it.
 - `(A6+0x0F)` is loaded from instrument `+7` by `trigger_channel_note` but no reader
   was found in this address range. Possibly dead, possibly consumed elsewhere.
 - The exact MFP prescaler encoding for TACR is standard 68901 behaviour, not read out

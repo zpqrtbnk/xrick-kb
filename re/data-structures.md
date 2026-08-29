@@ -425,7 +425,7 @@ entries in the old copy were stale; all below are current.
 |---|---|---|---|
 | `0x4922B` | `joystick1_state` | byte | **Joystick, not keyboard.** IKBD joystick-1 report: `0x01` UP, `0x02` DOWN, `0x04` LEFT, `0x08` RIGHT, `0x80` FIRE |
 | `0x4922C` | last scan code | byte | Raw keyboard code; used only for ESC / P / SPACE |
-| `0x4D00A` | `player_collision_flags` | byte | Player tile-probe result. Bits: `0x01` background-A *(inert)*, `0x02` ladder, `0x04` lethal, `0x08` background-B *(inert)*, `0x10` one-way, `0x20` landable floor, `0x40` solid, `0x80` ladder-top; blocked = `& 0xD0`. **`0x01`/`0x08` are never tested** — see the attribute-bit section at the end |
+| `0x4D00A` | `player_collision_flags` | byte | Player tile-probe result. Bits: `0x01` background-A *(inert)*, `0x02` ladder, `0x04` lethal, `0x08` background-B *(inert)*, `0x10` one-way, `0x20` bounce surface, `0x40` solid, `0x80` ladder-top; blocked = `& 0xD0`. **`0x01`/`0x08` are never tested** — see the attribute-bit section at the end |
 | `0x4D00B` | ceiling-above flag | byte | Captured while crouching; saved in `CheckpointState` |
 | `0x4BF14` | `player_crouching` | byte | Non-zero while crouched (widens/shifts probes) |
 | `0x4BF18` | `player_dying` | byte | `0xFF` during the death sequence. **Not "game_running"** |
@@ -508,7 +508,7 @@ Values are **mutually exclusive** apart from `0x60` (floor+solid) and `0x82`
 | `0x04` | lethal | 4 / 4 | rendered: spikes |
 | `0x08` | background class B — ornate wall backdrop | 87 / 144 | rendered; **never tested** |
 | `0x10` | one-way platform | 8 / 9 | rendered: ledges |
-| `0x20` | landable floor | 3 / 1 | only ever with `0x40` (`0x60`) |
+| `0x20` | **bounce/spring surface** (*not* "landable floor") | 3 / 1 | only ever with `0x40` (`0x60`); drives the landing rebound |
 | `0x40` | solid | 62 / 34 | rendered: brick/stone |
 | `0x80` | ladder-top | 4 / 6 | only ever with `0x02` (`0x82`) |
 
@@ -525,3 +525,26 @@ apply `&= 0x6F` after the upper rows, so **one-way (`0x10`) and ladder-top (`0x8
 only be contributed by the final, bottom row** — those two attributes are detected at
 the player's feet and nowhere else. Without it a ledge at head height would read as
 standable. The same mask serves the identical purpose in `probe_entity_tile_collision`.
+
+
+### Bit `0x20` is a bounce surface, not "landable floor" (corrected 2026-08-29)
+
+Only **4 tiles in the whole game** carry it — bank 0 tiles 190/191/192 and bank 1 tile
+216, always as `0x60` (solid + bounce) — and they appear in exactly **5 rooms**:
+13 and 19 (bank 0), 23, 36 and 37 (bank 1). Ordinary ground is plain `0x40`.
+
+The only code that tests bit 5 is the landing path in `player_controller`:
+
+```
+4C176  bcs  4C1AC          ; probe returned blocked
+       (not blocked -> nVelY += 0x80, clamped to 0x800 terminal velocity)
+4C1AC  cmpi.w #0,nVelY
+4C1B4  blt  4C238          ; moving upward: different path
+4C1B8  btst #5,player_collision_flags
+4C1C0  beq  4C24A          ; ORDINARY SOLID GROUND LEAVES HERE
+4C1C4  ...                 ; only bounce tiles reach the rebound
+```
+
+So `nVelY = 0xFE - nVelY` never runs on normal ground. Verified dynamically: with the
+instruction breakpointed, Rick fell repeatedly around room 0 reaching `nVelY` of
+`0x08xx`–`0x0Cxx` and the site was **never** reached.

@@ -70,7 +70,7 @@ in a conclusion worth not rediscovering.
 > the address relocation delta before any probe result is trusted.
 Each is inferred from static reading with good confidence but has never been observed.
 
-**Four of the eight closed 2026-08-29** — see `re/hatari.md` §6 for the evidence.
+**Six of the eight closed 2026-08-29** — see `re/hatari.md` §6 for the evidence.
 
 | Item | Status |
 |---|---|
@@ -80,8 +80,8 @@ Each is inferred from static reading with good confidence but has never been obs
 | `player_touched_hazard` | ✅ single reader, `player_controller` @ `0x4C06A` — the entry was stale, `algo-player.md` had it right |
 | Enemy variants | ⏳ which of the 4 sprite banks × 3 AI modes is which creature, per level |
 | Trigger bits | ⏳ semantics read off the code, but no bit observed firing in play |
-| Landing rebound | ⏳ `nVelY = 0xFE - nVelY` transcribed literally; interpretation uncertain |
-| Song 0 transpose | ⏳ order-list transpose of `0x1C`; decodes consistently, musical result unverified |
+| Landing rebound | ✅ not the normal landing path — gated on attribute `0x20`, which only 4 tiles carry; these are **bounce surfaces**, max rebound `-0x702` |
+| Song 0 transpose | ✅ targets pattern 8 (a single note `b=6`) → index 46, ≈466 Hz; a deliberate high closing accent, no overflow |
 
 **Strategy.** One Hatari session, batched — they share setup and none needs more than
 a breakpoint plus a memory watch. Concretely: break on `probe_player_tile_collision`

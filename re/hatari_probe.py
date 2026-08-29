@@ -85,6 +85,8 @@ REF = {
     "player_collision_flags":  0x4D00A,   # byte: 02 ladder 04 lethal 10 one-way
                                           #       20 floor 40 solid 80 ladder-top
     "scripted_trap_update":    0x4D15C,
+    "landing_rebound_pc":      0x4C1DE,   # move.w #0xfe,D4 ; sub.w nVelY,D4
+    "nVelY":                   0x4A756,   # word
     "resolve_channel_note_period": 0x4538C,
     "note_period_table":       0x45720,
 }
@@ -295,7 +297,35 @@ def probe_levelsel(s):
     time.sleep(0.6)
 
 
+def probe_rebound(s):
+    """G1 item 5: how big is nVelY at the moment of landing?
+
+    The arithmetic is certain (disassembly at 0x4C1DE: move.w #0xfe,D4 / sub.w nVelY,D4),
+    so the only question is the VELOCITY RANGE landings actually occur at -- that decides
+    whether 0xFE - nVelY is a token nudge or a real upward rebound. Rather than log every
+    landing, arm one conditional breakpoint per threshold and see which ones ever fire.
+    """
+    pc, v = s.addr("landing_rebound_pc"), s.addr("nVelY")
+    print("[rebound] landing site %#x, nVelY %#x" % (pc, v))
+    s.cmd("b pc = $%x :trace :once" % pc)                      # does landing happen at all
+    time.sleep(0.4)
+    for th in (0x200, 0x400, 0x800):
+        s.cmd("b pc = $%x && ($%x).w > $%x :trace :once" % (pc, v, th))
+        time.sleep(0.4)
+    # UP alone does not jump from standing, but the opening room has drops -- walking
+    # right produces real falls, which reach higher velocities than a jump anyway.
+    print("[rebound] armed; walking right to fall off ledges")
+    for i in range(8):
+        s.hold(J_RIGHT, rounds=12)
+        s.joy(0)
+        time.sleep(1.2)
+        s.cmd("memdump $%x-$%x" % (v, v + 1))
+        time.sleep(0.4)
+        s.shot("(step %d)" % i)
+
+
 PROBES = {
+    "rebound":  probe_rebound,
     "levelsel": probe_levelsel,
     "boot":  probe_boot,
     "drive": probe_drive,

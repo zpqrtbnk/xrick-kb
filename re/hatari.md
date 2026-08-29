@@ -146,10 +146,10 @@ F4 turns out to patch code.
 | 2 | POOKY easter egg effect | Sets `menu_enabled` (`0x498C4`). With `max_level_reached` (`0x498C2`) non-zero it opens the game's own **SELECT LEVEL** screen — observed on screen, all four levels. | ✅ **resolved** |
 | 3 | Enemy-variant → creature mapping | `:trace` on the spawn path per level, now that level select works | pending |
 | 4 | Trigger-bit behaviour | `:trace` on `scripted_trap_update` | pending |
-| 5 | Landing rebound `nVelY = 0xFE - nVelY` | breakpoint at the instruction, log `nVelY` before/after | pending |
+| 5 | Landing rebound `nVelY = 0xFE - nVelY` | **Not the normal landing path.** Gated on attribute `0x20`, carried by only 4 tiles game-wide (5 rooms). Ordinary ground is `0x40` and branches away at `4C1C0`. These are **bounce surfaces**; gravity `+0x80`/frame clamps at `0x800`, so the max rebound is `-0x702`. Breakpoint never fired across repeated falls at `nVelY` `0x08xx`–`0x0Cxx`. | ✅ **resolved** |
 | 6 | Four name-entry glyphs | `0x36` = ◄ RUBOUT; `0x37`/`0x3A`/`0x3B` = `E`,`N`,`D` spelling "END". Only `0x36`/`0x37` are selectable codes; the other two are display-row continuation glyphs. | ✅ **resolved** |
 | 7 | `player_touched_hazard` consumer | Exactly **one reader**: `player_controller` at `0x4C06A` (Ghidra xrefs; 6 writers). Was already correct in `algo-player.md` — the plan entry was stale. | ✅ **resolved** |
-| 8 | Song-0 transpose | `--trace psg_write`, diff against `algo-music.md` | pending |
+| 8 | Song-0 transpose | Transpose `0x1C` targets **pattern 8** = `80 06 10 FF`, a single note `b=6` → index 46, period `0x010C` ≈ 466 Hz. In range, deliberate: one high closing accent. No overflow. | ✅ **resolved** |
 
 Items 2 and 6 end in screenshots — **visual verification is the user's call**.
 
@@ -165,6 +165,13 @@ turns the ~98% estimate from a judgement into a measurement — which is exactly
 **2026-08-28 — harness commissioned (against the wrong disk).** Environment verified;
 nothing needed installing. Automated a boot chain for `rd.st` and measured its
 stage-dependent relocation. Superseded: `rd.st` is not the analysed build.
+
+**2026-08-29 (third pass) — six of eight resolved.** Items 5 and 8 fell to reading
+rather than watching. Item 5 turned on noticing that attribute `0x20` is carried by
+only 4 tiles game-wide, so the rebound is a bounce-surface special case and the
+breakpoint's *silence* across many falls was the confirming evidence, not a failure.
+Item 8 needed only decoding the pattern the transpose actually applies to. Items 3 and
+4 (enemy variants, trigger bits) remain — both need watching the game play.
 
 **2026-08-29 (later) — four G1 items resolved.** Level select reached by setting the
 POOKY flag plus `max_level_reached`, with **no code patching** — the cracktro's F4 is

@@ -439,11 +439,18 @@ goto player_sprite_update;
 ```
 
 **Notes / uncertainties**
-- `nVelY = 0xFE - nVelY` on landing is transcribed literally. For a fast fall
-  (`nVelY = 0x800`) this yields `-0x702`, a large upward rebound, which is
-  surprising for a game without bouncing. The `nVelY == 0x100` early-out above it
-  catches the resting case. **Needs dynamic verification** to confirm the observable
-  effect; the arithmetic itself is unambiguous.
+- ✅ **Resolved 2026-08-29.** `nVelY = 0xFE - nVelY` is **not the normal landing
+  path**. It is gated on `player_collision_flags & 0x20`, and bit `0x20` is carried by
+  only 4 tiles in the entire game (bank 0: 190/191/192; bank 1: 216 — always `0x60`,
+  solid+bounce), used in just 5 rooms (13, 19, 23, 36, 37). Ordinary solid ground is
+  plain `0x40` and leaves at `4C1C0` for `0x4C24A`.
+  So the "surprising" large rebound is exactly right: these are **bounce surfaces**,
+  and the rebound scales with impact speed. Gravity is `+0x80`/frame clamped to a
+  terminal `0x800`, so the strongest bounce is `0xFE - 0x800 = -0x702`. The
+  `nVelY == 0x100` early-out is the only way to come to rest on such a tile.
+  Confirmed dynamically: with `0x4C1DE` breakpointed, repeated falls reaching `nVelY`
+  of `0x08xx`–`0x0Cxx` never once reached the site. *(Visual confirmation of what the
+  tiles look like in play is still open — see rooms 13/19.)*
 - The ladder-grab X test (`btst #3` then `& 7`) accepts X values where
   `(X & 8) == 0`, or `(X & 0x0F) == 8`. Effectively "close enough to a 16px column".
 - `nSpawnX` (`0x4A75A`) is *not* used as a spawn position for the player; it is a
