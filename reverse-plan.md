@@ -129,9 +129,11 @@ unresolved. No further sweep is worthwhile.
 
 ## 3b. Byte-identity audit (opened 2026-08-29)
 
-`re/byte-identity.md` is the standing record. Four audits run, **7 defects fixed**;
-five audits outstanding, of which #6 (literal transcription of both tile-probe sampling
-shapes) is the highest risk to a byte-identical reimplementation and blocks it.
+`re/byte-identity.md` is the standing record. **Six audits run, 9 defects fixed.** Both
+tile probes are now transcribed literally, which removes the blocker: the previous
+"equivalent" formulation would have broken ladder detection whenever the player sat on
+an 8-pixel column boundary. Four audits remain (struct-field widths, `dbf` bounds,
+immediate signedness, decompiler-hidden instructions); none is known to block.
 
 ---
 

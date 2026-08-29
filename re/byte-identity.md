@@ -130,29 +130,35 @@ columns before merging the middle accumulator. `data-structures.md` is updated.
 `0x4DA7E`–`0x4DBB2` remain "outline only". Given what the player probe turned out to
 hide, assume nothing about it.
 
-## Audit 4 — transcriptions that are deliberately *not* literal
+## Audit 6b — literal transcription of `probe_entity_tile_collision` ✅ DONE
 
-One known case, and it is the highest remaining risk to byte-identity:
+Disassembled `0x4DA40`–`0x4DC1E`. **Structurally identical to the player probe**, with
+the same four variants, the same row counts, the same strides and the **same tail
+asymmetry** (2-wide variants never write `D1` and omit `bclr #7`/`bclr #1`/`or D1,D0`).
+Differences are only:
 
-**`probe_player_tile_collision` (`0x4CD70`).** `algo-player.md` gives an *equivalent*
-formulation ("OR the attributes of every tile intersecting the player's 24×21 box")
-rather than the four hard-coded sampling shapes at `0x4CDB4`–`0x4CF70`. The equivalence
-is **asserted, not proven**. `probe_entity_tile_collision` (`0x4DA40`) has the same
-problem — its per-shape offset sequences at `0x4DA7E`–`0x4DBB2` are transcribed "in
-outline only".
+- no `clr.b ceiling_flag` on entry and **no crouch block**;
+- no crouch/ceiling special case in the pushable-block test;
+- results go to `tile_probe_mask` (`0x4DC28`) / `tile_probe_result` (`0x4DC29`) instead
+  of `collision_mask` / `player_collision_flags`.
 
-Neither may be shipped as-is. Both need the literal offset sequences extracted from the
-disassembly and an exhaustive differential test against the current formulation.
+Also corrected while transcribing: the `A1` index expression had unbalanced parentheses
+and described the tile map as `0x20` bytes **per column**; it is `0x20` bytes **per
+row** (row-major), matching `algo-level.md`'s correction. And `x += 4` happens *before*
+the index is computed, which the old formula obscured.
 
----
+Both probes' block-bounds tests use **signed** `bge`/`blt`.
+
+**Audit 4 is now closed** — there are no remaining deliberately-non-literal
+transcriptions.
 
 ## Outstanding audits
 
 | # | Audit | Status |
 |---|---|---|
 | 5 | Struct-field access widths (same method as Audit 1, for `(d16,An)` forms) | not run |
-| 6a | Literal transcription of `probe_player_tile_collision` | ✅ **done — 2 defects, see above** |
-| 6b | Literal transcription of `probe_entity_tile_collision` (`0x4DA7E`–`0x4DBB2`) | not run — **blocks reimplementation** |
+| 6a | Literal transcription of `probe_player_tile_collision` | ✅ **done — 2 defects** |
+| 6b | Literal transcription of `probe_entity_tile_collision` | ✅ **done — same shape, same tail asymmetry** |
 | 7 | `dbf` loop bounds (`dbf` iterates N+1; also `dbf D3w` at `0x491E2` tests the *word*) | partially done |
 | 8 | Immediate-operand signedness (e.g. music transpose — **already found one**, `algo-music.md`) | one found, not swept |
 | 9 | Instructions the decompiler hides (`lea`-loaded callbacks — a documented past error class) | not swept |

@@ -543,13 +543,37 @@ so it produces *no* register result. Its output is the global `tile_probe_result
 
 ```c
 A0 = tile_attr_table_ptr;                     /* 0x495D4 */
-A1 = &room_tile_map[(x + 4) >> 3) + ((y & ~7) * 4)];   /* 0x4A17E, 0x20 B/column */
-x += 4;
-/* Four sampling shapes, chosen by ((x & 7) == 0) and (y & 4):
-   each ORs tile attribute bytes through the LUT, masking intermediate
-   accumulations with 0x6F, and clearing bits 7 and 1 of the primary
-   accumulator before merging the secondary one. Row stride 0x1E or 0x1F. */
-D0 = <merged attribute byte>;
+x += 4;                                       /* addi.w #4,D6 -- BEFORE the index */
+A1 = &room_tile_map[(x >> 3) + ((y & ~7) * 4)];   /* 0x4A17E, 0x20 bytes per ROW */
+D0 = D1 = D4 = 0;
+
+/* ---- LITERAL four-variant transcription, 0x4DA7E-0x4DBB2 (2026-08-29) ----
+   Identical in shape to probe_player_tile_collision (see algo-player.md) except
+   that this one has NO crouch block and NO ceiling_flag. Same row counts, same
+   strides, and the same tail asymmetry.
+
+     D5 = x & 7 (after the +=4) ;  bit2 of D7 = y & 4
+     A' 0x4DA7E : D5!=0, y&4!=0 -> 3 tiles, stride 0x1E, 4 rows, mask after row 3, tail YES
+     B' 0x4DAE8 : D5!=0, y&4==0 -> 3 tiles, stride 0x1E, 3 rows, mask after row 2, tail YES
+     C' 0x4DB42 : D5==0, y&4!=0 -> 2 tiles, stride 0x1F, 4 rows, mask after row 3, tail NO
+     D' 0x4DB84 : D5==0, y&4==0 -> 2 tiles, stride 0x1F, 3 rows, mask after row 2, tail NO   */
+
+#define TRIPLE  D4=*A1++; D0|=A0[D4];  D4=*A1++; D1|=A0[D4];  D4=*A1; D0|=A0[D4];
+#define PAIR    D4=*A1++; D0|=A0[D4];                         D4=*A1; D0|=A0[D4];
+
+if ((x & 7) != 0) {                    /* 3 tiles wide, stride 0x1E */
+    if (y & 4) { TRIPLE A1+=0x1E; TRIPLE A1+=0x1E; TRIPLE A1+=0x1E;
+                 D0 &= 0x6F; D1 &= 0x6F;  TRIPLE }          /* A' -- 4 rows */
+    else       { TRIPLE A1+=0x1E; TRIPLE A1+=0x1E;
+                 D0 &= 0x6F; D1 &= 0x6F;  TRIPLE }          /* B' -- 3 rows */
+    D0 &= ~0x80;  D0 &= ~0x02;  D0 |= D1;      /* 3-wide ONLY */
+} else {                               /* 2 tiles wide, stride 0x1F */
+    if (y & 4) { PAIR A1+=0x1F; PAIR A1+=0x1F; PAIR A1+=0x1F;
+                 D0 &= 0x6F;  PAIR }                        /* C' -- 4 rows */
+    else       { PAIR A1+=0x1F; PAIR A1+=0x1F;
+                 D0 &= 0x6F;  PAIR }                        /* D' -- 3 rows */
+    /* NO bclr #7, NO bclr #1, NO "D0 |= D1". D1 stays 0 throughout. */
+}
 /* slot-0 block counts as solid */
 if (sprite_list[0].wType != 0
     && x - block.nHitboxW < block.nPosX && x - block.nHitboxW + block.nHitboxW + 0x0F >= block.nPosX
@@ -559,8 +583,11 @@ D0 &= tile_probe_mask;                        /* 0xFF walking, 0x7F chasing */
 tile_probe_result = D0;
 return (D0 & 0xD0) != 0;                      /* carry = blocked */
 ```
-The four sampling shapes are transcribed in outline only; the exact per-shape
-offset sequences live at `0x4DA7E`–`0x4DBB2`. Full byte-level transcription of the
+✅ **The four sampling shapes are now transcribed literally** (above, 2026-08-29),
+not in outline. They are structurally identical to `probe_player_tile_collision`'s,
+including the fact that the **2-wide variants have no `D1` accumulator and no
+`bclr #7`/`bclr #1`/`or D1,D0` tail** — see `byte-identity.md` Audit 6. The bounds
+checks in the block test use **signed** `bge`/`blt`. Superseded note:
 LUT walk is **deferred to `algo-level.md`**, which owns the tile map.
 
 ---
