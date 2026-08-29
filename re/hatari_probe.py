@@ -75,6 +75,18 @@ REF = {
     "keyboard_isr":      0x49262,
     "level_index":       0x4B586,
     "start_level":       0x4B588,
+    # --- G1 targets ---
+    "level_select_choice":     0x498C0,   # word
+    "max_level_reached":       0x498C2,   # word; run_selection_menu returns early if 0
+    "pooky_flag":              0x498C4,   # word; POOKY9999 sets it to 0x00FF
+    "run_selection_menu":      0x498C6,   # level select, gated by pooky_flag
+    "show_selection_menu":     0x499A0,
+    "probe_player_tile_collision": 0x4CD70,
+    "player_collision_flags":  0x4D00A,   # byte: 02 ladder 04 lethal 10 one-way
+                                          #       20 floor 40 solid 80 ladder-top
+    "scripted_trap_update":    0x4D15C,
+    "resolve_channel_note_period": 0x4538C,
+    "note_period_table":       0x45720,
 }
 
 
@@ -156,6 +168,11 @@ class Session:
         """Assert a joystick state (one poke)."""
         self.cmd("memwrite $%x $%02x" % (self.addr("joystick1_state"), bits))
 
+    def tap(self, bits, hold=0.15, after=0.45):
+        """A single press-and-release, for menus where FIRE means confirm."""
+        self.joy(bits); time.sleep(hold)
+        self.joy(0);    time.sleep(after)
+
     def hold(self, bits, rounds=6, gap=0.12):
         """Hold a joystick state across several frames."""
         for _ in range(rounds):
@@ -218,16 +235,83 @@ def probe_drive(s):
         s.shot("(after %s)" % tag)
 
 
+def probe_pooky(s):
+    """G1 item 2: what does the POOKY9999 easter egg actually do?
+
+    algo-system.md: entering "POOKY" + END in the name grid sets word 0x498C4 = 0x00FF.
+    algo-level.md: that flag gates run_selection_menu, making level select a cheat-only
+    screen. Setting the flag directly tests the claim AND, if it works, gives us level
+    access with NO code modification -- unlike the cracktro's F4, which may patch.
+    """
+    s.cmd("help b"); time.sleep(0.6)          # capture full option list (is :file available?)
+
+    flag = s.addr("pooky_flag")
+    print("[pooky] flag @ %#x; baseline (flag clear)" % flag)
+    s.cmd("memdump $%x-$%x" % (flag, flag + 1)); time.sleep(0.6)
+    s.watch("run_selection_menu")             # must NOT fire while flag is clear
+    s.watch("show_selection_menu")
+    time.sleep(3)
+    print("[pooky] --- setting flag to 0x00FF ---")
+    s.cmd("memwrite w $%x $00ff" % flag); time.sleep(0.5)
+    s.cmd("memdump $%x-$%x" % (flag, flag + 1)); time.sleep(0.6)
+    s.shot("(title, flag set)")
+
+    print("[pooky] asserting FIRE to start")
+    s.hold(J_FIRE, rounds=10)
+    s.joy(0)
+    time.sleep(6)
+    s.shot("(after fire with POOKY flag set)")
+    time.sleep(3)
+    s.shot("(a moment later)")
+
+
+def probe_levelsel(s):
+    """G1 item 2 completed, and level access for items 1/3/4.
+
+    run_selection_menu returns immediately unless BOTH menu_enabled (0x498C4, the POOKY
+    flag) and max_level_reached (0x498C2) are non-zero -- and the latter is 0 on a fresh
+    boot, which is why the previous run fell straight through into level 1. Setting both
+    gives the game's OWN level select with no code patching, unlike the cracktro's F4.
+    FIRE is the menu's confirm, so it must be tapped, never held.
+    """
+    for nm, val in [("pooky_flag", "00ff"), ("max_level_reached", "0003")]:
+        s.cmd("memwrite w $%x $%s" % (s.addr(nm), val)); time.sleep(0.4)
+        s.cmd("memdump $%x-$%x" % (s.addr(nm), s.addr(nm) + 1)); time.sleep(0.5)
+    print("[levelsel] flags set; tapping FIRE to leave the title")
+    s.watch("run_selection_menu")
+    s.tap(J_FIRE)
+    time.sleep(3)
+    s.shot("(expect: level-select menu)")
+
+    print("[levelsel] moving DOWN twice, then confirming")
+    s.tap(J_DOWN); s.shot("(after DOWN 1)")
+    s.tap(J_DOWN); s.shot("(after DOWN 2)")
+    s.cmd("memdump $%x-$%x" % (s.addr("level_select_choice"), s.addr("level_select_choice") + 1))
+    time.sleep(0.5)
+    s.tap(J_FIRE)
+    time.sleep(6)
+    s.shot("(expect: the chosen level)")
+    s.cmd("memdump $%x-$%x" % (s.addr("level_index"), s.addr("level_index") + 1))
+    time.sleep(0.6)
+
+
 PROBES = {
+    "levelsel": probe_levelsel,
     "boot":  probe_boot,
     "drive": probe_drive,
+    "pooky": probe_pooky,
 }
 
 if __name__ == "__main__":
     name = sys.argv[1] if len(sys.argv) > 1 else "boot"
     if name not in PROBES:
         sys.exit("unknown probe %r; known: %s" % (name, ", ".join(sorted(PROBES))))
-    sess = Session()
+    TITLE_ONLY = {"pooky", "levelsel"}
+    sess = Session(auto=(name not in TITLE_ONLY))
+    if name in TITLE_ONLY:
+        sess.to_title()
+        sess.h.change_option("--fast-forward off")
+        time.sleep(2)
     try:
         PROBES[name](sess)
     finally:

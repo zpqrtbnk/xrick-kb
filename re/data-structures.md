@@ -425,7 +425,7 @@ entries in the old copy were stale; all below are current.
 |---|---|---|---|
 | `0x4922B` | `joystick1_state` | byte | **Joystick, not keyboard.** IKBD joystick-1 report: `0x01` UP, `0x02` DOWN, `0x04` LEFT, `0x08` RIGHT, `0x80` FIRE |
 | `0x4922C` | last scan code | byte | Raw keyboard code; used only for ESC / P / SPACE |
-| `0x4D00A` | `player_collision_flags` | byte | Player tile-probe result. Bits: `0x02` ladder, `0x04` lethal, `0x10` one-way, `0x20` landable floor, `0x40` solid, `0x80` ladder-top; blocked = `& 0xD0` |
+| `0x4D00A` | `player_collision_flags` | byte | Player tile-probe result. Bits: `0x01` background-A *(inert)*, `0x02` ladder, `0x04` lethal, `0x08` background-B *(inert)*, `0x10` one-way, `0x20` landable floor, `0x40` solid, `0x80` ladder-top; blocked = `& 0xD0`. **`0x01`/`0x08` are never tested** — see the attribute-bit section at the end |
 | `0x4D00B` | ceiling-above flag | byte | Captured while crouching; saved in `CheckpointState` |
 | `0x4BF14` | `player_crouching` | byte | Non-zero while crouched (widens/shifts probes) |
 | `0x4BF18` | `player_dying` | byte | `0xFF` during the death sequence. **Not "game_running"** |
@@ -489,3 +489,39 @@ entries in the old copy were stale; all below are current.
 | `0x463CC` | default instrument data | — | Referenced by `init_music_playback`/`process_sequence_command` |
 | `0x22FEE` | tile-graphics table | 16 bytes/tile, 4 de-interleaved bitplane longword arrays | Source for `decode_level_tiles_to_cache` |
 | `0x23FEE` | title screen bitmap | 32768 bytes | Source for `draw_title_picture`; inside the still-unmapped `0x1B01E-0x44BED` blob (see `re/memory_map.md`) |
+
+
+---
+
+## Tile attribute bits — complete (resolved 2026-08-29)
+
+Attribute LUTs: `0x49F1E` (bank 0) and `0x4A01E` (bank 1), 256 bytes each, selected
+into `tile_attr_table_ptr` (`0x495D4`) by `init_screen_pointers`. Indexed by tile number.
+
+Values are **mutually exclusive** apart from `0x60` (floor+solid) and `0x82`
+(ladder+ladder-top) — each tile carries essentially one attribute.
+
+| Bit | Meaning | bank0 / bank1 tiles | Verified by |
+|---|---|---|---|
+| `0x01` | background class A — fragments, torches, blank | 77 / 55 | rendered; **never tested** |
+| `0x02` | ladder | 18 / 10 | rendered: ladder rungs |
+| `0x04` | lethal | 4 / 4 | rendered: spikes |
+| `0x08` | background class B — ornate wall backdrop | 87 / 144 | rendered; **never tested** |
+| `0x10` | one-way platform | 8 / 9 | rendered: ledges |
+| `0x20` | landable floor | 3 / 1 | only ever with `0x40` (`0x60`) |
+| `0x40` | solid | 62 / 34 | rendered: brick/stone |
+| `0x80` | ladder-top | 4 / 6 | only ever with `0x02` (`0x82`) |
+
+**`0x01` and `0x08` are inert.** The LUT has exactly three readers (Ghidra xrefs on
+`0x495D4`): `probe_player_tile_collision`, `probe_entity_tile_collision` and
+`bullet_hit_solid_test`. The first two test only `& 0xD0` plus `0x02`/`0x04`/`0x20`/
+`0x80` downstream; the third does `btst #6` (solid) alone. **No code branches on bit 0
+or bit 3.** A reimplementation may copy the LUTs verbatim and never inspect those bits;
+they exist to give every tile a non-zero classification.
+
+**The `0x6F` intermediate mask is a row filter, not a bit-meaning puzzle.**
+`0x6F` = `~(0x10 | 0x80)`. Both probes OR tile attributes across up to four rows and
+apply `&= 0x6F` after the upper rows, so **one-way (`0x10`) and ladder-top (`0x80`) can
+only be contributed by the final, bottom row** — those two attributes are detected at
+the player's feet and nowhere else. Without it a ledge at head height would read as
+standable. The same mask serves the identical purpose in `probe_entity_tile_collision`.

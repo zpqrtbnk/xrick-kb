@@ -30,9 +30,21 @@ not inferred from context:
 digits are stored as **unpacked decimal values 0–9**, which index font glyphs 0–9
 directly. Any reimplementation must not treat score bytes as ASCII characters.
 
-Codes `0x36`, `0x37`, `0x3A`, `0x3B` render as special non-letter glyphs and appear
-only in the name-entry grid — most likely the END / RUBOUT style controls. Their exact
-meaning is **unconfirmed**.
+✅ **Resolved 2026-08-29 by rendering the glyphs** (`hatari/glyphs_30_41.png`):
+
+| Byte | Renders as | Role |
+|---|---|---|
+| `0x36` | **left arrow ◄** | RUBOUT / DELETE |
+| `0x37` | **`E`** | first glyph of `END` — the code the grid returns |
+| `0x3A` | **`N`** | second glyph of `END`, display only |
+| `0x3B` | **`D`** | third glyph of `END`, display only |
+
+The earlier claim that all four "appear only in the name-entry grid" was imprecise.
+The **selection grid** at `0x48FA1` is 30 entries — `A`–`Z`, `0x5C` (`.`), `0x5E`
+(space), `0x36`, `0x37` — so only `0x36` and `0x37` are selectable codes. `0x3A` and
+`0x3B` live in the **display row** at `0x48F98`
+(`5C 5E 5E 5E 36 37 3A 3B FF` = `.` ␣ ␣ ␣ ◄ E N D), which spells "END" across three
+glyphs because the font has no multi-character cell.
 
 ---
 

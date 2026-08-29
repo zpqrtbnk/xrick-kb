@@ -70,16 +70,18 @@ in a conclusion worth not rediscovering.
 > the address relocation delta before any probe result is trusted.
 Each is inferred from static reading with good confidence but has never been observed.
 
-| Item | What is unclear |
+**Four of the eight closed 2026-08-29** — see `re/hatari.md` §6 for the evidence.
+
+| Item | Status |
 |---|---|
-| Tile-attribute bits | Bits beyond `0x02/0x04/0x10/0x20/0x40/0x80`, and the `0x6F` intermediate mask used inside the probe routines |
-| `POOKY9999` easter egg | Sets flag `0x498C4` and gates the level-select menu; the rest of its effect is untraced |
-| Enemy variants | Which of the 4 sprite banks × 3 AI modes is which on-screen creature, per level |
-| Trigger bits | Semantics read confidently off the code, but no bit observed firing in play |
-| Landing rebound | `nVelY = 0xFE - nVelY` transcribed literally; interpretation uncertain |
-| Name-entry glyphs | Four non-letter glyphs (`0x36 0x37 0x3A 0x3B`), presumably END/DELETE |
-| `player_touched_hazard` | Set on lethal overlap; the consumer site was never pinned down |
-| Song 0 transpose | Order-list transpose of `0x1C`; decodes consistently, musical result unverified |
+| Tile-attribute bits | ✅ `0x6F` = `~(0x10\|0x80)`, a row filter so one-way/ladder-top register only at the feet; bits `0x01`/`0x08` are background classes **no reader tests** |
+| `POOKY9999` easter egg | ✅ sets `menu_enabled`; with `max_level_reached` it opens the game's own SELECT LEVEL screen — observed |
+| Name-entry glyphs | ✅ `0x36` = ◄ RUBOUT; `0x37`/`0x3A`/`0x3B` = `E`,`N`,`D` |
+| `player_touched_hazard` | ✅ single reader, `player_controller` @ `0x4C06A` — the entry was stale, `algo-player.md` had it right |
+| Enemy variants | ⏳ which of the 4 sprite banks × 3 AI modes is which creature, per level |
+| Trigger bits | ⏳ semantics read off the code, but no bit observed firing in play |
+| Landing rebound | ⏳ `nVelY = 0xFE - nVelY` transcribed literally; interpretation uncertain |
+| Song 0 transpose | ⏳ order-list transpose of `0x1C`; decodes consistently, musical result unverified |
 
 **Strategy.** One Hatari session, batched — they share setup and none needs more than
 a breakpoint plus a memory watch. Concretely: break on `probe_player_tile_collision`

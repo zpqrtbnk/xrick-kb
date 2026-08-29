@@ -140,16 +140,16 @@ F4 turns out to patch code.
 
 ## 6. Probe plan — the G1 items
 
-| # | Item | Technique | Status |
+| # | Item | Outcome | Status |
 |---|---|---|---|
-| 1 | Remaining tile-attribute bits; the `0x6F` probe mask | `:trace` on the attribute probe logging tile + attribute + branch; then `memwrite` a bit onto a known tile | ready |
-| 2 | POOKY easter egg effect | `memwrite` the flag; screenshot + `video_color` trace | ready (no gameplay needed) |
-| 3 | Enemy-variant → creature mapping | `:trace` on the spawn path logging (room, type, variant, bank) | ready |
-| 4 | Trigger-bit behaviour | `:trace` on the placement-flag consumer | ready |
-| 5 | Landing rebound `nVelY = 0xFE - nVelY` | breakpoint at the instruction, log `nVelY` before/after | ready |
-| 6 | Four unidentified name-entry glyphs | `memwrite` the codes into the name buffer, screenshot | ready (no gameplay needed) |
-| 7 | `player_touched_hazard` consumer | value-changed breakpoint, log PC | ready |
-| 8 | Song-0 transpose | `--trace psg_write --trace-file`, diff against `algo-music.md` | ready (title music) |
+| 1 | Tile-attribute bits; the `0x6F` mask | `0x6F` = `~(0x10\|0x80)`, a **row filter** so one-way/ladder-top register only at the feet. Bits `0x01`/`0x08` are two background classes that **no reader tests** (all three LUT readers enumerated via Ghidra xrefs). | ✅ **resolved** |
+| 2 | POOKY easter egg effect | Sets `menu_enabled` (`0x498C4`). With `max_level_reached` (`0x498C2`) non-zero it opens the game's own **SELECT LEVEL** screen — observed on screen, all four levels. | ✅ **resolved** |
+| 3 | Enemy-variant → creature mapping | `:trace` on the spawn path per level, now that level select works | pending |
+| 4 | Trigger-bit behaviour | `:trace` on `scripted_trap_update` | pending |
+| 5 | Landing rebound `nVelY = 0xFE - nVelY` | breakpoint at the instruction, log `nVelY` before/after | pending |
+| 6 | Four name-entry glyphs | `0x36` = ◄ RUBOUT; `0x37`/`0x3A`/`0x3B` = `E`,`N`,`D` spelling "END". Only `0x36`/`0x37` are selectable codes; the other two are display-row continuation glyphs. | ✅ **resolved** |
+| 7 | `player_touched_hazard` consumer | Exactly **one reader**: `player_controller` at `0x4C06A` (Ghidra xrefs; 6 writers). Was already correct in `algo-player.md` — the plan entry was stale. | ✅ **resolved** |
+| 8 | Song-0 transpose | `--trace psg_write`, diff against `algo-music.md` | pending |
 
 Items 2 and 6 end in screenshots — **visual verification is the user's call**.
 
@@ -165,6 +165,12 @@ turns the ~98% estimate from a judgement into a measurement — which is exactly
 **2026-08-28 — harness commissioned (against the wrong disk).** Environment verified;
 nothing needed installing. Automated a boot chain for `rd.st` and measured its
 stage-dependent relocation. Superseded: `rd.st` is not the analysed build.
+
+**2026-08-29 (later) — four G1 items resolved.** Level select reached by setting the
+POOKY flag plus `max_level_reached`, with **no code patching** — the cracktro's F4 is
+not needed. Items 1, 6 and 7 fell to static work once Ghidra was back: enumerating the
+readers of a global is decisive in a way that reading transcriptions is not. Items 3,
+4, 5, 8 remain.
 
 **2026-08-29 — correct build, gameplay under script.** `disks/chaos43/RICK.PRG`
 autostarted from a GEMDOS drive reproduces the analysed layout exactly (`-0x2054`,
