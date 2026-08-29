@@ -5,9 +5,9 @@ list of behavioural details that cannot be settled by reading bytes — they nee
 game *running*. This document is the standing record of how we talk to Hatari, what
 has been verified about the setup, and the state of each probe.
 
-**Status: harness working end-to-end 2026-08-28.** The game boots unattended to the
-title screen under script control, RAM dumps out in the same form as `atari_ram.bin`,
-and the relocation delta is measured and self-checked automatically. No probes run yet.
+**Status: harness fully working 2026-08-29.** The correct build boots unattended to
+gameplay, the address base reproduces the Ghidra dump exactly, and Rick is driveable
+under script. No G1 probe run yet, but nothing is blocking one.
 
 ---
 
@@ -20,194 +20,170 @@ and the relocation delta is measured and self-checked automatically. No probes r
 | Display | **WSLg working** — `DISPLAY=:0`, `WAYLAND_DISPLAY=wayland-0` |
 | hconsole | **packaged**: `/usr/share/hatari/hconsole/hconsole.py` |
 | Repo from WSL | `/mnt/d/d/reverse/xrick` — no copying needed |
-| Disk images | `disks/rd.st`, `disks/rd.msa` (also `rd2.st`, `RICKDA2`) |
-| TOS | **EmuTOS 512k 1.4 US** — `../atari/emutos-512k-1.4/etos512us.img` (outside the repo) |
-| Machine config | `--machine st --memsize 1` — from the pre-existing `hatari.sh`; the status bar reads `1MB ST(WS3), EmuTOS 1.4.0` |
-| Driver | `re/hatari_probe.py` — boots, drives the menus, dumps RAM, measures the delta |
-
-Hatari options that matter: `--control-socket`, `--parse`, `--log-file`,
-`--trace` / `--trace-file`, `--memstate`, `--memsize`, `--machine`, `--joy1`.
+| TOS | **EmuTOS 512k 1.4 US** — `../atari/emutos-512k-1.4/etos512us.img` |
+| Machine config | `--machine st --memsize 1`; status bar reads `1MB ST(WS3), EmuTOS 1.4.0` |
+| Driver | `re/hatari_probe.py` |
 
 Relevant `--trace` flags: `psg_write`, `psg_read`, `video_color`, `video_addr`,
 `cpu_disasm`, `cpu_regs`, `ikbd_cmds`, `int`, `mem`, `os_base`.
 
 ## 2. The channel
 
-`hconsole.py` is an **importable Python module**, not just an interactive console.
-That is the key fact: we script whole experiment batches in one process instead of
-trading one experiment per turn.
+`hconsole.py` is an **importable Python module**, not just an interactive console, so
+whole experiment batches run in one process.
 
 ```
-re/hatari_probe.py                       (driver — we write this)
+re/hatari_probe.py
   └ imports hconsole
       └ binds an AF_UNIX socket, listens, then launches
         `hatari --control-socket <path> …`   (Hatari is the CLIENT; it connects to us)
-          ├─ commands IN  → hatari-debug / hatari-event / hatari-option /
-          │                 hatari-shortcut / hatari-path / hatari-toggle
-          └─ results OUT  → NOT the socket. Debugger output goes to the log file.
+          ├─ commands IN  → hatari-debug / hatari-event / hatari-option / hatari-shortcut
+          └─ results OUT  → NOT the socket. They arrive on Hatari's stdout.
 ```
 
-**The asymmetry is the thing to remember: the control socket is command-only.**
-Nothing comes back on it. Results are read by tailing the file set with the debugger's
-`logfile` command (or `--log-file`). Every probe therefore has two halves: send, then
-parse the log.
+**The control socket is command-only — nothing comes back on it.** Collect results
+from stdout: `python3 re/hatari_probe.py <probe> 2>&1 | tee run.log`. The debugger's
+`logfile` command is unreliable here (it reports the file opened, but the buffer was
+empty at kill).
 
-Useful `hconsole` methods: `debug_command(cmd)`, `insert_event(ev)`,
-`send_string(text)`, `change_option(opt)`, `trigger_shortcut(s)`, `toggle_pause()`,
-`kill_hatari()`, plus `Main.run(line)` and `Main.script(file)`.
+Confirmed vocabulary: **events** `keypress/keydown/keyup/text/doubleclick/rightdown/
+rightup`; **shortcuts** `screenshot/savemem/coldreset/warmreset/recanim/recsound/
+bosskey/mousegrab`; **debugger** `b(reakpoint)/cont/cpureg/disasm/memdump/memwrite/
+evaluate/info/history/lock/logfile/loadbin/savebin/address/help`.
+`change_option()` accepts any command-line option at runtime.
 
-Vocabulary confirmed from the source:
+## 3. Booting — use `chaos43`, **not** `rd.st`
 
-- **events**: `keypress`, `keydown`, `keyup`, `text`, `doubleclick`, `rightdown`,
-  `rightup` (with a `Scancode` table for non-alphanumeric keys)
-- **shortcuts**: `screenshot`, `savemem`, `coldreset`, `warmreset`, `recanim`,
-  `recsound`, `bosskey`, `mousegrab`
-- **debugger**: `breakpoint`, `cont`, `cpureg`, `disasm`, `memdump`, `memwrite`,
-  `evaluate`, `info`, `history`, `lock`, `logfile`, `loadbin`, `address`, `help`
-
-`change_option()` accepts essentially any command-line option at runtime, so `--trace`
-and `--joy1` can be flipped mid-session.
-
-### Fallback
-
-If the socket ever misbehaves, `hatari --parse <file>` executes a debugger command
-file at startup, with `:trace` breakpoints logging without ever halting the machine.
-Same evidence, no interactivity. Not expected to be needed.
-
-## 3. Booting the game — `disks/rd.st` is not a bare game disk
-
-It is a **Fuzion cracktro compilation (CD#12)**. Booting it lands on a menu:
-`F1 CHASE HQ / F2 RICK / F3 SUPER SPRINT / F4 QUARTZ`. Selecting F2 (Atari scancode
-`0x3C`) then hits a second prompt:
+**`disks/chaos43/RICK.PRG` is the build the Ghidra dump was taken from.** It
+reproduces the documented layout exactly: delta `-0x2054`, identical to
+`atari_ram_1M.bin`. Autostart it from a GEMDOS drive — no floppy, no mouse, no
+compilation menu:
 
 ```
-TRAINER (Y/N) ?
+hatari --machine st --memsize 1 --tos <emutos> \
+       --harddrive ~/rickhd --auto C:\RICK.PRG
 ```
 
-**Always answer N.** A trainer *patches the game code* (infinite lives and so on), so
-answering Y would silently invalidate every comparison against `algo-*.md`. This is
-not a preference; it is a correctness requirement for the whole exercise.
+`~/rickhd` is staged by `hatari_probe.py::stage_hd()` with `RICK.PRG`, `RICK2.PRG` and
+the `RICK_*.HNK` hunks, **deliberately excluding the `AUTO` folder** — `AUTO/MENU44.PRG`
+would launch the Chaos compilation menu and steal the boot.
 
-`re/hatari_probe.py` automates the full chain — boot → F2 → N → title screen — and it
-runs unattended. Verified working 2026-08-28.
+The sequence is then:
 
-Debugger syntax confirmed on this build: `savebin <filename> <address> <length>`.
-`savebin <f> 0 0x100000` yields a 1 MB raw image byte-identical in form to
-`atari_ram.bin`, so all existing Python tooling parses it unchanged.
+```
+trainer menu    F1 Infinite Lives / F2 Infinite Ammo / F3 Infinite Dynamite
+                F4 Select Level        -- ALL DEFAULT OFF
+                "Press space to play"
+title screen
+gameplay        entered by asserting FIRE (see §5)
+```
 
-## 4. Step zero — re-establish the address base (mandatory, EVERY session)
+**Leave F1–F3 OFF.** They patch game code and would invalidate any comparison against
+`algo-*.md`. **F4 (Select Level) is the route to Egypt / Castle / Missile Base** and
+removes the need for save-state fixtures — but verify first whether enabling it patches
+code or merely sets `level_index`; dump RAM with it on and off and diff.
 
-**Every address in this knowledge base comes from one specific run's memory layout.**
-Rick Dangerous is a GEMDOS program, so TOS chooses its load address; a different TOS
-version or RAM size relocates the entire image and every documented address becomes
-wrong by a constant.
+### `disks/rd.st` is a different game build — do not use it
 
-**Measured result: the delta is deterministic per boot *stage*, but the game
-relocates during startup.**
+It is a Fuzion cracktro compilation (CD#12): an `F1–F4` menu, then a `TRAINER (Y/N)?`
+prompt. It has **its own loader and a different relocation** (`-0x70FE` at the trainer
+prompt, `-0x7276` at the title, moving 0x178 bytes between the two). It is *not* the
+analysed binary. Time was lost here before `hatari.sh` — which had pointed at
+`chaos43.msa` all along — was taken seriously.
 
-Sampled across four boots (probe `relocation`):
+The packed disk files contain no recognisable code: the anchor appears in none of
+`RICK.PRG`, `RICK2.PRG`, the `.HNK` hunks or `chaos43.msa`. The game only materialises
+in RAM, so all verification must be against a live dump.
 
-| Stage | Delta vs `atari_ram.bin` | Reproducible |
-|---|---|---|
-| trainer prompt | `-0x70FE` | yes, every boot |
-| title screen | `-0x7276` | yes, every boot |
-| title + 20 s (attract) | `-0x7276` | unchanged |
+## 4. Step zero — re-establish the address base
 
-The game **moves 0x178 bytes between the trainer prompt and the title screen** — the
-cracktro loader evidently discards or compacts something once the Y/N answer is in.
-Loading itself is deterministic; an earlier reading of "unstable across boots" was a
-misdiagnosis, comparing two samples taken at *different stages*.
+Rick Dangerous is a GEMDOS program, so TOS chooses its load address and every
+documented address shifts by a constant. Measure it every session; never hardcode.
 
-The practical hazard is therefore sharper than mere nondeterminism would be:
-
-> **A breakpoint armed at one boot stage is silently stale after the next stage
-> transition.** It does not error — it just points 376 bytes into the wrong code.
-
-So: measure at the stage where the probe will actually run, re-measure after any
-stage transition, and never hardcode. `hatari_probe.py` measures automatically and
-refuses to report a delta that fails its self-check. Whether gameplay entry triggers a
-further relocation is **not yet tested** — assume it might until shown otherwise.
+On the correct boot path the delta is **`-0x2054`**, and it is **stable across the
+title screen and gameplay** (verified repeatedly). That equals `atari_ram_1M.bin`'s
+offset from `atari_ram.bin`, which is the strongest available confirmation that we are
+running the analysed binary in the analysed configuration.
 
 The measurement anchors on `reset_sound_chip`'s absolute PSG pokes — position-
 independent by construction — and validates the candidate against the music track
 table's type field (all 29 entries must be 0/1/2). `build_sndh.py::find_delta()` is
-the canonical implementation; `hatari_probe.py::measure_delta()` mirrors it and
-returns the reason on failure.
+canonical; `hatari_probe.py::measure_delta()` mirrors it.
 
-For reference, `atari_ram_1M.bin` sits at `-0x2054` relative to `atari_ram.bin`.
+`savebin <file> 0 0x100000` yields a 1 MB raw image byte-compatible with
+`atari_ram.bin`, so all existing Python tooling parses live dumps unchanged.
 
-## 5. Driving the game
+## 5. Driving the game — solved, no extra tooling
 
-Rick Dangerous is joystick-controlled. Set `--joy1 keys` (keyboard joystick emulation)
-and drive with `hatari-event keypress <scancode>`; the `Scancode` class in
-`hconsole.py` has cursor keys and the rest. Menus and the name-entry screen take
-`send_string()` directly.
+`hatari-event` **cannot press fire**: it injects *emulated* IKBD scancodes, while
+`--joy1 keys` intercepts *host* SDL keys, and the event vocabulary has no joystick
+verb. xdotool was considered and is **not needed**.
 
-**Save states are the fixtures.** Reaching Egypt by playing is slow and
-non-repeatable. Get there once, `savemem`, and start every later experiment from that
-exact state with `--memstate`. This is what makes differential experiments possible at
-all: change one variable, reload, compare.
+Instead, poke the decoded joystick byte the KB documents at **`0x4922B`**
+(`joystick1_state`: `01` UP, `02` DOWN, `04` LEFT, `08` RIGHT, `80` FIRE). `keyboard_isr`
+only rewrites it when an IKBD packet arrives, and with no joystick attached those are
+rare — so a poke sticks. Asserting `0x80` at the title screen starts the game;
+direction bits walk and jump Rick. **Verified: he walks right, the view scrolls, and
+the opening boulder gives chase.**
 
-Prefer **forcing** a condition with `memwrite` over playing to reach it. For the
-easter egg, the trigger bits and the name-entry glyphs we do not need the condition
-reached legitimately — writing the flag from a known state isolates one variable and
-is stronger evidence than observation.
+**Turn fast-forward OFF for gameplay.** It runs ~48x realtime (measured: 7,331
+`music_tick` hits in ~3 wall-clock seconds against a 50 Hz tick), so a 0.35 s poke gap
+spans ~17 *emulated* seconds — far too coarse to steer with, and Rick dies to the
+opening boulder while an input is still held. `to_game()` drops to realtime once boot
+is done. Keep fast-forward ON for booting, which it makes ~40 s instead of minutes.
 
-State files live in `re/hatari/states/` and are **not** committed (binary, large,
-regenerable).
+For frame-accurate input, the next step would be a breakpoint on `player_controller`
+with `:file <cmds>` that pokes the byte on every frame. Not yet needed.
+
+Save states (`savemem` + `--memstate`) remain useful as fixtures for deep-level work if
+F4 turns out to patch code.
 
 ## 6. Probe plan — the G1 items
 
 | # | Item | Technique | Status |
 |---|---|---|---|
-| 1 | Remaining tile-attribute bits; the `0x6F` probe mask | `:trace` breakpoint on the attribute probe logging tile + attribute + branch taken; then `memwrite` a bit onto a known tile and observe | pending |
-| 2 | POOKY easter egg effect | `memwrite` the flag from a save state; screenshot + `video_color` trace | pending |
-| 3 | Enemy-variant → creature mapping | `:trace` on the spawn path logging (room, placement type, variant, sprite bank) — one pass yields the whole table | pending |
-| 4 | Trigger-bit behaviour | `:trace` on the placement-flag consumer | pending |
-| 5 | Landing rebound `nVelY = 0xFE - nVelY` | breakpoint at the instruction, log `nVelY` before/after with player Y | pending |
-| 6 | Four unidentified name-entry glyphs | `memwrite` the codes into the name buffer, screenshot | pending |
-| 7 | `player_touched_hazard` consumer | value-changed breakpoint on the variable, log PC | pending |
-| 8 | Song-0 transpose | `--trace psg_write --trace-file`, diff against `algo-music.md`'s predicted register writes | pending |
+| 1 | Remaining tile-attribute bits; the `0x6F` probe mask | `:trace` on the attribute probe logging tile + attribute + branch; then `memwrite` a bit onto a known tile | ready |
+| 2 | POOKY easter egg effect | `memwrite` the flag; screenshot + `video_color` trace | ready (no gameplay needed) |
+| 3 | Enemy-variant → creature mapping | `:trace` on the spawn path logging (room, type, variant, bank) | ready |
+| 4 | Trigger-bit behaviour | `:trace` on the placement-flag consumer | ready |
+| 5 | Landing rebound `nVelY = 0xFE - nVelY` | breakpoint at the instruction, log `nVelY` before/after | ready |
+| 6 | Four unidentified name-entry glyphs | `memwrite` the codes into the name buffer, screenshot | ready (no gameplay needed) |
+| 7 | `player_touched_hazard` consumer | value-changed breakpoint, log PC | ready |
+| 8 | Song-0 transpose | `--trace psg_write --trace-file`, diff against `algo-music.md` | ready (title music) |
 
-Items 2 and 6 end in screenshots — **visual verification is the user's call**, per the
-standing decision on room renderings (`reverse-plan.md` §4).
+Items 2 and 6 end in screenshots — **visual verification is the user's call**.
 
 ### Beyond G1
 
-The higher-value use of a working harness is **validating the transcriptions**: run
-with a breakpoint on each major function, log the register state, and diff against
-what `algo-*.md` predicts. That converts the ~98% estimate from a judgement into a
-measurement — which is exactly what `analyze_function_completeness` could not do.
+The higher-value use of the harness is **validating the transcriptions**: breakpoint
+each major function, log register state, diff against what `algo-*.md` predicts. That
+turns the ~98% estimate from a judgement into a measurement — which is exactly what
+`analyze_function_completeness` could not do.
 
 ## 7. Findings log
 
-**2026-08-28 — harness commissioned.** Environment verified (nothing needed
-installing). Established that `rd.st` is a Fuzion cracktro requiring F2 + a trainer
-prompt, and that the trainer must be declined. Automated the boot chain in
-`hatari_probe.py`; confirmed `savebin` produces an `atari_ram.bin`-compatible image.
-**Key result: the relocation delta varies between identical boots (`-0x70FE` vs
-`-0x7276`), so it must be re-measured every session.** No G1 probe run yet.
+**2026-08-28 — harness commissioned (against the wrong disk).** Environment verified;
+nothing needed installing. Automated a boot chain for `rd.st` and measured its
+stage-dependent relocation. Superseded: `rd.st` is not the analysed build.
 
-## 8. Gotchas
+**2026-08-29 — correct build, gameplay under script.** `disks/chaos43/RICK.PRG`
+autostarted from a GEMDOS drive reproduces the analysed layout exactly (`-0x2054`,
+matching `atari_ram_1M.bin`). Its trainer menu is keyboard-driven and exposes a level
+selector. Gameplay reached and Rick driven by poking `joystick1_state`; no xdotool, no
+save states, no host-key problem. Two false conclusions retracted — see §8.
 
-- The control socket returns **nothing**; always pair a send with a log read.
-- Hatari **connects to** the socket — the driver must `bind()` and `listen()` first.
-  `hconsole` already does this; a hand-rolled driver must not get it backwards.
-- `hconsole` refuses to start if Hatari lacks `--control-socket` (its own compatibility
-  check, aimed at Windows builds). Ours has it.
-- Run Hatari from **WSL**, not from Windows — the Windows build has no control socket.
-- Match `--machine st --memsize 1024`, or the relocation delta changes under you.
-- `savemem` saves a Hatari *state snapshot*; a raw RAM image (what our Python tooling
-  parses) comes from the debugger's `savebin`.
-- **Never accept the trainer.** It patches code; observations would not match the
-  transcriptions.
-- **Never hardcode the relocation delta** — see §4. Measure, self-check, then rebase.
+## 8. Gotchas — each one cost a run
+
+- **Never use `:quiet` as a detector.** It suppresses the per-hit `:trace` output, and
+  the `b` listing has **no hit counter**, so a firing breakpoint looks identical to one
+  that never fired. This produced a confident and wrong "`keyboard_isr` and
+  `player_controller` never run" reading. Use **`:trace :once`** — one line on the first
+  hit, then it deletes itself; still being listed by `b` means it never fired.
+- **Boot the build you analysed.** Findings from `rd.st` describe a different loader.
+  The repo's own `hatari.sh` pointed at `chaos43.msa` from the start.
+- **Never accept a trainer / leave F1–F3 off.** They patch code.
+- **Turn fast-forward off before trying to steer** (§5).
+- Collect results from **stdout**, not the debugger `logfile`.
 - The `screenshot` shortcut writes `grabNNNN.png` into Hatari's working directory, not
-  into `re/hatari/`. Dumps and screenshots are gitignored (large, regenerable).
-- **Collect results from stdout, not the debugger `logfile`.** Despite `logfile`
-  reporting the file opened, breakpoint/trace output arrived on Hatari's stdout and
-  the log file was empty at kill (buffered and lost). Run probes with stdout captured:
-  `python3 re/hatari_probe.py <probe> 2>&1 | tee run.log`.
-- `--fast-forward on` runs roughly **48x realtime** (measured: 7,331 `music_tick` hits
-  in ~3 wall-clock seconds against a 50 Hz tick). Turn it off for any probe where
-  emulated timing matters.
+  into `re/hatari/`. Dumps and screenshots are gitignored.
+- `savemem` saves a Hatari *state snapshot*; a raw RAM image comes from `savebin`.
