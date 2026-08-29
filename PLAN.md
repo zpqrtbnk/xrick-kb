@@ -17,7 +17,7 @@ behaviour*. Everything below is measured against that.
 | Structs applied | **10**, plus typed arrays over every hard-bounded data region |
 | Entity dispatch types | **74 / 74** characterised |
 | Placement table | 523 slots = 476 real records + 47 per-room terminators (reconciled) |
-| Knowledge base | **16 documents + 4 scripts** in `re/` |
+| Knowledge base | **16 documents + 4 scripts** in `re/`, plus **11 documents** in `xrick/re/` about the prior C/SDL port |
 | Extracted assets | 12 graphic PNG sheets (185 sprite frames among them), 47 room maps + 47 entity overlays, 1 playable SNDH |
 | Byte-identity audits | **9 of 9 complete** — 15 defects found and fixed |
 | Dynamic-verification probes | **7 of 8 resolved**; the 8th reduced to a nice-to-have |
@@ -68,10 +68,54 @@ and the song-0 transpose. The eighth (trigger-bit semantics) is O2 below.
 
 ## 3. Open
 
-Four items. None of them blocks a reimplementation; the knowledge base is not known to
+Five items. None of them blocks a reimplementation; the knowledge base is not known to
 be missing anything structural.
 
-### O1. Build the reimplementation and diff it against the live game — **the next step**
+### O0. Compare against "the port" — **newly available, cheapest verification we have**
+
+A second, independent reverse-engineering of Rick Dangerous exists and is now on disk:
+**xrick**, bigorno's 1998–2005 C/SDL clone, cloned into `xrick/` at commit `c2aef3d`.
+Its knowledge base is `xrick/re/` (11 documents; entry point `xrick/re/README.md`), and
+`xrick/re/xref.md` is the comparison worksheet. `MEMORY.md` §9 carries the standing
+rules.
+
+**Why this is worth doing before O1.** It is a paper exercise — no emulator, no live
+run — and it is *independent*: the port was reversed from the PC executable by someone
+else, decades ago, with no shared method or tooling. Where the two agree, the fact is
+corroborated twice over. First reading already produced agreement on the 523-record
+placement table, all eight tile-attribute bits, all five common trigger bits, the enemy
+spawn-slot pools, the `-0x580` jump impulse, `+0x80`/`0x800` gravity, and the super-pad
+rebound `0xFE - vel` — the last two being arbitrary constants nobody guesses twice.
+
+**The caveat that governs everything.** The port's *logic* came from the **PC** version;
+only its artwork is ST. A difference is therefore three-ways ambiguous — PC-vs-ST, port
+error, or our error — and none of the three may be assumed. It also has no sound engine
+and no timing model, so it can say nothing about `re/algo-music.md` or anything measured
+in wall-clock time.
+
+Work already queued in `xrick/re/xref.md`:
+
+1. **Data first.** Decode `map_marks[523]`, `ent_entdata[74]`, `map_submaps[47]` and
+   `map_eflg_c[32]` from the port's C initialisers and diff field-by-field against the
+   same tables read out of `atari_ram.bin`. Level data should be identical across
+   platforms if anything is, so a clean match validates both sides' decoders at once.
+2. **Then the 17 numeric discrepancies (Q1–Q17)** — mechanical. The sharpest are the
+   stick-jab stun (port 20 vs our 25), the spawn latency seed (×32 vs ×25), the
+   dying-entity gravity (`+0x80` vs our `+0xC4` with no clamp), and the death launch
+   velocity (`-0x400` vs our `-0x300`).
+3. **Then `u_envtest` versus `probe_player_tile_collision`** — the highest-value single
+   routine, and very likely the same 8-pixel-column subtlety that audit 6 forced us to
+   transcribe literally, seen from the other side.
+4. **Then the four AI behaviours**, where genuine PC/ST divergence is most likely.
+
+**One finding already lands on us, not the port.** `re/data-structures.md` gives two
+conflicting readings of placement flag bit `0x02`: line 261 says "spawn into
+`sprite_list[0]` (the solid-block slot)", line 67 says "bullet passes through". The port
+independently reads it as `ENT_FLG_STOPRICK` — slot 0, solid, blocks Rick — corroborating
+line 261. Fix the inconsistency; it is ours either way. A second, weaker one: we
+attribute the skipped `|3` Y-alignment nudge to bit `0x04`, the port to bit `0x02`.
+
+### O1. Build the reimplementation and diff it against the live game — **the main event**
 
 Static auditing has reached diminishing returns: the last three audits found four
 defects between them, all in prose rather than in transcribed logic. The remaining
@@ -145,3 +189,4 @@ Known, understood, and deliberately not being fixed:
 | Hatari harness | 08-28/29 | Commissioned, then switched to the analysed build (`chaos43/RICK.PRG`); `-0x2054` delta reproduced; gameplay driven under script by poking `joystick1_state` |
 | Dynamic-probe pass | 08-29 | 7 of 8 items resolved — several by Ghidra xref census rather than by watching |
 | **Byte-identity audit (9 audits)** | 08-29 | 15 defects found and fixed; both tile probes transcribed literally; signedness of the music engine established; struct widths and hidden dispatches proven clean |
+| **"The port" registered and analysed** | 08-29 | xrick (bigorno, C/SDL) cloned into `xrick/`; knowledge base written to `xrick/re/` (11 docs); PC-derived-logic caveat established; ~20 facts cross-validated on first reading; 17 numeric + 7 semantic questions queued in `xrick/re/xref.md`; one internal inconsistency found on **our** side (placement flag `0x02`) |

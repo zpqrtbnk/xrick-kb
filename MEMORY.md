@@ -4,6 +4,8 @@ Slow-changing knowledge about **the project itself**: what we are working on, th
 we work under, decisions that are settled, and lessons that cost something to learn.
 
 - Game knowledge lives in **`re/`** (entry point: `re/README.md`).
+- Knowledge about **the pre-existing C/SDL port** lives in **`xrick/re/`** (entry point:
+  `xrick/re/README.md`). See §9.
 - Current status, open work and next steps live in **`PLAN.md`**.
 - Nothing here should duplicate either. If a fact is about the *game*, it belongs in
   `re/`; if it is about *where we are*, it belongs in `PLAN.md`.
@@ -49,6 +51,8 @@ similarity. Every assessment of progress is made against that bar.
 | `disks/` | Rick Dangerous disk images, incl. `chaos43/` |
 | `attempt.0/`, `attempt.1/` | Abandoned earlier attempts, deliberately kept in place |
 | `ghidra.xrick2/` | Out of scope — see §2 |
+| `xrick/` | **"The port"** — a clone of the xrick C/SDL clone (nested git repo). See §9 |
+| `xrick/re/` | Our knowledge base *about the port*, mirroring `re/`'s structure |
 | `hatari.sh`, `env.sh` | Emulator / environment helpers |
 
 ## 5. Where knowledge lives, and which layer wins
@@ -132,3 +136,45 @@ Two overrides on top of that:
 - **Never use Hatari's `:quiet` as a detector.** It suppresses per-hit output and the
   breakpoint listing has no hit counter, so a firing breakpoint looks identical to one
   that never fired. Use `:trace :once`.
+
+## 9. "The port" — xrick, the prior C/SDL clone
+
+Registered 2026-08-29. A second, independent reverse-engineering of Rick Dangerous
+already exists: **xrick**, by "bigorno" (Arnaud Nolen), 1998–2005, re-coded in C on SDL.
+It is cloned into `xrick/` (its own nested git repo, remote
+`https://github.com/zpqrtbnk/xrick.git`, commit `c2aef3d`, version string `050500`).
+Our analysis of it lives in `xrick/re/` — 11 documents mirroring `re/`'s structure, with
+`xrick/re/xref.md` as the comparison worksheet.
+
+Facts worth not rediscovering:
+
+- **The port's logic is PC-derived; only its artwork is Atari ST.** Every algorithm
+  comment cites PC-style addresses (`ASM 12CA`, `ASM 0FBC`) in a `0x0000`–`0x2FFF` space;
+  the build is configured `GFXST` for graphics only. A behavioural difference against our
+  ST reversal may therefore be a genuine PC-vs-ST difference, a port error, **or ours** —
+  three candidates, and none may be assumed. This governs every comparison.
+- **`ASM nnnn` comments do not map onto ST addresses.** No constant offset exists; they
+  are different executables for different CPUs. Never try to translate them.
+- **The port is a playable reconstruction, not a fidelity project.** It normalises struct
+  layouts into C types, drops two entity fields as "never used", and its own comments
+  admit it cannot explain several mechanisms. It discards exactly the width/signedness
+  information that `re/byte-identity.md` exists to capture.
+- **The port has no sound engine.** All audio is pre-rendered WAVs made by ear; there is
+  no PSG data anywhere. `re/algo-music.md` and our SNDH have no counterpart, and the port
+  can contribute nothing there.
+- **It also has no timing model** — a 75 ms software-slept state machine, no VBlank, no
+  interrupts. Per-frame *counts* are comparable; durations are not.
+- **Licence is unsettled.** Source headers say "All rights reserved" and point at a
+  README that carries no terms. Use the port as a reference for understanding only; do
+  not copy its code into this project's output without settling this.
+
+Already cross-validated on first reading (both sides independent): the 523-record
+placement table, 47 rooms, all eight tile-attribute bits, all five common trigger bits,
+the enemy spawn-slot pools 9–11 / 4–8, the placement X/Y bit packing, the `-0x580` jump
+impulse, `+0x80` gravity with a `0x800` clamp, and the super-pad rebound `0xFE - vel`.
+Seventeen numeric discrepancies and seven semantic ones are listed in `xrick/re/xref.md`.
+
+**One finding lands on our side, not the port's:** `re/data-structures.md` gives two
+conflicting readings of placement flag bit `0x02` (line 261 "spawn into `sprite_list[0]`"
+vs line 67 "bullet passes through"). The port corroborates the first. This is an internal
+inconsistency to fix regardless of the comparison.
