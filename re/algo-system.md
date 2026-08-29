@@ -529,7 +529,7 @@ play_music(D0 = 5, D1 = 1);         // title music, one-shot
 draw_title_picture();
 flip_screen_buffer(); vsync_wait();
 
-for (D1 = 0xAF; D1 >= 0; D1--) {    // 175-frame title wait
+for (D1 = 0xAF; D1 >= 0; D1--) {    // dbf D1: 0xAF -> **176** frames, not 175
     vsync_wait();
     toggle_palette_on_space();
     if (joystick1_state & 0x80) goto NEW_GAME;
@@ -610,7 +610,7 @@ AFTER_FADE:                                           // 0x4DDBE
     draw_string_xy(0x4DE27, x = 0x15, y = 0x0C);      // "OVER"
     palette_fade_in();
     do { vsync_wait(); } while (*(word*)0x45096 != 0);    // wait for jingle to finish
-    for (D0 = 0x3C; D0 >= 0; D0--) {                     // then up to 60 frames
+    for (D0 = 0x3C; D0 >= 0; D0--) {                     // dbf D0: 0x3C -> up to **61** frames
         vsync_wait();
         if (joystick1_state & 0x80) break;
     }
@@ -620,8 +620,12 @@ AFTER_FADE:                                           // 0x4DDBE
 ```
 
 **Constants:** room-scroll thresholds `0x5F` / `0xCC` on `player_pos_y_copy`;
-out-of-bounds bounds `0` / `0xE8` on `player_pos_x_copy`; title wait 175 frames;
-game-over wait 60 frames.
+out-of-bounds bounds `0` / `0xE8` on `player_pos_x_copy`; title wait **176** frames
+(`dbf` with `0xAF`); game-over wait **61** frames (`dbf` with `0x3C`).
+
+⚠️ **`dbf Dn` with `Dn = N` executes the body `N+1` times.** The `for (D = N; D >= 0; D--)`
+form above is correct; the earlier prose counts of "175" and "60" were off by one and
+are corrected. Audit 7 in `byte-identity.md` enumerates every `dbcc` site.
 
 ---
 
@@ -681,7 +685,7 @@ for (;;) {
 }
 ```
 
-Alternates high-score table and title picture, 175 frames each, until FIRE.
+Alternates high-score table and title picture, **176** frames each (`dbf` with `0xAF`), until FIRE.
 
 ## 0x4DF5A `draw_title_picture`
 

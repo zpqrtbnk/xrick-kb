@@ -129,11 +129,16 @@ unresolved. No further sweep is worthwhile.
 
 ## 3b. Byte-identity audit (opened 2026-08-29)
 
-`re/byte-identity.md` is the standing record. **Six audits run, 9 defects fixed.** Both
-tile probes are now transcribed literally, which removes the blocker: the previous
-"equivalent" formulation would have broken ladder detection whenever the player sat on
-an 8-pixel column boundary. Four audits remain (struct-field widths, `dbf` bounds,
-immediate signedness, decompiler-hidden instructions); none is known to block.
+`re/byte-identity.md` is the standing record. **All nine audits complete, 15 defects
+found and fixed.** Highlights: both tile probes now transcribed literally (the previous
+"equivalent" formulation would have broken ladder detection on 8-pixel column
+boundaries); six global width errors; the music engine's note index and transpose proven
+**signed**; four off-by-one loop counts.
+
+Two audits came back **clean** — the entity struct's field widths, and the
+decompiler-hidden-dispatch class (only 4 register-indirect transfers exist, all
+documented). Nothing further is known to block a reimplementation; the next step is to
+build one and diff it against the live game with the Hatari harness.
 
 ---
 

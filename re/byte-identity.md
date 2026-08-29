@@ -199,16 +199,70 @@ both are corrected. An unsigned reimplementation indexes far past `note_period_t
 That only 7 sites exist is itself the useful result: sign-extension is rare in this
 program, so this class of defect is now **exhaustively** closed rather than sampled.
 
-## Outstanding audits
+## Audit 7 — `dbcc` loop bounds ✅ DONE
+
+**Method.** Enumerate every `dbcc` in the code image, resolve each loop register's
+initialiser by scanning backwards, and compare the implied `N+1` iteration count against
+what the documents state.
+
+**Result: 40 sites; 4 off-by-one defects in prose, all corrected.**
+
+`dbf Dn` with `Dn = N` executes the body **N+1** times. The transcriptions' loop *form*
+— `for (D = N; D >= 0; D--)` — is correct and does iterate `N+1` times. But the prose
+and comments beside them stated the raw `N`:
+
+| Site | Register init | Documented | Correct |
+|---|---|---|---|
+| `0x4DC8A` title wait | `move.w #0xAF` | "175-frame title wait" | **176** |
+| `0x4DE10` game-over wait | `move.w #0x3C` | "up to 60 frames" | **61** |
+| attract-mode prose | — | "175 frames each" | **176** |
+| constants summary | — | "title wait 175; game-over 60" | **176 / 61** |
+
+Two notes from the same sweep:
+
+- **Three apparent `dbeq`/`dbpl` sites (`0x44EEC`, `0x45086`, `0x46F58`) are false
+  positives** — their branch targets are *odd addresses*, impossible on a 68000, so they
+  are data misparsed as code. Every genuine site is `dbf`/`dbra`.
+- The name-entry loop at **`0x491E2`** reports "initialiser not found", which is exactly
+  the documented quirk: `D3` is loaded from the string *inside* the loop, so there is no
+  initialiser to find. Mechanical confirmation of the hand analysis.
+
+## Audit 9 — instructions the decompiler hides ✅ DONE
+
+The known error class: `lea`-loaded callbacks that the decompiler omitted entirely,
+which caused a documented past mistake.
+
+**Method.** Enumerate every register-indirect control transfer in the code image.
+
+**Result: only 4 exist program-wide, and all 4 are correctly documented.** ✅
+
+| Site | Dispatch | Documented as |
+|---|---|---|
+| `0x4B086` `jsr (A1)` | `sprite_type_dispatch[type-1]`, base `0x4AAE0`, stride 4 | ✅ including the **`type − 1` bias** |
+| `0x4BF02` `jsr (A2)` | effect callback | ✅ the recovered A2 callbacks |
+| `0x4D08E` `jsr (A2)` | effect callback | ✅ same |
+| `0x4566C` `jmp (A0)` | `movea.l (0x10,A6),A0` — music channel coroutine resume | ✅ `+0x10` typed as **Coroutine resume pointer**, with all four state addresses listed |
+
+The remaining 29 indirect-looking transfers are `jsr (abs).l` — ordinary direct calls.
+So the hidden-callback class is **exhaustively closed**: there is nothing else dispatching
+through a register anywhere in the program.
+
+## Audit status — all planned audits complete
 
 | # | Audit | Status |
 |---|---|---|
 | 5 | Struct-field access widths | ✅ **done — entity struct clean** |
 | 6a | Literal transcription of `probe_player_tile_collision` | ✅ **done — 2 defects** |
 | 6b | Literal transcription of `probe_entity_tile_collision` | ✅ **done — same shape, same tail asymmetry** |
-| 7 | `dbf` loop bounds (`dbf` iterates N+1; also `dbf D3w` at `0x491E2` tests the *word*) | partially done |
+| 7 | `dbcc` loop bounds | ✅ **done — 40 sites, 4 off-by-one prose defects fixed** |
 | 8 | Sign-extension / immediate signedness | ✅ **done — 7 sites, exhaustive; 2 more defects fixed** |
-| 9 | Instructions the decompiler hides (`lea`-loaded callbacks — a documented past error class) | not swept |
+| 9 | Instructions the decompiler hides | ✅ **done — only 4 indirect dispatches, all documented** |
+
+**All nine planned audits are now complete: 15 defects found and fixed.** What remains
+is not an audit but a *test*: build the reimplementation and diff its behaviour against
+the live game using the Hatari harness (`hatari.md`). Static auditing has reached the
+point of diminishing returns — the last three audits found 4 defects between them, all
+in prose rather than in transcribed logic.
 
 **Precedent for #8:** the music transpose was documented as
 `note_period_table[b + transpose + 12]`, but the engine does `add.b` / `addi.b` / `ext.w`
