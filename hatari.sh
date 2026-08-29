@@ -3,3 +3,6 @@
 	--machine st --memsize 1 \
 	--wincon \
 	--disk-a disks/chaos43.msa
+
+# if needed:
+# savebin atari_ram.bin 0 <size>
