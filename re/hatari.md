@@ -144,8 +144,8 @@ F4 turns out to patch code.
 |---|---|---|---|
 | 1 | Tile-attribute bits; the `0x6F` mask | `0x6F` = `~(0x10\|0x80)`, a **row filter** so one-way/ladder-top register only at the feet. Bits `0x01`/`0x08` are two background classes that **no reader tests** (all three LUT readers enumerated via Ghidra xrefs). | ✅ **resolved** |
 | 2 | POOKY easter egg effect | Sets `menu_enabled` (`0x498C4`). With `max_level_reached` (`0x498C2`) non-zero it opens the game's own **SELECT LEVEL** screen — observed on screen, all four levels. | ✅ **resolved** |
-| 3 | Enemy-variant → creature mapping | `:trace` on the spawn path per level, now that level select works | pending |
-| 4 | Trigger-bit behaviour | `:trace` on `scripted_trap_update` | pending |
+| 3 | Enemy-variant → creature mapping | Resolved statically: 476-record placement scan gives bank-per-level, and each bank rendered (`enemy_banks.png`). Tribesman / white-robed fez guard / two green soldiers; Castle and Missile Base share both soldier banks. | ✅ **resolved** |
+| 4 | Trigger-bit behaviour | Census: **all 8 bits exercised** across all 4 levels, so no transcribed path is unreachable. Semantics still from code; dynamic spot-check optional. | ⚪ largely closed |
 | 5 | Landing rebound `nVelY = 0xFE - nVelY` | **Not the normal landing path.** Gated on attribute `0x20`, carried by only 4 tiles game-wide (5 rooms). Ordinary ground is `0x40` and branches away at `4C1C0`. These are **bounce surfaces**; gravity `+0x80`/frame clamps at `0x800`, so the max rebound is `-0x702`. Breakpoint never fired across repeated falls at `nVelY` `0x08xx`–`0x0Cxx`. | ✅ **resolved** |
 | 6 | Four name-entry glyphs | `0x36` = ◄ RUBOUT; `0x37`/`0x3A`/`0x3B` = `E`,`N`,`D` spelling "END". Only `0x36`/`0x37` are selectable codes; the other two are display-row continuation glyphs. | ✅ **resolved** |
 | 7 | `player_touched_hazard` consumer | Exactly **one reader**: `player_controller` at `0x4C06A` (Ghidra xrefs; 6 writers). Was already correct in `algo-player.md` — the plan entry was stale. | ✅ **resolved** |

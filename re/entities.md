@@ -86,10 +86,56 @@ history rather than keeping strikethroughs here. Genuinely open:
    `0x10` one-way, `0x20` landable floor, `0x40` solid, `0x80` ladder-top
    (blocked = `& 0xD0`). The remaining bits of the 256-byte LUT, and the `0x6F`
    intermediate mask used inside the probe routines, are not accounted for.
-2. **Which visual enemy variant maps to which on-screen creature per level.** The
-   four sprite banks and three AI modes are known; matching them to what the player
+2. ~~**Which visual enemy variant maps to which on-screen creature per level.**~~
+   ✅ **Resolved 2026-08-29** — see the table below. *(original note kept for context)*
+   The four sprite banks and three AI modes are known; matching them to what the player
    actually sees needs a live run or a per-level placement survey.
 3. **Trigger-bit semantics in live play** — the bit meanings are read off the code
    with confidence, but no bit has been observed firing in a running game.
 4. `ObjectTypeDef` entries with no placement record referencing them — unused content
    versus types only reachable via paths not yet traced.
+
+
+---
+
+## Enemy visual variants — resolved 2026-08-29
+
+Placement scan over all 476 records, plus rendering each bank
+(`hatari/enemy_banks.png`). The three AI modes inside each triple share a bank and are
+visually identical — **the creature is determined by the triple, i.e. by the level**;
+`aiMode` changes only behaviour.
+
+| Types | Bank | Creature | Levels used in |
+|---|---|---|---|
+| 4, 5, 6 | `0x0000` | hunched **tribesman** with headdress, orange/brown | South America (rooms 0–8) |
+| 7, 8, 9 | `0x0D20` | **guard in white robe with red fez** | Egypt (rooms 9–19) |
+| 10, 11, 12 | `0x1A40` | **green-helmeted soldier** | Castle (20–37) *and* Missile Base (38–46) |
+| 13, 14, 15 | `0x2760` | **second green soldier variant** | Castle (type 14 only) and Missile Base |
+
+Alt banks (`0x8B20` + `0xA80` stride), selected when `bTriggerFlags` bit 7 is set on
+the placement, hold a visually different creature per slot — bank `0x8B20` renders an
+orange animal-like figure rather than a humanoid.
+
+Levels do **not** each get their own enemy art: Castle and Missile Base share both
+green-soldier banks, which is why only two distinct guard sprites cover 27 rooms.
+
+## `bTriggerFlags` — every bit is exercised
+
+Census over all 476 placement records. No bit is dead, and all four levels use all
+eight, so none of the transcribed semantics describes an unreachable path.
+
+| Bit | Uses | S.America | Egypt | Castle | Missile |
+|---|---|---|---|---|---|
+| `0x01` | 84 | 13 | 21 | 34 | 16 |
+| `0x02` | 26 | 6 | 11 | 4 | 5 |
+| `0x04` | 73 | 15 | 24 | 14 | 20 |
+| `0x08` | 189 | 37 | 59 | 43 | 50 |
+| `0x10` | 117 | 21 | 21 | 49 | 26 |
+| `0x20` | 86 | 13 | 17 | 37 | 19 |
+| `0x40` | 93 | 14 | 19 | 41 | 19 |
+| `0x80` | 238 | 47 | 62 | 65 | 64 |
+
+The commonest whole-byte values are `0x88` (×102), `0xF0` (×70), `0x00` (×167) and
+`0x8C` (×26). This establishes **reachability**, not semantics: the meanings still come
+from the code transcription in `algo-entities.md`. A dynamic spot-check of one bit
+would be a useful confirmation but the risk of misreading is now low.
