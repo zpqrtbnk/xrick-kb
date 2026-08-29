@@ -435,19 +435,19 @@ entries in the old copy were stale; all below are current.
 | `0x4D00A` | `player_collision_flags` | byte | Player tile-probe result. Bits: `0x01` background-A *(inert)*, `0x02` ladder, `0x04` lethal, `0x08` background-B *(inert)*, `0x10` one-way, `0x20` bounce surface, `0x40` solid, `0x80` ladder-top; blocked = `& 0xD0`. **`0x01`/`0x08` are never tested** — see the attribute-bit section at the end |
 | `0x4D00B` | ceiling-above flag | byte | Captured while crouching; saved in `CheckpointState` |
 | `0x4BF14` | `player_crouching` | byte | Non-zero while crouched (widens/shifts probes) |
-| `0x4BF18` | `player_dying` | byte | `0xFF` during the death sequence. **Not "game_running"** |
-| `0x4BF1A` | `dynamite_exploding` | byte | 0 = fuse phase, `0xFF` = blast phase |
+| `0x4BF18` | `player_dying` | byte | `0xFF` during the death sequence. **Not "game_running"**. ⚠️ Written/tested as a **byte** at 8 sites, but `trigger_zone_update` reads it with **`tst.w` at `0x4BEDC`**, covering `0x4BF19` too. `0x4BF19` has **no references anywhere** and is `00` in every dump, so the word test behaves like a byte test — but that is a property of the *data*, not the code. Emit `tst.w` here |
+| `0x4BF1A` | `dynamite_exploding` | **word** | 0 = fuse phase, `0xFF` = blast phase. Corrected 2026-08-29: all 5 accesses are word (`clr.w`, `tst.w`, `move.w #0xff`), spanning `0x4BF1A`–`0x4BF1B` |
 | `0x4BF1E` | `stick_attack_active` | word | Non-zero while the stick jab is out |
 | `0x4BF20`/`0x4BF22` | `stick_point_x`/`_y` | word | Stick-jab probe point |
 | `0x4BF24`/`0x4BF26` | `bullet_point_x`/`_y` | word | Bullet leading-edge probe. **No range budget** |
-| `0x4BF28` | `explosion_active` | byte | `0xFF` during blast frames 0–6 |
+| `0x4BF28` | `explosion_active` | **word** | `0xFF` during blast frames 0–6. Corrected 2026-08-29: all 8 accesses are word, spanning `0x4BF28`–`0x4BF29` |
 | `0x4BF2A`/`0x4BF2C` | `explosion_x`/`_y` | word | Blast centre |
 | `0x4BF2E` | `player_touched_hazard` | **word** | Set on any lethal overlap. ✅ **Single consumer**: `player_controller` @ `0x4C06A` (Ghidra xrefs: 6 writers, 1 reader). ⚠️ **Word, not byte** — corrected 2026-08-29: *every* access is word-width (`clr.w` at `0x4BF30`, `tst.w` at `0x4C06A`, `move.w #0xff` at `0x4CBC6`/`0x4D0D2`/`0x4D17C`/`0x4D290`/`0x4D800`), so it occupies `0x4BF2E`–`0x4BF2F` and a "set" leaves `00 FF`, not `FF`. A byte-typed reimplementation would put `0xFF` at the wrong address |
 
 ### Level, rooms and scrolling
 | Address | Name | Type | Meaning |
 |---|---|---|---|
-| `0x495C8` | `spawn_scan_flags` | word | Which spawn passes to run (7 = repopulate all) |
+| `0x495C8` | `spawn_scan_flags` | **byte** | Which spawn passes to run (7 = repopulate all). Corrected 2026-08-29: all 7 accesses are byte (`btst.b #0/#1/#2`, `move.b #imm`); `0x495C9` is unreferenced |
 | `0x495CA` | `world_row_base` | word | Top world row of the view; also in `CheckpointState` |
 | `0x495CC` | `cur_tilemap_ptr` | long | Current room's packed tilemap |
 | `0x495D0` | `tile_gfx_base_ptr` | long | `0x1D01E` or `0x1F01E` per `RoomHeader.wTileBankVariant` |
@@ -460,14 +460,14 @@ entries in the old copy were stale; all below are current.
 | `0x4B586` | `level_index` | word | Current level 0–3; ≥4 = game complete |
 | `0x498C2` | `furthest_level` | word | High-water mark for the level-select menu |
 | `0x498C4` | POOKY flag | word | Set by the `POOKY9999` easter egg; gates the level-select menu |
-| `0x4DE2C` | return-to-attract | byte | Set on game completion |
+| `0x4DE2C` | return-to-attract | **word** | Set on game completion. Corrected 2026-08-29: all 3 accesses are word (`clr.w`, `tst.w`, `move.w #0xff`) |
 
 ### Timer and tile probes
 | Address | Name | Type | Meaning |
 |---|---|---|---|
 | `0x4BE18` | `timer_enable` | word | Non-zero while the escape countdown runs |
 | `0x4BE1A` | `timer_tick` | word | Counts down from 25 (one BCD unit per second) |
-| `0x4BE1C` | `bcd_timer` | word | BCD countdown value (starts `0x2000` = 20.00) |
+| `0x4BE1C` | `bcd_timer` | **word + byte chain** | BCD countdown value (starts `0x2000` = 20.00). Tested/loaded as a word (`tst.w`, `move.w`), but decremented by an **`sbcd` borrow chain** at `0x4BE54`/`0x4BE56` that walks *down* from `lea 0x4BE20,A1`, touching `0x4BE1F` then `0x4BE1E`. The BCD field therefore spans `0x4BE1C`–`0x4BE1F`; reproduce the `sbcd` chain, not a binary subtract |
 | `0x4DC28` | `tile_probe_mask` | byte | Attribute mask for `probe_entity_tile_collision` |
 | `0x4DC29` | `tile_probe_result` | byte | Masked probe result; carry = `& 0xD0` |
 

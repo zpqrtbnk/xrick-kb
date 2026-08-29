@@ -127,6 +127,14 @@ unresolved. No further sweep is worthwhile.
 
 ---
 
+## 3b. Byte-identity audit (opened 2026-08-29)
+
+`re/byte-identity.md` is the standing record. Four audits run, **7 defects fixed**;
+five audits outstanding, of which #6 (literal transcription of both tile-probe sampling
+shapes) is the highest risk to a byte-identical reimplementation and blocks it.
+
+---
+
 ## 4. Settled — do not re-open
 
 | Question | Decision |

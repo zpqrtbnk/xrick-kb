@@ -23,6 +23,11 @@ When two documents disagree, trust in this order:
 3. **Everything else** — `functions.md`, `entities.md`, `rick.md` are **indexes and
    narrative**. They carry no derived detail by design.
 
+**For a byte-identical reimplementation, `byte-identity.md` overrides the prose.** The
+`algo-*.md` transcriptions are C-like and therefore lossy about operand *width*,
+*signedness* and *flag* semantics; that document records where those differ from the
+instruction encodings, and which transcriptions are deliberately non-literal.
+
 That layering was introduced 2026-08-28 after `functions.md` and `entities.md` drifted
 three separate times by duplicating facts that lived elsewhere. **Do not add
 behavioural detail to an index file** — put it in the owning document and link to it.
@@ -39,6 +44,7 @@ behavioural detail to an index file** — put it in the owning document and link
 | `strings.md` | All in-game text, the character encoding, and the font mapping |
 | `assets-manifest.md` | Extracted graphics: formats, palette, and what's in `assets/` |
 | `hatari.md` | **Dynamic verification**: the Hatari harness, how we drive it, and the G1 probe plan |
+| `byte-identity.md` | **Fidelity audit** — mechanical checks that the KB corresponds byte-for-byte to the original, the defects found, and the audits still outstanding. **Read before reimplementing.** |
 
 ### Transcriptions (`algo-*.md`) — exact, re-codable pseudocode
 
