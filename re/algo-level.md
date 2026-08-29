@@ -309,8 +309,12 @@ Notes: **partial input-bit mapping recovered here** — `player_input_bitmask`
 transcription owns the full mapping; this is independent corroboration.)
 Menu label stride is `0x1A` bytes, rows 3 apart. Gated by `0x498C4` — the flag set by
 the `"POOKY9999"` easter egg — so the level-select menu is a **cheat-only** screen.
-**Needs dynamic verification:** the `D0` (x) argument to the cursor `draw_string_xy`
-is set before the loop and not visibly reloaded; confirm on hardware.
+✅ **Verified on hardware 2026-08-29.** The menu was reached by setting `0x498C4`
+and `max_level_reached` (`0x498C2`), and the cursor renders correctly on the selected
+row (observed moving from row 1 to row 4 and confirming into Missile Base), so the
+un-reloaded `D0` is not a defect. Note also that the menu steps **one row per frame**
+while the direction bit is held — there is no edge detection — and `FIRE` is the
+confirm, so a held FIRE opens and immediately accepts the menu.
 
 ## `show_selection_menu` — 0x499A0
 

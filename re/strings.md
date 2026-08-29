@@ -190,8 +190,10 @@ drawn by `draw_name_entry_cursor` (`0x491E8`):
 | `0x48F88` | `S^T^U^V^W^X` | `S T U V W X` |
 | `0x48F94` | `Y^Z^\^^^67:;` | `Y Z .` + 4 special glyphs |
 
-The trailing `0x36 0x37 0x3A 0x3B` are non-letter glyphs — presumably END/DELETE
-controls. **Unconfirmed.**
+✅ The trailing `0x36 0x37 0x3A 0x3B` are **confirmed** (2026-08-29): `0x36` is a
+left arrow (RUBOUT/DELETE) and `0x37`/`0x3A`/`0x3B` are `E`,`N`,`D` spelling "END".
+This is the **display row** at `0x48F98`; the *selection* grid at `0x48FA1` holds only
+`0x36` and `0x37` as returnable codes.
 
 ---
 

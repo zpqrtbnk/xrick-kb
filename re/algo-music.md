@@ -709,7 +709,7 @@ command**.
 
 | Byte | Operands | Effect |
 |---|---|---|
-| `0x00`–`0x7D` | 1 byte (duration) | **Note.** period = `note_period_table[b + transpose + 12]` |
+| `0x00`–`0x7D` | 1 byte (duration) | **Note.** period = `note_period_table[sign_extend((b + transpose + 12) & 0xFF)]` — see the signedness note in §18 |
 | `0x7E` | 2 bytes + 1 duration | **Raw period**, little-endian (`lo, hi`) |
 | `0x7F` | 1 byte | **Rest** for that many ticks |
 | `0x80`–`0x88` | — | **Select instrument** from slot `b & 7` |
@@ -740,11 +740,26 @@ the table stride exactly, confirming the format.
 
 ## 18. Notes / uncertainties
 
-- **Pattern opcodes `0xC0`/`0xC1`/`0xC3`–`0xFE` are skipped as 3-byte commands** but
-  never interpreted. Either they are unused in shipped data or they carry effects the
-  engine ignores. No occurrence was found in the two streams decoded here.
-  **Needs dynamic verification** (or a full scan of all pattern data) to confirm they
-  never appear.
+- ✅ **Resolved 2026-08-29 by scanning all pattern data.** All **55 patterns** decode
+  cleanly to their `0xFF` terminator. Opcodes `0xC0`/`0xC1`/`0xC3`–`0xFE` occur
+  **zero times** — and so do `0x7E` (raw period) and the whole `0x89`–`0xBF` mixer
+  range. The shipped streams use only: notes (457), rests (14), instrument selects
+  (34) and end (55). A reimplementation need not implement the unknown opcodes to play
+  the shipped music correctly, though it should still skip 3 bytes for them.
+
+- ⚠️ **Transpose is byte-wide and sign-extended — the arithmetic is signed.**
+  At `0x452F6`: `add.b (0x13,A4),D0` / `addi.b #0xc,D0` / `ext.w D0` / `add.w D0,D0`,
+  indexing `lea (0x418,PC),A1` = `0x45720` (which independently confirms the table
+  address). So the index is `sign_extend((note + transpose + 12) & 0xFF)`, **not** a
+  plain sum: the addition wraps modulo 256 and the result is then read as a *signed*
+  byte. This matters because the shipped songs use negative transposes extensively —
+  the full set is `-124, -12, -7, -5, -2, 0, 1, 2, 3, 5, 7, 10, 12, 22, 25, 28`. A
+  reimplementation doing widened unsigned arithmetic would index far past the table.
+
+- ✅ **The engine never reads outside `note_period_table` on shipped data.** Census of
+  all 23 order lists and 1012 note events: resulting indices span **11..67**, inside
+  the 84-entry table, with **zero** out-of-range accesses. (The `-124` transpose does
+  appear but no pattern reference follows it, so it never takes effect.)
 - ✅ **Resolved 2026-08-29 by decoding the target pattern.** The transpose `0x1C`
   applies to **pattern 8**, which is `80 06 10 FF` — select instrument slot 0, then a
   *single* note `b = 6` of duration `0x10`, then end. Index = `6 + 28 + 12 = 46`, well

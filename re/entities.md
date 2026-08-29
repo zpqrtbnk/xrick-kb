@@ -101,14 +101,16 @@ history rather than keeping strikethroughs here. Genuinely open:
 ## Enemy visual variants — resolved 2026-08-29
 
 Placement scan over all 476 records, plus rendering each bank
-(`hatari/enemy_banks.png`). The three AI modes inside each triple share a bank and are
+(`hatari/enemy_banks.png`). The Egypt identification was **visually confirmed by the
+user**; the others follow from the same rendered sheet. The three AI modes inside each
+triple share a bank and are
 visually identical — **the creature is determined by the triple, i.e. by the level**;
 `aiMode` changes only behaviour.
 
 | Types | Bank | Creature | Levels used in |
 |---|---|---|---|
 | 4, 5, 6 | `0x0000` | hunched **tribesman** with headdress, orange/brown | South America (rooms 0–8) |
-| 7, 8, 9 | `0x0D20` | **guard in white robe with red fez** | Egypt (rooms 9–19) |
+| 7, 8, 9 | `0x0D20` | **guard in white robe with red fez** ✅ *user-confirmed* | Egypt (rooms 9–19) |
 | 10, 11, 12 | `0x1A40` | **green-helmeted soldier** | Castle (20–37) *and* Missile Base (38–46) |
 | 13, 14, 15 | `0x2760` | **second green soldier variant** | Castle (type 14 only) and Missile Base |
 

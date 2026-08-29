@@ -80,6 +80,8 @@ Each is inferred from static reading with good confidence but has never been obs
 | `player_touched_hazard` | ✅ single reader, `player_controller` @ `0x4C06A` — the entry was stale, `algo-player.md` had it right |
 | Enemy variants | ✅ bank per level established from a 476-record placement scan and each bank rendered: tribesman / white-robed fez guard / two green soldiers (Castle+Missile share both). AI modes within a triple are visually identical |
 | Trigger bits | ⚪ **all 8 bits exercised** in shipped data across all 4 levels (census in `re/entities.md`), so no path is unreachable. Semantics still rest on the code transcription; a dynamic spot-check remains nice-to-have |
+| *(new)* Music transpose signedness | ✅ found during the consistency pass: transpose is **byte-wide then sign-extended**, and negative transposes are used throughout. Full census: 1012 note events, indices 11–67, no out-of-range read |
+| *(new)* Unknown pattern opcodes | ✅ full scan of all 55 patterns: `0xC0`/`0xC1`/`0xC3`–`0xFE`, `0x7E` and `0x89`–`0xBF` occur **zero times** |
 | Landing rebound | ✅ not the normal landing path — gated on attribute `0x20`, which only 4 tiles carry; these are **bounce surfaces**, max rebound `-0x702` |
 | Song 0 transpose | ✅ targets pattern 8 (a single note `b=6`) → index 46, ≈466 Hz; a deliberate high closing accent, no overflow |
 

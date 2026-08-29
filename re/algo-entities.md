@@ -326,7 +326,10 @@ else {
   faithfully. It looks like an original-source typo (`0x6` where `0x4` was meant);
   **needs dynamic verification** to confirm the on-screen effect.
 - `tile_probe_result` bit meanings used here: `0x02` = ledge/edge, `0x04` = lethal
-  tile, `0x80` = chase-enabling tile. Remaining bits **needs dynamic verification**.
+  tile, `0x80` = chase-enabling tile. ✅ **Remaining bits resolved 2026-08-29**:
+  `0x01` and `0x08` are inert background classes tested by no reader, `0x20` is the
+  rare bounce surface (4 tiles game-wide), `0x40` solid, `0x10` one-way. See
+  `data-structures.md` → *Tile attribute bits*.
 
 ## `enemy_update_4`…`15` — `0x4D39C`–`0x4D4E2` (12 wrappers)
 
@@ -677,8 +680,10 @@ These contradict current `re/` docs. I did **not** edit those files.
 
 - Exact per-shape offset sequences inside `probe_entity_tile_collision` (outlined
   only; belongs with the tile map in `algo-level.md`).
-- `tile_probe_result` bits other than `0x02`/`0x04`/`0x40`/`0x80`, and the meaning
-  of the `0x6F` intermediate mask — **needs dynamic verification**.
+- ~~`tile_probe_result` bits and the `0x6F` mask~~ ✅ **resolved 2026-08-29.**
+  `0x6F` = `~(0x10|0x80)`, a **row filter**: applied after the upper rows so one-way
+  and ladder-top can only be contributed by the bottom row (feet). Bits `0x01`/`0x08`
+  are inert. See `data-structures.md` → *Tile attribute bits*.
 - The dying-enemy `nPosY += 1` asymmetry (suspected original typo) — **needs
   dynamic verification**.
 - `0x4BF12`, `0x4BF13`, `0x4BF15`, `0x4BF1C` are cleared by `reset_player_state`
