@@ -155,4 +155,5 @@ eight, so none of the transcribed semantics describes an unreachable path.
 The commonest whole-byte values are `0x88` (×102), `0xF0` (×70), `0x00` (×167) and
 `0x8C` (×26). This establishes **reachability**, not semantics: the meanings still come
 from the code transcription in `algo-entities.md`. A dynamic spot-check of one bit
-would be a useful confirmation but the risk of misreading is now low.
+would be a useful confirmation but the risk of misreading is now low. Tracked as
+`../PLAN.md` T6.

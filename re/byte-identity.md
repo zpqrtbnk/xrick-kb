@@ -777,10 +777,36 @@ problems in an afternoon, at zero emulator cost.
 | 10k | O6 — the "unexplained" `0x4B336`–`0x4B34F` region | ✅ **done — 1 defect (mine, from 10e); four HUD render buffers, solved statically** |
 | 10l | T2 (bullet probe points) and T3 (the third `0x19`) | ✅ **done — 0 defects; both closed** |
 | 10m | T5 — entity-dispatch reconciliation | ✅ **done — 0 defects; a base mismatch, not a shape mismatch** |
+| 10n | T12/T13/T14/T16 — the assumption T-items | ✅ **done — 1 defect; all four claims promoted from assumed to measured** |
 
-**All audits are complete: 49 defects found and fixed** (15 from audits 1–9, 16 from
-audit 10, 10 from 10b, 1 from 10c, 0 from 10d, 2 from 10e, 4 from 10f, 1 from 10k). What remains is not an audit but a *test*: build the reimplementation and diff
+**All audits are complete: 50 defects found and fixed** (15 from audits 1–9, 16 from
+audit 10, 10 from 10b, 1 from 10c, 0 from 10d, 2 from 10e, 4 from 10f, 1 from 10k, 1 from
+10n). What remains is not an audit but a *test*: build the reimplementation and diff
 its behaviour against the live game using the Hatari harness (`hatari.md`).
+
+### Audit 10n — the assumption T-items (2026-08-31)
+
+Prompted by the user's rule that **no assumption may sit in a document**: every one must
+become a numbered task. Four were cleared by measurement rather than argument.
+
+| Item | Was | Now |
+|---|---|---|
+| T12 `palette_fade_in` starts from black | inferred contract | **proven**: `0x00FF8240` is referenced by exactly 3 instructions (`set_palette` `0x49382`, fade-in `0x493AE`, fade-out `0x4940A`), `set_palette` has 1 caller; 8 of 9 fade-in sites pair with a fade-out in the same function, the 9th closes through `show_selection_menu` → `start_level` → `show_level_intro_screen` (fade-out `0x4B794`) |
+| T13 screen bases | inferred from `draw_string` | **read**: `0x492EA` = `0x00078000`; `flip_screen_buffer` XORs bit 7 of `0x492EC`, giving `0x70000`/`0x78000` |
+| T14 `hide_entity` dead | `get_xrefs_to` → none (blind to table dispatch) | **scanned**: `0x0004AC08` stored 0 times, against 50 for `0x0004D15C` and 1 for `0x0004B856` — query validated |
+| T16 engine clean before SFX | unverified ordering claim | **traced**: first `play_music` after boot is track 5 (type 0) at `0x4DC62`, inside init, before the main loop; all 22 type-1/2 sites are gameplay-only |
+
+**The one defect (#50): `assets-manifest.md` had the type-0 census wrong** — "subtunes 1–8
+are the only type-0 tracks". Reading `nTrack_type` from all 29 records at `0x44F08` gives
+**nine**: tracks `0`–`7` *and* `27` (0x1B), whose `nParam_index` = 8 is the ninth entry of
+the 9×6 song table at `0x46932`. The stated 9-onward bug boundary is therefore not a clean
+type split.
+
+**Method lesson.** Two of these were negatives from queries that could not have found the
+thing — the same class as the padded-operand trap. `get_xrefs_to` cannot see table
+dispatch; a "nearest preceding literal" scan misreads `0x4B6FC` as `D0 = 0` when
+`moveq #0,D0` is immediately overwritten by `move.w (0x4B586).l,D0`. **Validate the query
+against a known-present control before trusting a negative** — now applied every time.
 
 Static auditing against *our own documents* has reached the point of diminishing returns
 — audits 7–9 found 4 defects between them, all in prose. Static auditing against an

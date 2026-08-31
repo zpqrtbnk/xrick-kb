@@ -178,18 +178,41 @@ count depends on entry state as well as on what was typed, and the copy over-run
 code is the specification — but **what the player actually sees has never been
 characterised.** Model it in Python, then confirm one case live. See `re/algo-system.md`.
 
-### T8 — Adjudicate the port differences (needs the PC side)
+### T8 — Adjudicate the port differences — **15 of 17 done; 2 remain**
 
-Seventeen measured differences against the xrick port remain unadjudicated. They are
-tabulated as state in `xrick/re/xref.md` → *Unadjudicated*.
+**Unblocked 2026-08-31**: `re/ibmpc_cs.bin`, a dump of the game's PC **code segment**, is
+in the Ghidra project as `x86:LE:16:Real Mode`. Correspondence with the port's cited
+addresses is verified — see `xrick/re/provenance.md`.
 
-**Our value is certain in every case** — each is read directly from instruction
-encodings. What is unknown is whether the port's differing value is a genuine PC-vs-ST
-difference or a port error, and **that is a question about the PC build.** An Atari run
-cannot answer it: it would only re-confirm the side that is not in dispute.
+**Result: the port read its build correctly every single time. Not one difference turned
+out to be a port error.** Fourteen are now confirmed **genuine PC-vs-ST divergences** —
+stun 20/25, latency seed x32/x25, dying gravity +0x80/+0xC4, death launch -0x400/-0x300,
+corpse drift, ladder-exit -0x300/-0x200, bonus divider 30/25, dynamite fuse 45-counter vs
+17-frame table, hitbox +0x11/+0x12, scroll threshold 0x60/0x5F, trigger probe
++0x0C/+0x0B, the type-2 ladder-grab masks, and the two closed in the final pass:
 
-**Method:** a DOSBox run of PC Rick Dangerous, or a disassembly of the PC executable.
-Neither is currently in scope. Until then this stays open by design, not by neglect.
+- **the spawn Y-nudge bit** — `ent_actvis` at `0x212D` does
+  `TEST byte[DI+2],0x2 / JNZ` around `ADD DX,0x3`, so the PC uses bit **`0x02`** where we
+  read bit `0x04` (`btst.b #0x2,(0x3,A0)` @ `0x497B8`);
+- **the bullet's second probe point** — the PC really does keep **two**: a stored centre
+  `x + 0x0C` at `[0x7D7E]` (written `0x1A17`, read by the trigger code at `0x2602` and
+  `0x27FF`) *and* an inline leading edge `+0x18` in the enemy-hit path (`ADD BL,0x18` @
+  `0x233B`, `0x2899`). We keep one.
+
+The pass also produced **one new difference nobody had noticed** — the ceiling-bonk
+velocity, PC zeroes it, ST sets `0x80` — **eight new three-way agreements** including the
+arbitrary super-pad constants `0xFE` and `-0x800`, and a full instruction-level
+confirmation of the tile-probe asymmetry: `u_envtest` is `FUN_0000_11bc`, and its masks
+`0x6D`/`0x6F`/`0x7D` with strides `0x1E`/`0x1F` agree with our reading in all 32
+reachability cells.
+
+**Remaining two** — the bomb blast box and the submap re-entry X. Unlike before, the
+searches behind them are now **validated**: the same instruction forms locate other
+constants elsewhere in the segment, so the port's values are genuinely not present as
+8-bit immediates. Rick's x (`0x7E80`) is only ever written *through AL*, so the re-entry
+value is computed, not literal. Closing these needs the two routines located by
+structure; the constants cannot be found by search alone. Low value — both are small
+behavioural details already documented on our side with certainty.
 
 ### T9 — Explain the `sni` → `sprbase` substitution
 
@@ -204,6 +227,197 @@ The port's connector table holds 154 records in an array it declares as 153
 (`MAP_NBR_CONNECT = 0x99`), the surplus being a third connector in list 17 where we and
 the port's own constant have two. Worth reporting to the upstream repository. No effect
 on our work.
+
+### T11 — The MFP TACR prescaler encoding is taken on trust
+
+`algo-music.md` derives the timer rate from the 68901 TACR prescaler divisors, but those
+divisors are **standard hardware behaviour, not read out of this code**. The rate formula
+depends on them, so if the encoding is wrong every tempo figure in that document is wrong
+by a constant factor.
+
+**Method:** confirm against the MFP 68901 datasheet, then measure — breakpoint the Timer-A
+interrupt under Hatari, count interrupts per second, and check the observed rate against
+the formula. A measurement settles it without trusting any datasheet reading.
+
+### T12 — `palette_fade_in`'s precondition ✅ **RESOLVED 2026-08-31 — verified, not assumed**
+
+The claim "assumes the palette currently reads black" is now **proven for every call
+site**. Three steps:
+
+**1. Only three routines can write the palette.** Scanning the image for the hardware
+palette base `0x00FF8240` gives exactly three stored longwords — `0x49382` (inside
+`set_palette`), `0x493AE` (inside `palette_fade_in`) and `0x4940A` (inside
+`palette_fade_out`). Nothing else touches `0xFF8240`. And `set_palette` has exactly
+**one** caller, `0x4DE4A`.
+
+**2. Eight of the nine `palette_fade_in` call sites have a `palette_fade_out` in the same
+function.** Both routines have 9 callers; the pairing (call-site scanner validated at 31
+callers for `vsync_wait`):
+
+| `palette_fade_in` | blacked out by |
+|---|---|
+| `0x490A8` | `0x4903C` |
+| `0x49918` | `0x498DE` |
+| `0x49B48` | `0x49ACC` |
+| `0x4B700` | `0x4B5F8` |
+| `0x4DDEC` | `0x4DDBA` |
+| `0x4DE98` | `0x4DE68` |
+| `0x4DF0A`, `0x4DF38` | `0x4DF02`, `0x4DF28` |
+
+**3. The ninth resolves through its call chain.** `0x499BC` sits in
+`enter_screen_with_fade` (`0x499B8`), which is only
+`bsr init_screen_pointers; bsr palette_fade_in; rts` — no blackout of its own. It has
+**exactly one** caller, and that chain closes it:
+
+```
+show_selection_menu 0x499A0
+  ├── bsr run_selection_menu   0x498C6
+  ├── bsr start_level          0x4B588   (verified: bsr @0x499AE -> 0x4B588)
+  │     └── bsr show_level_intro_screen 0x4B5F4   (sole caller, @0x4B5EA)
+  │           ... 0x4B794  bsr palette_fade_out 0x493FE   <- palette goes black
+  │               0x4B798  bsr reset_hud_dirty_and_redraw
+  │               0x4B79C  clr.w 0x4AA92 / 0x4AAA8 / 0x4AAAE
+  │               0x4B7AE  bsr spawn_player_entity 0x4BFAE
+  │               0x4B7B6  rts                              <- still black
+  └── bsr enter_screen_with_fade 0x499B8 -> palette_fade_in
+```
+
+Nothing between the fade-out at `0x4B794` and the return can restore the palette:
+`reset_hud_dirty_and_redraw` and `spawn_player_entity` cannot reach `set_palette`, whose
+only caller is `0x4DE4A`, elsewhere. **The precondition holds on every path.**
+`algo-system.md` updated — the wording is now a verified contract, not an inference.
+
+### T13 — Screen buffer bases ✅ **RESOLVED 2026-08-31 — read directly**
+
+The inference is replaced by a direct read. `0x492EA` is the longword holding the current
+screen address, and in `atari_ram.bin` it reads:
+
+```
+0x492E8:  00 00 | 00 07 80 00 | 23 fc
+                 ^^^^^^^^^^^ 0x492EA = 0x00078000
+0x492EB = 0x07   (-> 0xFF8201, base bits 16-23)
+0x492EC = 0x80   (-> 0xFF8203, base bits 8-15)
+```
+
+`flip_screen_buffer` does `*(byte*)0x492EC ^= 0x80`, so the mid byte alternates
+`0x80`/`0x00` and the longword alternates **`0x00078000`** / **`0x00070000`**. Both bases
+are therefore confirmed from the value the program actually feeds the video hardware, not
+inferred from `draw_string`. `memory_map.md` updated.
+
+### T14 — Is `hide_entity` dead code? ✅ **RESOLVED 2026-08-31 — yes, with a validated query**
+
+The concern was that `get_xrefs_to` cannot see table dispatch. Scanning the whole 320 KB
+image for the stored longword `0x0004AC08` returns **zero** sites — and this time the
+query is **validated against real dispatch targets**:
+
+| Longword | Meaning | Sites |
+|---|---|---|
+| `0x0004D15C` | known dispatch target | **50** |
+| `0x0004B856` | known dispatch target | **1**, at `0x4AC04` |
+| `0x0004AC08` | `hide_entity` | **0** |
+
+The single `0x4B856` hit lands exactly on the table slot `algo-render.md` names, which
+also confirms the correction that `0x4ABF8`-`0x4AC07` are four dispatch entries
+(`0x4ABF8`/`0x4ABFC`/`0x4AC00` -> `0x4D15C`, `0x4AC04` -> `0x4B856`) rather than the start
+of the function.
+
+Reading `0x4AC08` itself confirms the entry point and the transcription:
+`08A8 0000 0016` = `bclr #0,(0x16,A0)`, `08A8 0000 001C` = `bclr #0,(0x1C,A0)`, `4E75` =
+`rts` — the two render-flag clears exactly as documented.
+
+**Scope of the negative:** this covers absolute 32-bit pointers plus Ghidra's
+control-flow xrefs. A table of 16-bit offsets or a computed address would not be caught —
+but the game's dispatch tables demonstrably use absolute longwords (50 hits on one
+target), so that is the right form to search. `hide_entity` is unreachable.
+
+### T15 — Provenance of `atari_ram.bin` ✅ **RESOLVED 2026-08-31 — no check required**
+
+Previously raised as the project's load-bearing assumption: because layer-2 decompression
+was abandoned as impractical, every fact in `re/` is read out of a Hatari RAM snapshot
+that had never been cross-checked against what `RICK.PRG` produces.
+
+**Closed by the user, who produced the artifact:** `atari_ram.bin` is their own dump of
+Hatari's RAM, taken from the game running correctly. Its provenance is **attested at
+first hand and is fully trusted**. No re-dump, diff, or decompressor work is needed, and
+the layer-2 decompressor does not need to be reproduced for this purpose.
+
+*Evidence type: direct attestation by the person who created the file* — not a check run
+inside this project, and recorded as such so the basis stays visible.
+
+### T16 — "the engine is always clean" ✅ **RESOLVED 2026-08-31 — verified, plus one defect found**
+
+**The ordering claim is true.** The first `play_music` executed after boot is
+`play_music(5, 1)` at `0x4DC62`, inside `main_init_and_loop`'s init sequence
+(`0x4DC2A`–`0x4DCCD`) — before `attract_mode_loop`, before `NEW_GAME` (`0x4DC9E`), before
+the per-frame main loop (`0x4DCCE`). Track 5 is **type 0**, so `init_music_playback` runs
+and zeroes the per-channel work area before anything else can sound. All 22 type-1/2 call
+sites are in gameplay code (`0x4BE9A`–`0x4D89C`), reachable only from the main loop, and
+`RESTART` (`0x4DC90`) re-plays track 5 before re-entering attract mode. The type-1/2 skip
+of `init_music_playback` is safe in the shipped game.
+
+**Method:** read `nTrack_type` from all 29 `MusicTrackDescriptor` records at `0x44F08`,
+then enumerate all **27** `play_music` (`0x44CCE`) call sites and classify each by the D0
+literal preceding it.
+
+**Defect found on the way — `assets-manifest.md` had the type-0 census wrong.** It read
+"subtunes 1–8 are the only type-0 tracks". There are **nine**: tracks `0`–`7` **and `27`
+(0x1B)**. Track 27's `nParam_index` is `8`, the ninth entry of the 9×6 song table at
+`0x46932`, independently confirming the nine-song count. It reaches `play_music` through
+the entity trigger-sound range (`0x13`–`0x1C`), not as a literal. Corrected.
+
+**Also corrected in passing:** three call sites take a computed track number
+(`0x44E5A` the engine's own loop restart, `0x4D26C`/`0x4D2CC` entity trigger sounds), and
+`0x4B6FC` is `D0 = level_index` — `0x4B6F2`'s `moveq #0,D0` is immediately overwritten by
+`move.w (0x4B586).l,D0`. A naive "nearest preceding literal" scan misreads that site as
+`D0 = 0`; it is a runtime value, always in the type-0 range `0`–`7`.
+
+### T17 — The port's `e_them_rndseed` pointer ✅ **RESOLVED 2026-08-31 — it is a real bug**
+
+Both prior readings were inferences about the author's intent. The PC binary settles them.
+
+The randomiser is a subroutine at `0x024A` in `re/ibmpc_cs.bin`, followed immediately by
+the seed increment at `0x0270` — **the exact address the port annotates as `(0270)`**,
+which confirms the correspondence independently:
+
+```
+024C  MOV BX,[0x7E48]     ; e_them_rndnbr
+0250  ADD BX,[0x7E4A]     ; + seed LOW word
+0254  ADD BX,0x0D
+0257  MOV CX,[0x7E4C]     ; seed HIGH word
+025B  ADD BX,CX
+025D  SUB AL,AL / XOR AL,BL / XOR AL,CH / XOR AL,CL / XOR AL,BH / MOV BL,AL
+0269  MOV [0x7E48],BX
+0270  ADD word [0x7E4A],1 / ADC word [0x7E4C],0    ; 32-bit increment
+```
+
+The `ADD`/`ADC` pair proves the seed is **32 bits held as two words** — low `0x7E4A`,
+high `0x7E4C` — and the randomiser reads **both**. The high half is therefore
+`(U16*)&e_them_rndseed + 1`. The port's `+ 2` addresses four bytes past a four-byte
+object. **Confirmed defect in the port**; `divergences.md`'s warning that the port's enemy
+randomness is not evidence about the original's is upheld.
+
+**The XOR chain is transcribed correctly** — the PC's `AL` temporary fold is equivalent to
+the port's three `*bl ^=` statements.
+
+**The "Black Magic" is explained.** Add the running value, both halves of the free-running
+frame-counter seed, and 13; fold all four bytes of `BX`/`CX` into the low byte by XOR;
+test bit 0 for the direction. The author could not explain it because they never had the
+seed's two-word layout — the same gap that produced the `sh` bug.
+
+**Relation to T8's "zero port errors".** No contradiction: T8 concerned 17 measured
+*behavioural constants*, and the port read its build correctly in every one. This is a
+different category — a C-level pointer slip in the transcription, not a misreading of the
+original. It is also **not** the same question as T9 (`sni`→`sprbase`), which stays open.
+
+**Three-way note.** Our ST build does not share this design at all: it has a genuine
+two-longword PRNG (`seed_prng_state` `0x49574`, `update_prng` `0x49596`, fixed seeds
+`0x121901F9`/`0x160566F9`), consumers testing `prng_b & 3`. The PC's accumulate-and-fold
+scheme and the ST's PRNG are independent implementations — consistent with the S6 finding
+already recorded in `byte-identity.md`.
+
+**Note.** Two further "needs verification" markers in `re/` are **already covered** and are
+not new items: the `dbf D3w` name-entry loop (`algo-system.md`) is **T7**, and the
+trigger-bit dynamic spot-check (`entities.md`, `hatari.md` probe 4) is **T6**.
 
 ---
 
@@ -263,3 +477,4 @@ Known, understood, and not being pursued:
 | **O6 resolved** | 08-30 | The "26 unexplained bytes" at `0x4B336`–`0x4B34F` turned out to be **four 8-byte HUD render buffers** (score/bullets/dynamite/lives — 6 glyph cells + `0xFF` `draw_string` terminator + pad), addressed by four `lea`s at `0x4B3C8`/`0x4B46C`/`0x4B4A0`/`0x4B4D4` and filled by `draw_hud_count`. Solved statically; **no Hatari run needed**. The earlier "nothing references it" claim was an artifact of an operand search using zero-padded addresses (`0x0004b34`) where Ghidra renders them unpadded (`0x4b340`) — a search that could not have matched. Lesson added to `MEMORY.md` §8 |
 | **T2 and T3 resolved** | 08-31 | **T2**: the bullet has **one** probe point on the ST — seeded at the muzzle as the leading edge, stepped ±8, and read **unmodified** by both `bullet_hits_entity` (`0x4CC1A`/`0x4CC20`) and `scripted_trap_update` (`0x4D1EC`/`0x4D1F2`). So triggers are tested at the leading edge; the port's separate centre point has no ST counterpart. **T3**: the escape-timer divider is genuinely `0x19` at **two** sites (`0x4BE3C`, `0x4BE84`), word-wide — so the three `25`s are independent instruction sites of differing widths, not one reading propagated. Both searches were validated before their negatives were trusted |
 | **T5 resolved** | 08-31 | The entity-dispatch "shape mismatch" was a **base mismatch** — the port writes types in hex, we write decimal; `0x18` = 24, so its `ent_actf[0..0x17]` + `>= 0x18` catch-all is exactly our 0–23 individual + 24–73 shared. One real divergence: the port marks a dying enemy by **rewriting the type** to `0x47`, we by setting the **`bDying` flag** (`0x4D87C`, `wType` untouched) — and the immediate `0x47` occurs nowhere in our program, so ST type 71 is an ordinary trap. Plus our type 74, which the port has no equivalent for. Mapping table added to `xref.md` |
+| **T8: PC code segment arrives, 13 of 17 adjudicated** | 08-31 | `re/ibmpc_cs.bin` (PC code segment) verified to correspond to the port's cited addresses — decisively at `map_resetMarks`, where `MOV CX,0x20B` (523) and `ADD BX,5` sit exactly at the cited `0x0025`. **Twelve differences confirmed as genuine PC-vs-ST divergences; zero port errors.** One new difference found (ceiling-bonk velocity: PC zeroes it, ST sets `0x80`) and eight new three-way agreements, including the arbitrary super-pad `0xFE` and `−0x800`. Four rows remain, blocked on locating the code, not on evidence |

@@ -346,8 +346,18 @@ for (D0 = 15; D0 >= 0; D0--) *A1++ = *A0++;    // 16 hardware colour registers
 
 ## 0x49394 `palette_fade_in`
 
-Ramps the hardware palette up to the target at `0x4DEE2` over **8 frames**. Assumes the
-hardware palette currently reads black.
+Ramps the hardware palette up to the target at `0x4DEE2` over **8 frames**.
+
+✅ **Precondition verified 2026-08-31 (T12) — the palette does read black at entry.**
+The routine ramps *up to* a target and never reads or zeroes the current palette, so the
+"starts from black" contract is real and had to be proven at the call sites. It is:
+the hardware palette base `0x00FF8240` is referenced by exactly **three** instructions in
+the image — in `set_palette` (`0x49382`), here (`0x493AE`) and in `palette_fade_out`
+(`0x4940A`) — and `set_palette` has a single caller (`0x4DE4A`). Of the nine callers of
+this routine, eight have a `palette_fade_out` in the same function; the ninth
+(`0x499BC`, in `enter_screen_with_fade`) is reached only via `show_selection_menu` ->
+`start_level` -> `show_level_intro_screen`, which ends with `palette_fade_out` at
+`0x4B794` and cannot restore the palette before returning. See `../PLAN.md` T12.
 
 ```c
 D2 = 0x700; D3 = 0x70;                       // per-component thresholds
@@ -733,7 +743,7 @@ here is outstanding. (See the rule in `MEMORY.md` §8.)
   2026-08-29** — it gates `run_selection_menu` (`0x498C6`), the level-select screen,
   which is therefore unreachable in normal play. See `algo-level.md`.
 - The `dbf D3w` name-commit loop (item above) — behaviour is deterministic but odd;
-  **needs dynamic verification** to describe the visible result.
+  **needs dynamic verification** to describe the visible result. Tracked as `../PLAN.md` T7.
 - ~~`0x4DE2C`, the "return to attract mode" flag~~ ✅ **resolved** — set to `0xFF` by
   `process_level_transition_point` on the game-complete path (`algo-level.md`), cleared
   and read here. The cross-range gap is closed.

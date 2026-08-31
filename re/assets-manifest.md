@@ -316,14 +316,32 @@ is longword-aligned and its first bytes match the dump at `0x44C10`.
 ### Playback bug found and fixed: the superimposed 'ding'
 
 The first build had a stale note ringing under every subtune from **9 onward**
-(reported from real playback; **fix confirmed working**). The boundary is the tell:
-subtunes 1–8 are the only **type-0** tracks.
+(reported from real playback; **fix confirmed working**).
+
+⚠️ **Correction 2026-08-31 — the type-0 census here was wrong.** This previously read
+"subtunes 1–8 are the only type-0 tracks". Reading `nTrack_type` out of all 29
+`MusicTrackDescriptor` records at `0x44F08` gives **nine** type-0 tracks, not eight:
+tracks `0`–`7` **and track `27` (0x1B)**, i.e. subtunes 1–8 *and 28*. Track 27 carries
+`nParam_index = 8`, the ninth entry of the 9×6 song table at `0x46932` — which
+independently confirms the nine-song count. Track 27 is not a literal at any call site;
+it is reached through the entity trigger-sound range (`0x13`–`0x1C`). So the 9-onward
+boundary is **not** a clean type-0/type-1 split, and subtune 28 should not have rung.
 
 **Cause.** Only the type-0 path in `play_music` calls `init_music_playback`, which
-zeroes the per-channel work area. Type-1 and type-2 tracks skip it — they assume the
-engine is *already* in a clean state, which it always is in the real game, where music
-starts before any effect plays. But the blob restores the snapshot's **live** engine
-state: it was captured with track 5 (the title music) mid-play, `song_active =
+zeroes the per-channel work area. Type-1 and type-2 tracks skip it — they rely on the
+engine already being in a clean state.
+
+✅ **That reliance is safe in the shipped game — verified 2026-08-31 (T16).** The
+**first** `play_music` executed after boot is `play_music(5, 1)` at `0x4DC62`, inside
+`main_init_and_loop`'s init sequence (`0x4DC2A`–`0x4DCCD`) — before `attract_mode_loop`,
+before `NEW_GAME` (`0x4DC9E`) and before the per-frame main loop (`0x4DCCE`). Track 5 is
+**type 0**, so `init_music_playback` runs and clears the channel work area before
+anything else can play. All 22 type-1/type-2 call sites lie in gameplay code
+(`0x4BE9A`–`0x4D89C`), reachable only from the main loop; `RESTART` (`0x4DC90`) re-plays
+track 5 before re-entering attract mode. No type-1/2 track can start on a dirty engine.
+
+The blob bug is therefore specific to the blob, which restores the snapshot's **live**
+engine state: it was captured with track 5 (the title music) mid-play, `song_active =
 0xFF00`, `play_state = 1`. `reset_sound_chip` clears the top-level flags but **not**
 the three channel-active flags at `0x45454`/`0x4546E`/`0x45488`, so a leftover voice
 kept sounding under the selected track.

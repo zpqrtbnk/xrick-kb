@@ -786,12 +786,25 @@ the table stride exactly, confirming the format.
   closing accent, roughly two octaves and four semitones above the pattern's written
   pitch. **No out-of-range read occurs** — the theoretical maximum note (`0x7D`) would
   overflow at this transpose, but the shipped data never goes near it.
-- `(A6+0x0F)` is loaded from instrument `+7` by `trigger_channel_note` but no reader
-  was found in this address range. Possibly dead, possibly consumed elsewhere.
+- `(A6+0x0F)` is loaded from instrument `+7` by `trigger_channel_note` and is
+  **never read back**. ✅ **Measured 2026-08-31** rather than asserted: scanning
+  `0x44C00`-`0x45800` for every instruction whose *source* effective address is
+  `(d16,A6)` with displacement `0x000F` returns **zero** sites. The query is validated —
+  the identical scan finds displacement `0x0E` twice (`0x456FA`, `0x4571A`), `0x10` once
+  (`0x45668`) and `0x07` four times (`0x44D8A`, `0x4532A`, `0x4538C`, `0x456D8`).
+  A MOVE *destination* EA is encoded in different bits and so is not covered, but that is
+  a write, not a read. **Conclusion: the field is write-only within the music engine.**
+  A port must still allocate it (the write happens), but nothing depends on the value.
 - The exact MFP prescaler encoding for TACR is standard 68901 behaviour, not read out
-  of this code; the rate formula given assumes it.
+  of this code; the rate formula given assumes it. ⚠️ **Assumption — tracked as
+  `../PLAN.md` T11.** Every tempo figure in this document depends on it.
 - `music_tick` tests `0x45096` as a **word** while every writer touches only the byte
-  at `0x45096`. The adjacent byte `0x45097` is therefore read as part of the test. It
-  appears to be always zero, but this is an aliasing hazard worth preserving in a port.
+  at `0x45096`. The adjacent byte `0x45097` is therefore read as part of the test.
+  ✅ **Measured 2026-08-31**, replacing the earlier "appears to be always zero":
+  `0x45096` is named by **6** absolute operands in the program (`0x44CA4`, `0x44D92`,
+  `0x44DFA`, `0x44E36`, `0x4B78A`, `0x4DDF6`) and `0x45097` by **zero** — no instruction
+  addresses the low byte at all — and it reads `0x00` in `atari_ram.bin`. The word test
+  is therefore equivalent to a byte test in practice. Still worth preserving the word
+  width in a port, since the equivalence is a property of the data, not of the code.
 - Register 7 is always updated read-modify-write through the `0x4543A` shadow; a port
   must keep that shadow rather than computing the mixer from scratch.

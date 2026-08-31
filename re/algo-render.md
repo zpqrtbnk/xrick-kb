@@ -62,7 +62,11 @@ erase-pending flag lands on the buffer holding the *stale* image (see below).
 > ⚠️ **The Ghidra function starts at 0x4ABF8, which is wrong.** Bytes
 > `0x4ABF8`–`0x4AC07` are four more entries of `sprite_type_dispatch` (see
 > Corrections). The real entry point is **`0x4AC08`**. The function has **no
-> callers** (`get_xrefs_to` → none) and appears to be dead code.
+> callers** and is ✅ **confirmed dead code (T14, 2026-08-31)**. `get_xrefs_to` returns
+> none, *and* — since an xref cannot see table dispatch — the whole image was scanned for
+> the stored longword `0x0004AC08`: **zero** sites, against **50** for the known dispatch
+> target `0x0004D15C` and **1** for `0x0004B856` (at `0x4AC04`), which validates the
+> query. That single hit also confirms `0x4ABF8`-`0x4AC07` are four dispatch entries.
 
 `void hide_entity(SpriteEntity *A0)`
 
@@ -593,9 +597,34 @@ spawn_player_entity();                  /* 0x4BFAE */
 `sprite_list[12]` is at `0x4AA92` (= `0x4A702 + 12 × 0x4C`), confirming the slot
 index and that `wType = 0x4A` is decimal **74**.
 
-**Uncertainty:** the exact glyph/cell semantics of `draw_glyph_string` and the
-meaning of the `0x19` / `0x4E7` / `0x500` screen strides belong to that function
-(0x494AC, another fork's range) — **needs cross-checking** against its transcription.
+✅ **Strides resolved 2026-08-31** by cross-checking against `draw_glyph_string`
+(`algo-system.md`, `0x494AC`) and reading the strings out of `atari_ram.bin`. All three
+are exact, and together they show the block is a **frame drawn around the story text**:
+
+| Stride | Value | Meaning |
+|---|---|---|
+| `0x500` | 1280 | one text row = 8 scanlines x 160 bytes — independently confirmed by `draw_string_xy`'s `D1 * 1280` |
+| `0x19` | 25 | **exactly 7 character cells.** `draw_glyph_string` steps a cell by `A1 ^= 1` and `+8` on the odd->even carry, so k cells = `(k>>1)*8 + (k&1)`; k=7 is the unique solution for 25 |
+| `0x4E7` | 1255 | `0x500 - 0x19` — the carriage return that undoes the 7-cell advance and drops one row |
+
+So `0x19 + 0x4E7 = 0x500` precisely: each loop iteration draws the left edge, jumps 7
+cells, draws the right edge, and returns to the left of the next row. The strings confirm
+the geometry — an **8-cell-wide frame**:
+
+| Address | Bytes | Role |
+|---|---|---|
+| `0x4B7C2` | `0D 10 10 10 10 10 10 0D FF` | top edge — corner, 6 x rail, corner |
+| `0x4B7CC` | `0E 0F 0F 0F 0F 0F 0F 0E FF` | bottom edge |
+| `0x4B7D6` | `0D FF` | single side glyph, buffer B |
+| `0x4B7D8` | `0E FF` | single side glyph, buffer A |
+
+The verticals land at columns 0 and 7, exactly under the first and last glyph of the
+8-cell top string. The two screen buffers get **different** side glyphs (`0x0D` vs
+`0x0E`), so the frame's edges alternate between two shapes as the buffers flip — an
+animated border, redrawn every frame inside the keypress loop.
+
+`0x1941` decodes under the same rule: byte 6465 = scanline 40, byte 65 -> **text row 5,
+cell column 17, right half** — the banner's top-left corner. Nothing here is unexplained.
 
 ---
 

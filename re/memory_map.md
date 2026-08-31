@@ -136,7 +136,7 @@ The GEMDOS basepage was located by scanning for the self-referential `p_lowtpa` 
 
 ## Screen Buffer Layout
 
-The game uses **double buffering**. Two screen buffers are located at `0x70000` and `0x78000` (inferred from `draw_string` which writes to both). `flip_screen_buffer` toggles which buffer is displayed by writing to `0xFF8201/03`.
+The game uses **double buffering**. Two screen buffers are located at `0x70000` and `0x78000` (✅ **confirmed 2026-08-31, T13** — read directly, not inferred: the screen-address longword at `0x492EA` holds `0x00078000` in `atari_ram.bin`, and `flip_screen_buffer` XORs bit 7 of the mid byte `0x492EC`, alternating the base between `0x00078000` and `0x00070000`. These bytes go straight to the video base registers `0xFF8201`/`0xFF8203`). `flip_screen_buffer` toggles which buffer is displayed by writing to `0xFF8201/03`.
 
 Sprite pixel data is held in a separate area starting at `0x63800` (zeroed by `clear_screen_buffers` at startup, 0x1C800 bytes = 115,712 bytes).
 

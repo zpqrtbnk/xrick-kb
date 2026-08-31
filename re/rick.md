@@ -23,6 +23,11 @@ Rick Dangerous on Chaos #43 is not the original Core Design release. It is a cra
 
 3. **Layer 2 decompression** — attempted a Python micro-emulator of the LSD decompressor. Abandoned due to self-modifying code and exception-based control flow that are impractical to replicate without a full 68K emulator.
 
+   ✅ **Not a problem — `../PLAN.md` T15, resolved 2026-08-31.** Layer 2 never needed to
+   be reproduced: `atari_ram.bin` is the **user's own dump of Hatari's RAM**, taken from
+   the game running correctly, and its provenance is attested at first hand. The snapshot
+   is trusted as the project's primary artifact.
+
 4. **Hatari approach** — ran the game in the Hatari Atari ST emulator. The user interacted with the game until it was fully decompressed and running. A RAM snapshot was saved via Hatari's GUI (Hatari v2.6.1; the `memsave` debugger command is not available in that version). The snapshot is `re/atari_ram.bin` (327,680 bytes = first 320 KB of Atari physical RAM).
 
 5. **Ghidra import** — `atari_ram.bin` was imported into Ghidra as a flat 68K binary at base `0x000000`. Auto-analysis found 80 functions.

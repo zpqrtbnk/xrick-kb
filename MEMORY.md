@@ -21,6 +21,7 @@ we work under, decisions that are settled, and lessons that cost something to le
 | Ghidra project | `ghidra.xrick` → single program `atari_ram.bin` |
 | Primary artifact | `re/atari_ram.bin` — 327,680-byte Hatari RAM snapshot. **Authoritative for every address in the knowledge base.** |
 | Secondary artifact | `re/atari_ram_1M.bin` — full 1 MB capture, used only as the source of the complete PCM samples |
+| **PC artifact** | `re/ibmpc_cs.bin` — 65,535-byte dump of the **IBM PC** build's code segment, in the Ghidra project as `x86:LE:16:Real Mode` at base `0000:0000`. Dense 8086 code in `0x0000`–`0x2FFF`. **Its offsets are exactly the `ASM nnnn` addresses in the xrick port's comments** (verified at `map_resetMarks`: `MOV CX,0x20B` = 523 marks, `ADD BX,5`, at the cited `0x0025`). This is what makes PC-vs-ST questions answerable — see `PLAN.md` T8 |
 | Source build | `disks/chaos43/RICK.PRG` — the Chaos #43 compilation disk; the build the snapshot was taken from |
 
 ## 2. Hard rules
@@ -32,7 +33,17 @@ we work under, decisions that are settled, and lessons that cost something to le
   state a count or address from memory or from another document; never call something
   unused, absent or safe to delete without a lookup. When two sources disagree, go to
   the disassembly rather than picking the more plausible one. If a check is
-  impractical, say so and mark the claim unverified.
+  impractical, say so and mark the claim unverified. **And on 2026-08-31 the user extended it:
+  an assumption may not simply sit in a document marked "unverified" — every one must be
+  promoted to a numbered `T` task in `PLAN.md` and the site annotated with its number.
+  "Zero assumptions" means zero *untracked* assumptions.** The sweep that established
+  this produced T11-T17; re-run it with the assumption-language regex in the work log
+  before claiming the knowledge base is clean.
+
+  **`atari_ram.bin` is trusted absolutely and needs no provenance check** — the user
+  dumped it themselves from Hatari with the game running correctly (attested
+  2026-08-31). Do not re-raise it as an assumption; the layer-2 LSD decompressor never
+  needs to be reproduced for this purpose.
   **Violations that prompted this rule:** claiming "confirmed by an xref census" for
   `0x4BF12/13/15/1C` before running one (the census, once run, disproved the claim);
   nearly adding `*.gbf` to `.gitignore` on the assumption it was Ghidra scratch, when
@@ -207,6 +218,19 @@ Facts worth not rediscovering:
   the build is configured `GFXST` for graphics only. A behavioural difference against our
   ST reversal may therefore be a genuine PC-vs-ST difference, a port error, **or ours** —
   three candidates, and none may be assumed. This governs every comparison.
+- **Adjudicated: of 17 measured port-vs-ST differences, 15 are now settled against the
+  PC code segment, and the port was right every time — zero port errors.** Fourteen are
+  genuine PC-vs-ST divergences (Core Design changed constants per platform); one, the
+  ceiling-bonk velocity, we had not even noticed. The remaining two — bomb blast box,
+  submap re-entry X — need their routines located by structure, not by constant search.
+  The practical lesson: **when the port disagrees with us on a constant, the prior should
+  now be "the PC build differs", not "the port is wrong".** Our values were never the
+  error.
+- **`ibmpc_cs.bin` responds well to Ghidra's `run_analysis`** (74/75 functions from a raw
+  segment dump). Identifying a routine by *structure* — masks, strides, the shape of the
+  loop — is far more reliable than searching for a constant, because the same constant
+  may not exist as a literal at all. `FUN_0000_11bc` = `u_envtest`, `FUN_0000_12bc` =
+  `u_boxtest`, `FUN_0000_2089` = `ent_actvis`.
 - **`ASM nnnn` comments do not map onto ST addresses.** No constant offset exists; they
   are different executables for different CPUs. Never try to translate them.
 - **The port is a playable reconstruction, not a fidelity project.** It normalises struct
