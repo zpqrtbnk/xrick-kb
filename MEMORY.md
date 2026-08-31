@@ -155,8 +155,12 @@ Two overrides on top of that:
   `0x4B336`–`0x4B34F`" was asserted from an operand search for `0x0004b34…`, but Ghidra
   renders absolute operands **without leading zeros** (`lea (0x4b340).l, A0`) — the
   pattern could not have matched whatever the truth was. The region turned out to be four
-  HUD render buffers with four `lea`s pointing at them. **When a search returns nothing,
-  first prove the search can find something**: run it against a case you know exists.
+  HUD render buffers with four `lea`s pointing at them. **Both prefix forms fail
+  somewhere**: Ghidra renders some absolute operands padded (`(0x0004be1a).l`) and others
+  unpadded (`(0x4b340).l`), so `0x0004be1a` and `0x4be1a` each miss half the cases.
+  **Search the bare hex substring** (`4be1a`), which matches both — and **when a search
+  returns nothing, first prove the search can find something**: run it against a case you
+  know exists. Both traps have now bitten once each, in opposite directions.
 - **Beware filters in the extraction scripts, not just in the analysis.** The sprite
   sweep discarded genuine frames on a `> 10% non-zero bytes` heuristic, and the reported
   "185 frames" was that filter's output presented as a fact about the game. Any threshold

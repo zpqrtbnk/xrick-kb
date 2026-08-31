@@ -19,7 +19,7 @@ behaviour*. Everything below is measured against that.
 | Placement table | 523 slots = 476 real records + 47 per-room terminators (reconciled) |
 | Knowledge base | **16 documents + 4 scripts** in `re/`, plus **12 documents** in `xrick/re/` about the prior C/SDL port |
 | Extracted assets | 12 graphic PNG sheets (**212** sprite frames among them, cell index = sprite number), 47 room maps + 47 entity overlays, 1 playable SNDH |
-| Byte-identity audits | **20 of 20 complete** — 49 defects found and fixed (10 = port cross-check; 10b–10k = assumption sweeps) |
+| Byte-identity audits | **22 of 22 complete** — 49 defects found and fixed (10 = port cross-check; 10b–10m = assumption sweeps) |
 | Dynamic-verification probes | **7 of 8 resolved**; the 8th reduced to a nice-to-have |
 | Hatari harness | **Working** — boots the analysed build unattended, Rick driveable under script |
 
@@ -88,24 +88,44 @@ predicts. That turns the ~98% judgement into a measurement.
 **T1 subsumes several smaller items** — it exercises the blitter (T4), the trigger bits
 (T6) and the name-entry loop (T7) as a side effect of running the game.
 
-### T2 — Bullet probe points: one or two?
+### T2 — ~~Bullet probe points: one or two?~~ ✅ **RESOLVED 2026-08-31**
 
-We keep a single `bullet_point_x/y` (the leading edge). The port keeps **two** — the
-leading edge for enemy hits, and a separate centre point `x + 0x0C` for trigger boxes,
-boxes and bonuses. If the original really uses a centre point for triggers, we are
-testing the wrong point for those interactions.
+**We have exactly one, and both consumers read it unmodified.** The full xref set for
+`0x4BF24`/`0x4BF26` is six + four references:
 
-**Method:** enumerate the readers of `0x4BF24`/`0x4BF26` and check whether any call site
-adjusts the point before use. Cheap, static, decisive.
+| Function | Site | Use |
+|---|---|---|
+| `player_controller` | `0x4C5AA`, `0x4C5C8`, `0x4C5E8` | seeds the point at the muzzle (leading edge) |
+| `player_bullet_update` | read `0x4CA5E`, write `0x4CA9C` | the ±8 step, in lockstep with `nPosX` |
+| `bullet_hits_entity` | `0x4CC1A` / `0x4CC20` | `move.w` straight into D1/D2, then `bsr entity_contains_point` — **no adjustment** |
+| `scripted_trap_update` | `0x4D1EC` / `0x4D1F2` | `move.w` straight into D0/D1, then `bsr trigger_box_contains_point` — **no adjustment** |
 
-### T3 — Verify the third `0x19` site independently
+So the ST tests **trigger boxes at the bullet's leading edge**, not at a centre point.
+The port's second point (`e_bullet_xc = x + 0x0C`, used for triggers, boxes and bonuses)
+has no counterpart here. For *enemy* hits the two sides agree — both use the leading
+edge. The difference is confined to trigger tests, and is now recorded as state in
+`xrick/re/xref.md`. Whether the PC build really had two points is part of T8.
 
-`0x19` (25) appears in three places on our side — the stick-jab stun, the spawn latency
-seed, and the super-bonus tick divider — where the port has three *different* values
-(20, 32, 30). Two of ours are verified at instruction level (`move.b #0x19,(0x4a,A0)` @
-`0x4D574`; `mulu.w #0x19` @ `0x497FE`). **The third, the escape-timer divider at
-`0x4BE1A`, has not been.** Confirm it is a genuine third occurrence and not one reading
-propagated into three documents.
+### T3 — ~~Verify the third `0x19` site independently~~ ✅ **RESOLVED 2026-08-31**
+
+**It is genuine, and at two instruction sites, not one.** `0x4BE1A` has three
+references, all word-wide:
+
+- `subi.w #0x1,(0x4BE1A)` @ `0x4BE32` — the per-frame decrement (`bcd_countdown_timer`)
+- `move.w #0x19,(0x4BE1A)` @ `0x4BE3C` — reload after each tick (`bcd_countdown_timer`)
+- `move.w #0x19,(0x4BE1A)` @ `0x4BE84` — initial set (`effect_start_escape_timer`)
+
+So the three `0x19` uses on our side are **independent**: a *byte* store in
+`enemy_ai_update` (`0x4D574`), a *word multiply* in `init_entity_from_placement`
+(`0x497FE`), and *word* stores in two timer functions. Different widths, different
+functions, different purposes. **The "we propagated one reading into three documents"
+worry is disposed of** — `0x19` genuinely recurs in the ST build, where the port has
+three unrelated values (20, 32, 30).
+
+*Method note: the first search (`0x4be1a`) returned zero because Ghidra renders these
+operands **padded** (`(0x0004be1a).l`) — the mirror of the O6 trap, where they were
+unpadded. Searching the bare substring `4be1a` matches both forms, and the query was
+validated against `4be18` (7 hits) before the negative was trusted.*
 
 ### T4 — Instruction-level check of the sprite blitter transcription
 
@@ -117,11 +137,30 @@ Audits 10h and 10i sampled the other hard transcriptions (`algo-system.md`'s eig
 functions, `algo-music.md`'s sequence opcodes) and found none, so expectations should be
 modest — but this is the largest untested surface. Partly subsumed by T1.
 
-### T5 — Reconcile the entity-dispatch shapes
+### T5 — ~~Reconcile the entity-dispatch shapes~~ ✅ **RESOLVED 2026-08-31**
 
-Ours is 74 dispatch types; the port is 24 `ent_actf` entries plus a `>= 0x18` range plus
-`0x47`. Not known to be a behavioural difference — the shapes simply have not been put
-side by side. Documentation reconciliation, not analysis.
+**They were never different.** The port writes type numbers in hex, we write them in
+decimal — `0x10` = 16, `0x12` = 18, `0x16` = 22, `0x18` = 24 — so the port's "24
+`ent_actf` entries plus a `>= 0x18` catch-all" *is* our types 0–23 dispatched
+individually with 24–73 sharing `scripted_trap_update`. Same partition, different base.
+Full mapping now in `xrick/re/xref.md` → *Entity type dispatch*.
+
+**One genuine structural divergence, and it is an implementation choice rather than a
+disagreement about the game:** how a dying enemy is marked.
+
+- The port **rewrites the type** — `e_them_gozombie` sets `n = 0x47`, so the dispatcher
+  routes the corpse to `e_them_z_action`.
+- We set a **flag** — `kill_enemy` (`0x4D87C`) does `move.b #-0x1,(0x49,A0)`
+  (`bDying = 0xFF`) and **never writes `wType`**; `enemy_ai_update` branches on it at
+  entry (`tst.b (0x49,A0)` @ `0x4D4F4`).
+
+Confirmed by a program-wide search: the immediate `0x47` occurs **nowhere** (validated
+against a control that returns its expected hits). So ST type 71 (= `0x47`) is an
+ordinary `scripted_trap_update` entry with no special meaning — which is consistent with
+the placement census, where 71 appears as a normal trap type.
+
+The other asymmetry is our **type 74** (`decorative_sprite_update`, intro screens), which
+the port has no equivalent for because it builds its map intro from `screen_imapsteps`.
 
 ### T6 — Observe the trigger bits firing
 
@@ -222,3 +261,5 @@ Known, understood, and not being pursued:
 | **Eighth sweep (audit 10i)** | 08-30 | `algo-music.md`'s sequence opcodes, the second "hardest remaining" transcription. `process_sequence_command` verified instruction by instruction, PC-relative targets resolved. **Zero defects**, two fidelity notes: (1) both range tests are **signed**, so the unsigned C form is valid **only because every call site guards on bit 7** (`tst.b (A0); bpl` at `0x452C0`/`0x452CE`) — checked rather than assumed, and now stated at the function; (2) the `0xC2` case is `beq.w 0x451D8`, a branch into `init_music_playback`'s `rts`, not a local return. **`algo-render.md`'s blitter shift path is now the one large untested transcription** |
 | **S5/S6/S7 resolved (audit 10j)** | 08-30 | The three port-side hypotheses, settled against our disassembly. **S5 false** — the ST's two ladder-grab sites are *byte-identical*; the port's asymmetry is port-side, and the ST rule (`(x&8)==0 \|\| (x&7)==0`, then snap `x=(x&0xF0)\|4`) differs from both port forms → new **Q22**. **S6 false** — ours is a real two-longword PRNG (`update_prng`, 2 callers, 1 consumer, turn on 1-in-4); the port's mixer picks direction 1-in-2. Unrelated, though both step a generator per frame. **S7 true and exact** — tabulating bit reachability across {upper,foot}×{outer,centre}, **all 32 cells agree**: ladder-top only from the centre foot column, one-way only from the foot row, ladder only from the centre column. Strongest corroboration in the comparison |
 | **O6 resolved** | 08-30 | The "26 unexplained bytes" at `0x4B336`–`0x4B34F` turned out to be **four 8-byte HUD render buffers** (score/bullets/dynamite/lives — 6 glyph cells + `0xFF` `draw_string` terminator + pad), addressed by four `lea`s at `0x4B3C8`/`0x4B46C`/`0x4B4A0`/`0x4B4D4` and filled by `draw_hud_count`. Solved statically; **no Hatari run needed**. The earlier "nothing references it" claim was an artifact of an operand search using zero-padded addresses (`0x0004b34`) where Ghidra renders them unpadded (`0x4b340`) — a search that could not have matched. Lesson added to `MEMORY.md` §8 |
+| **T2 and T3 resolved** | 08-31 | **T2**: the bullet has **one** probe point on the ST — seeded at the muzzle as the leading edge, stepped ±8, and read **unmodified** by both `bullet_hits_entity` (`0x4CC1A`/`0x4CC20`) and `scripted_trap_update` (`0x4D1EC`/`0x4D1F2`). So triggers are tested at the leading edge; the port's separate centre point has no ST counterpart. **T3**: the escape-timer divider is genuinely `0x19` at **two** sites (`0x4BE3C`, `0x4BE84`), word-wide — so the three `25`s are independent instruction sites of differing widths, not one reading propagated. Both searches were validated before their negatives were trusted |
+| **T5 resolved** | 08-31 | The entity-dispatch "shape mismatch" was a **base mismatch** — the port writes types in hex, we write decimal; `0x18` = 24, so its `ent_actf[0..0x17]` + `>= 0x18` catch-all is exactly our 0–23 individual + 24–73 shared. One real divergence: the port marks a dying enemy by **rewriting the type** to `0x47`, we by setting the **`bDying` flag** (`0x4D87C`, `wType` untouched) — and the immediate `0x47` occurs nowhere in our program, so ST type 71 is an ordinary trap. Plus our type 74, which the port has no equivalent for. Mapping table added to `xref.md` |

@@ -645,7 +645,7 @@ entries in the old copy were stale; all below are current.
 | Address | Name | Type | Meaning |
 |---|---|---|---|
 | `0x4BE18` | `timer_enable` | word | Non-zero while the escape countdown runs |
-| `0x4BE1A` | `timer_tick` | word | Counts down from 25 (one BCD unit per second) |
+| `0x4BE1A` | `timer_tick` | word | Counts down from 25 (one BCD unit per second). **Verified 2026-08-31**: three references, all word — `subi.w #0x1` @ `0x4BE32`, and `move.w #0x19` at both `0x4BE3C` (reload) and `0x4BE84` (`effect_start_escape_timer`) |
 | `0x4BE1C` | `bcd_timer` | **word + byte chain** | BCD countdown value (starts `0x2000` = 20.00). Tested/loaded as a word (`tst.w`, `move.w`), but decremented by an **`sbcd` borrow chain** at `0x4BE54`/`0x4BE56` that walks *down* from `lea 0x4BE20,A1`, touching `0x4BE1F` then `0x4BE1E`. The BCD field therefore spans `0x4BE1C`–`0x4BE1F`; reproduce the `sbcd` chain, not a binary subtract |
 | `0x4DC28` | `tile_probe_mask` | byte | Attribute mask for `probe_entity_tile_collision` |
 | `0x4DC29` | `tile_probe_result` | byte | Masked probe result; carry = `& 0xD0` |

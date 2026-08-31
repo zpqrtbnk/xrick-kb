@@ -108,7 +108,7 @@ capture `atari_ram_1M.bin` supplied the samples the original dump was missing.
 
 Since then, two further passes closed the remaining doubt. The eight behavioural
 details that wanted a live Hatari run are **7 resolved, 1 optional** (`re/hatari.md`),
-and twenty **byte-identity audits** ran to completion, finding and fixing 49 defects
+and twenty-two **byte-identity audits** ran to completion, finding and fixing 49 defects
 (`re/byte-identity.md`). What is left is not analysis but a test: build the
 reimplementation and diff it against the live game.
 

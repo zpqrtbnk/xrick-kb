@@ -8,7 +8,7 @@ Ghidra (project `ghidra.xrick`, program `atari_ram.bin`).
 behaviour*. Current estimate against that bar: **~98%**. The code is fully reversed
 (every function named, every non-trivial one transcribed); graphics are extracted and
 visually validated; all 47 room maps render; the sound engine is packaged as a playable
-SNDH, confirmed by ear with every PCM sample intact; and twenty byte-identity audits have
+SNDH, confirmed by ear with every PCM sample intact; and twenty-two byte-identity audits have
 been run to completion. The eight behavioural details that wanted a live Hatari run are
 **7 resolved, 1 optional** — see `hatari.md` for the harness and the evidence.
 

@@ -670,6 +670,77 @@ for longwords pointing into the range — three hits, all inside `hud_update_*`.
 planned Hatari watchpoint run would have found the same thing more slowly. Scan for
 pointer constants *before* reaching for the emulator.
 
+### Audit 10l — T2 and T3 (2026-08-31)
+
+Two cheap static tasks from `PLAN.md`. **No defects; both questions closed, and one
+search-methodology point worth keeping.**
+
+**T2 — the bullet has one probe point, not two.** Complete xref set for
+`0x4BF24`/`0x4BF26`: `player_controller` seeds it at the muzzle (`0x4C5AA`, `0x4C5C8`,
+`0x4C5E8`); `player_bullet_update` steps it +/-8 (`0x4CA5E` read, `0x4CA9C` write); and
+**both consumers read it unmodified** — `bullet_hits_entity` does
+`move.w (0x4BF24),D1w` / `move.w (0x4BF26),D2w` straight into `entity_contains_point`
+(`0x4CC1A`/`0x4CC20`), and `scripted_trap_update` does the same into
+`trigger_box_contains_point` (`0x4D1EC`/`0x4D1F2`). No call site adjusts the point.
+
+So the ST tests **trigger boxes at the bullet's leading edge**. The port's separate
+centre point (`x + 0x0C`) has no ST counterpart; for *enemy* hits the two agree. The
+difference is confined to trigger tests and is now state in `xrick/re/xref.md`.
+
+**T3 — the third `0x19` is genuine, at two sites.** `0x4BE1A` carries
+`subi.w #0x1` @ `0x4BE32`, `move.w #0x19` @ `0x4BE3C` (reload) and `move.w #0x19` @
+`0x4BE84` (`effect_start_escape_timer`) — all word-wide. Combined with the byte store at
+`0x4D574` and the word multiply at `0x497FE`, our three `25`s are **independent
+instruction sites of differing widths**, not one reading copied into three documents.
+The concern raised when the "25 cluster" was first noticed is disposed of.
+
+**Methodology — the padded/unpadded trap, seen from the other side.** The first T3
+search used `0x4be1a` and returned **zero**. That is the mirror of the O6 failure: there
+Ghidra rendered the operands *unpadded* (`0x4b340`) and the padded query missed; here it
+renders them *padded* (`(0x0004be1a).l`) and the unpadded query missed. **Neither prefix
+form is reliable.** Search the bare hex substring (`4be1a`), which matches both — and,
+per the rule now in `MEMORY.md` §8, validate the query against a case known to exist
+before trusting a negative. Here `4be18` was used as the control and returned 7 hits.
+
+### Audit 10m — T5, the entity-dispatch reconciliation (2026-08-31)
+
+**No defect. The two "shapes" were the same partition written in different bases.**
+
+The port's dispatch reads as "24 `ent_actf` entries, plus everything `>= 0x18` to
+`e_them_t3_action`, plus `0x47` to `e_them_z_action`", against our 74 types. Aligning
+the bases dissolves it: `0x10` = 16, `0x12` = 18, `0x16` = 22, **`0x18` = 24**. The
+port's catch-all boundary is exactly where our shared `scripted_trap_update` run begins,
+and every group below it maps one-to-one:
+
+`0x01`→1 player · `0x02`→2 bullet · `0x03`→3 dynamite · `0x04`–`0x0F`→4–15 enemies
+(4 banks × 3 modes both sides) · `0x10`–`0x11`→16–17 destructible pickups ·
+`0x12`–`0x15`→18–21 treasures · `0x16`–`0x17`→22–23 trigger zones · `>= 0x18`→24–73 traps.
+
+**One real divergence, and it is an implementation choice.** How a dying enemy is
+marked:
+
+- the port **rewrites the type** (`e_them_gozombie`: `n = 0x47`), routing the corpse to
+  a dedicated handler;
+- we set a **flag** — `kill_enemy` @ `0x4D87C` is `move.b #-0x1,(0x49,A0)`
+  (`bDying = 0xFF`) and **never writes `wType`**; `enemy_ai_update` tests it at entry
+  (`tst.b (0x49,A0)` @ `0x4D4F4`).
+
+Verified by a program-wide operand search: the immediate `0x47` appears **nowhere** in
+4,608 instructions. The negative was trusted only after validating the query form
+against a control (`#0x13, D0w`, which returns its two expected hits in `kill_player`
+and `kill_enemy`). Consequence: ST type 71 (= `0x47`) is an ordinary
+`scripted_trap_update` entry — consistent with the placement census, which finds 71 used
+as a normal trap type.
+
+The remaining asymmetry is our **type 74** (`decorative_sprite_update`), which the port
+lacks because it builds its map intro from `screen_imapsteps` rather than from entity
+types — already recorded when the object-type table sizes were reconciled.
+
+**Note on where this belongs.** The mapping is *correspondence*, so it went into
+`xrick/re/xref.md` → *Entity type dispatch*, and the dispatch row left the
+unadjudicated-differences table. Nothing changed in `re/` — our side was right
+throughout; only the comparison was unreconciled.
+
 **The structural finding.** Four of the six `algo-*.md` files ended with a block of
 corrections the authoring fork had deliberately *not* applied — 26 items in total, none
 ever processed. Defects 3–6 were sitting in those blocks, correctly identified, while the
@@ -704,6 +775,8 @@ problems in an afternoon, at zero emulator cost.
 | 10i | Eighth sweep: `algo-music.md` sequence opcodes | ✅ **done — 0 defects, 2 fidelity notes** |
 | 10j | S5/S6/S7 — the three port-side hypotheses | ✅ **done — 0 defects; S5 and S6 false, S7 an exact 32/32 match** |
 | 10k | O6 — the "unexplained" `0x4B336`–`0x4B34F` region | ✅ **done — 1 defect (mine, from 10e); four HUD render buffers, solved statically** |
+| 10l | T2 (bullet probe points) and T3 (the third `0x19`) | ✅ **done — 0 defects; both closed** |
+| 10m | T5 — entity-dispatch reconciliation | ✅ **done — 0 defects; a base mismatch, not a shape mismatch** |
 
 **All audits are complete: 49 defects found and fixed** (15 from audits 1–9, 16 from
 audit 10, 10 from 10b, 1 from 10c, 0 from 10d, 2 from 10e, 4 from 10f, 1 from 10k). What remains is not an audit but a *test*: build the reimplementation and diff
