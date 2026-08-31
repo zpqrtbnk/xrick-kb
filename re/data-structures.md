@@ -25,9 +25,9 @@ Confirmed via `render_sprites`, `blit_backgrounds`, `clear_sprite_flags`,
 > (`enemy_ai_update`, `player_death_physics`, `kill_player`'s upward launch) acts on
 > offset 6 via the 8.8 fixed-point pair at 0x08/0x0A. Consequence: the "scrolled"
 > axis (the room-scroll delta added by `render_sprites`) is **Y — the room scroll is
-> vertical**. The functions formerly called `scroll_room_left`/`scroll_room_right`
-> were therefore misnomers and have been **renamed `scroll_view_up`/`scroll_view_down`**
-> (they adjust `world_row_base` by −8/+8).
+> vertical**. The functions originally named `scroll_room_left` / `scroll_room_right`
+> were therefore misnomers and have been **renamed `scroll_view_up` (`0x49BD6`) /
+> `scroll_view_down` (`0x49C78`)** (they adjust `world_row_base` by −8/+8).
 
 | Offset | Field | Type | Confidence | Notes |
 |--------|-------|------|------------|-------|
@@ -35,9 +35,9 @@ Confirmed via `render_sprites`, `blit_backgrounds`, `clear_sprite_flags`,
 | 0x02 | `nDirection` | short | confirmed | Facing/direction (0 vs nonzero). Selects mirrored sprite bank (+0xFC0) for the player; walk direction for enemies; X drift ±3 for the player's death tumble |
 | 0x04 | `nPosX` | short | confirmed | X (horizontal); despawn threshold `<-8` or `>=0xF1` |
 | 0x06 | `nPosY` | short | confirmed | Y (vertical). ⚠️ Its **low byte is also accessed directly at `+0x07`** (4 byte-wide sites) for the tile-grid snap `(lo & 0xF8) \| 3`; equivalent to the word form here, but emit the byte access. Despawn threshold `<0` or `>=0x143`; world-Y range with visible window 0x40–0x100 |
-| 0x08 | `nVelY` | short | confirmed | Vertical velocity, 8.8 fixed point (whole part). Gravity: +0xC4/frame for enemies (terminal 0x800), +0x80 for the dead player; `kill_player`/`kill_enemy` set −0x300 upward launch |
+| 0x08 | `nVelY` | short | confirmed | Vertical velocity, 8.8 fixed point (whole part). **Gravity — corrected 2026-08-30, the previous note had it backwards** (it credited living enemies with `+0xC4` *and* a terminal clamp; neither is right). All four cases verified at instruction level: **living player `+0x80`, clamp `0x800`** (`addi.w #0x80` @ `0x4C148`/`0x4C18C`, each followed by `cmpi.w #0x800`); **living enemy `+0x80`, clamp `0x800`** (`0x4D684`/`0x4D68A`); **dead player `+0x80`, no clamp** (`0x4C8A8`); **dying enemy `+0xC4`, no clamp** (`0x4D532`). So `0x800` is terminal velocity for the *living* only, and `0xC4` belongs to the *dying enemy* alone. `kill_player`/`kill_enemy` both set `−0x300` as the upward launch |
 | 0x0A | `nPosYFrac` | short | confirmed | Fractional (low) byte pair of the Y position for the 8.8 velocity integration |
-| 0x0C | `nSpawnX` | short | confirmed | Spawn X; `scripted_trap_update` resets `nPosX` from here when the entity re-idles |
+| 0x0C | `nSpawnX` | short | confirmed | Spawn X; `scripted_trap_update` resets `nPosX` from here when the entity re-idles. **Overloaded in slot 1 (the player):** `0x4A75A` holds the *pre-move X* for one frame so a stick jab can cancel that frame's walk step (`player_controller` writes it before moving and restores from it in the attack branch) — it is not a spawn position there |
 | 0x0E | `nSpawnY` | short | confirmed | Spawn Y; scroll-adjusted along with `nPosY` during room scrolls |
 | 0x10 | `nHitboxW` | short | confirmed | Hitbox extent along X — used by every overlap test (`entity_overlaps_player`, `entity_contains_point`, `explosion_overlaps_entity`, the tile probes). Copied from object-type-definition table +2 |
 | 0x12 | `nHitboxH` | short | confirmed | Hitbox extent along Y. From definition table +4 |
@@ -55,7 +55,7 @@ Confirmed via `render_sprites`, `blit_backgrounds`, `clear_sprite_flags`,
 | 0x2A | `nAnimFrameIdx` | short | confirmed | Index into `anim_frame_table`; advanced each tick. Sentinel `-1`: replays frames 0/1 as idle loop, or (if `wTriggerSound` bit 7 set) plays the sound again first |
 | 0x2C | `nPathStepIdx` | short | confirmed | **Multi-use**: path-step index for scripted traps; AI walk timer for enemies (reload from `nAiTimerReload`); 12-frame sparkle countdown for treasure pickups |
 | 0x2E | `nPathStepTick` | short | confirmed | Tick counter for the current path step |
-| 0x30 | `nAiTimerReload` | short | likely | Reload value for the enemy AI walk timer (`enemy_ai_update` copies it into 0x2C at edge/turn events) |
+| 0x30 | `nAiTimerReload` | short | **confirmed** | Reload value for the enemy AI walk timer. Promoted from *likely* 2026-08-30: a program-wide instruction search for `(0x30,A0)` returns **exactly one** site, `move.w (0x30,A0),(0x2c,A0)` @ `0x4D7D8` in `enemy_ai_update`, on the turn/edge path — so "reload into 0x2C" is the field's only use. Seeded at spawn from `PlacementRecord.bTrigBoxXY & 0xF8` (`move.w D1w,(0x30,A1)` @ `0x4980A`) |
 | 0x32 | `anim_frame_table` | pointer | confirmed | Per-type table of animation-frame bitmap pointers, indexed by `nAnimFrameIdx` |
 | 0x36 | `movement_path_table` | pointer | confirmed | Scripted-movement path: 6-byte records `{duration, dX, dY}`, sentinel `duration==-1` (note: dX before dY, matching the corrected axes). Type 70 uses its own 10-byte format |
 | 0x3A | `wHazardActive` | short | confirmed | 0xFF while this entity is lethal-to-touch: refreshed each frame from `bTriggerFlags` bits 8/4 by `scripted_trap_update`; set on destruction for pickups. Read by `entity_touches_hazard_or_block` (enemies die on contact with hazard-active entities). Spawn seeds it from a placement flag |
@@ -64,18 +64,77 @@ Confirmed via `render_sprites`, `blit_backgrounds`, `clear_sprite_flags`,
 | 0x40 | `nTrigBoxXMax` | short | confirmed | |
 | 0x42 | `nTrigBoxYMax` | short | confirmed | |
 | 0x44 | `wTriggerSound` | ushort | confirmed | *(was `wTypeFlags`)* Sound/music track played when a scripted trap triggers, **with bit 7 stripped**; bit 7 set = also replay at end of animation; 0 = silent. Copied from `ObjectTypeDef.wTriggerSound`. Confirmed from the two call sites' disassembly (`move.w (0x44,A0),D0; bclr #7,D0; jsr play_music` at `0x4D25E` and `0x4D2BC`) |
-| 0x46 | `bTriggerFlags` | byte | confirmed | Per-instance trigger bitmask: 0x80 player-touch, 0x40 stick jab, 0x20 bullet, 0x10 explosion, 0x08/0x04 always-lethal (feeds `wHazardActive`), 0x02 "bullet passes through", 0x01 one-shot (despawn instead of reset at path end / mark placement dead) |
+| 0x46 | `bTriggerFlags` | byte | confirmed | Per-instance bitmask, copied verbatim from `PlacementRecord+3` (`move.b (0x3,A0),(0x46,A1)` at `0x49824`). **0x80** player-touch, probe point = player + (0x0B, 0x0A) (`0x4D192`) · **0x40** stick jab (`0x4D1B8`) · **0x20** bullet (`0x4D1DC`) · **0x10** explosion (`0x4D22E`) · **0x08** lethal while **triggered** (`0x4D27C`) · **0x04** lethal while **idle** (`0x4D168`) · **0x02** dual-purpose, see below · **0x01** one-shot: despawn at path end instead of resetting to the spawn position (`0x4D360`). See "The two readers of bit 0x02" |
 | 0x47 | `bAnimActive` | byte | confirmed | `0xFF` once the triggered/hit animation sequence is running |
 | 0x48 | `bChasing` | byte | confirmed | Enemy AI: homing-at-player mode (flying enemies) |
 | 0x49 | `bDying` | byte | confirmed | Enemy AI: death-tumble mode (set by `kill_enemy`) |
-| 0x4A | `bAiCooldown` | byte | likely | Enemy AI decision cooldown (reset to 0x19=25); spawn seeds it as `(subcell_row & 7) * 25` |
-| 0x4B | `bUnk4B` | undefined1 | unconfirmed | Untouched |
+| 0x4A | `bAiCooldown` | byte | **confirmed** | Enemy AI decision cooldown. Promoted from *likely* 2026-08-30: all five `(0x4a,A0)` sites are in `enemy_ai_update` — `tst.b` @ `0x4D562`/`0x4D588`/`0x4D75C` (gate), `subi.b #0x1` @ `0x4D568` (tick down), `move.b #0x19` @ `0x4D574` (stun on stick jab = 25 frames). Seeded at spawn as `(bTrigBoxXY & 7) × 0x19` (`mulu.w #0x19` @ `0x497FE`). **Byte-wide at every site** |
+| 0x4B | `bUnk4B` | undefined1 | **confirmed unused** | Verified 2026-08-30: a program-wide instruction search for `(0x4b,A0)` over all 4,608 instructions returns **zero** matches, and `0x4A74D` (slot 1's copy) has no xrefs. Genuinely untouched padding — not merely "not yet found" |
+
+### The `0xFFFF` end-of-list sentinel at `0x4AADE` — documented 2026-08-30
+
+`sprite_list` is `SpriteEntity[13]` at `0x4A702`, so the array ends at `0x4AADD`
+(13 × `0x4C` = `0x3DC`). The **two bytes immediately after it, `0x4AADE`–`0x4AADF`,
+hold `FF FF`** — a 14th `wType` word acting as the list terminator. It had never been
+recorded here; the gap between the array's end and `sprite_type_dispatch` at `0x4AAE0`
+looked like alignment padding. It is not.
+
+**Three functions iterate `sprite_list` and every one of them is bounded by this word
+alone — none uses a count of 13:**
+
+| Function | Terminator test | Step |
+|---|---|---|
+| `render_sprites` | `cmp.w #-0x1,D0w` @ `0x4B03E` | `lea (0x4c,A0),A0` @ `0x4B31E` |
+| `clear_sprite_flags` | `cmpi.w #-0x1,(A0)` @ `0x4AC1E` | `lea (0x4c,A0),A0` @ `0x4AC38` |
+| `blit_backgrounds` | `cmp.w #-0x1,D0w` @ `0x4AC98` | — |
+
+**It is static data, never written at runtime** — `get_xrefs_to 0x4AADE` returns
+nothing, so nothing initialises it during play; it arrives set from the
+loader/decompression stage.
+
+**Consequences for a reimplementation.** Allocate **14** `wType` words' worth of space,
+not 13 entries, and seed the 14th to `0xFFFF` before the first frame — otherwise all
+three walkers run past the end of the array and into `sprite_type_dispatch`. Iterating
+`for i in 0..12` instead is behaviourally identical *given* a correct sentinel, but the
+sentinel is what the original actually tests.
+
+Note the two bounding styles coexist: the *render/clear* walkers stop on the sentinel,
+while `spawn_level_entity`'s pool scans use **hard address bounds** (`cmpa.l #0x4a9ae`
+for the 4–8 pool, `#0x4aa92` for 9–11). Reproduce each as written.
 
 **Reserved slot indices in `sprite_list`** (all confirmed): `[0]` = the **scripted
 moving hazard** slot (crusher / falling boulder — see below), `[1]` = **player
 (Rick)**, `[2]` = bullet, `[3]` = dynamite, `[4..8]` = hazard-capable level entities
 (scanned by `entity_touches_hazard_or_block`), `[9..11]` = further level entities,
 `[12]` = decorative sprite (type 74, intro screens).
+
+### The two readers of bit 0x02 — corrected 2026-08-29
+
+`bTriggerFlags` bit 1 (`0x02`) is read in **two unrelated places**, which is why this
+document previously carried two different, both-incomplete descriptions of it. It is
+**not** "bullet passes through" — that reading is retracted.
+
+| Reader | Site | Effect |
+|---|---|---|
+| `spawn_level_entity` | `btst.b #0x1,(0x3,A0)` at `0x496B8` | Route this placement into **`sprite_list[0]`** (`0x4A702`), the solid scripted-hazard slot, instead of the normal type-based pool — and only if slot 0 is free. |
+| `scripted_trap_update` | `btst.b #0x1,(0x46,A0)` at `0x4D204` | Inside the **bullet**-trigger branch only: choose how the spent bullet is cleaned up. |
+
+The bullet-cleanup detail, since the old wording got it backwards: the bullet is
+consumed **either way**. `clr.w (0x4A79A).l` at `0x4D1FE` zeroes `sprite_list[2].wType`
+*before* the bit is tested. The bit then selects only the disposal route — set calls
+`despawn_offscreen_entity` on the bullet entity (`0x4D20C`–`0x4D214`); clear just sets
+the erase-pending render bits `bset #2` on `0x4A7B0` / `0x4A7B6` (`0x4D21C`). Nothing
+"passes through".
+
+The two uses are consistent with each other: a slot-0 entity is a large solid hazard,
+so a bullet stopped by it is removed outright rather than left to be erased in place.
+
+**Why this went wrong.** The bullet-cleanup reader was found and correctly described in
+`algo-entities.md`'s corrections list (item 2), and the
+slot-0 reader was correctly described in the "Slot 0" section immediately below — but
+neither correction was ever folded into this table, so the stale cell survived nine
+byte-identity audits. It was caught by the xrick port independently reading the same
+bit as `ENT_FLG_STOPRICK` (`xrick/re/xref.md` -> *Structural differences*).
 
 ### Slot 0 — resolved 2026-08-28: there is no block-pushing mechanic
 
@@ -160,6 +219,48 @@ pass by reading `player_controller`'s two fire paths (disassembly at `0x4C524` a
 (Odd offsets are unused padding bytes — the four flags are word-spaced in memory
 though each is only a byte wide.)
 
+`HudDirtyFlags` ends at `0x4B357`, immediately before `init_hud_state` (`0x4B358`) — a
+hard boundary confirming the 8-byte size.
+
+### ✅ The four HUD render buffers, `0x4B330`–`0x4B34F` — **resolved 2026-08-30**
+
+This region was flagged on 2026-08-30 as "26 unexplained bytes" holding an `FF`-at-
+stride-8 pattern that "no instruction references". **Both halves of that were wrong.**
+It is a plain array of **four 8-byte HUD text buffers**, and four `lea` instructions
+point straight at them:
+
+| Buffer | Terminator | Pad | Contents | Pointed at by |
+|---|---|---|---|---|
+| `0x4B330`–`0x4B335` | `0x4B336` | `0x4B337` | **score**, 6 digit glyphs | `hud_update_score` — `lea (0x4b330).l,A0` @ `0x4B3C8` |
+| `0x4B338`–`0x4B33D` | `0x4B33E` | `0x4B33F` | **bullets**, ≤6 icon glyphs | `hud_update_bullets` — `lea (0x4b338).l,A0` @ `0x4B46C` |
+| `0x4B340`–`0x4B345` | `0x4B346` | `0x4B347` | **dynamite** | `hud_update_dynamite` — `lea (0x4b340).l,A0` @ `0x4B4A0` |
+| `0x4B348`–`0x4B34D` | `0x4B34E` | `0x4B34F` | **lives** | `hud_update_lives` — `lea (0x4b348).l,A0` @ `0x4B4D4` |
+
+The `FF` bytes are **`draw_string` terminators**, not a mysterious pattern: `draw_string`
+(`0x49466`) renders until it reads `0xFF`. They are constant, which is why nothing ever
+writes them — and why they are byte-identical between the 320 KB and 1 MB captures.
+
+`draw_hud_count` (`0x4B4FC`) is the shared filler, called with `A0` = buffer,
+`D1` = count, `D2` = icon glyph:
+
+```c
+*(long*)(A0)     = 0x5E5E5E5E;      /* blank the 6 cells with glyph 0x5E */
+*(word*)(A0 + 4) = 0x5E5E;
+if (D1 != 0) { D1--; do { A0[D1] = D2; } while (D1-- != -1); }   /* dbf */
+draw_string(A0);                     /* stops at the 0xFF terminator */
+```
+
+So the counters are drawn **right-aligned into a 6-cell field**, and the score buffer at
+`0x4B330` is simply `HudCounters`' own `wScore_display_hi`/`dwScore_display_lo` pair
+(6 digit bytes) with its terminator immediately after — which is why `HudCounters` is
+16 bytes ending at `0x4B335` and the terminator sits at `0x4B336`.
+
+> **Why this was missed, and it is worth knowing.** The claim "no instruction references
+> any address in the range" came from an operand search for `0x0004b34…`. Ghidra renders
+> these operands **without leading zeros** — `lea (0x4b340).l, A0` — so the pattern could
+> not have matched, whatever the truth was. The absence was an artifact of the query, not
+> a fact about the program. See `MEMORY.md` §8.
+
 ---
 
 ## CheckpointState (10 bytes at 0x4BFB8)
@@ -168,10 +269,25 @@ though each is only a byte wide.)
 |--------|-------|------|----------------------------------|
 | 0x0 | `wSaved_a752` | ushort | `0x4A752` = **`sprite_list[1].nPosX`** (the player's X, read directly — not a copy) |
 | 0x2 | `wSaved_a754` | ushort | `0x4A754` = **`sprite_list[1].nPosY`** (the player's Y) |
-| 0x4 | `wSaved_a750` | ushort | `DAT_0004a750` |
-| 0x6 | `wSaved_95ca` | ushort | `DAT_000495ca` — scroll/world position |
-| 0x8 | `bSaved_d00b` | byte | `DAT_0004d00b` |
-| 0x9 | `bSaved_bf14` | byte | `DAT_0004bf14` |
+| 0x4 | `wSaved_a750` | ushort | `0x4A750` = **`sprite_list[1].nDirection`** (slot 1 base `0x4A74E` + 2) — Rick's facing |
+| 0x6 | `wSaved_95ca` | ushort | `0x495CA` = **`world_row_base`** — the room's scroll position |
+| 0x8 | `bSaved_d00b` | byte | `0x4D00B` = **`ceiling_flag`** |
+| 0x9 | `bSaved_bf14` | byte | `0x4BF14` = **`player_crouching`** |
+
+*(The four destination globals were left as raw `DAT_…` placeholders until 2026-08-30
+even though all four are named elsewhere in this document.)*
+
+**Layout and boundary verified 2026-08-30** against `save_checkpoint_state`
+(`0x4BFC2`–`0x4BFFE`) and `restore_checkpoint_state` (`0x4C000`): six moves, in this
+order, word/word/word/word/byte/byte. The struct occupies `0x4BFB8`–`0x4BFC1` and ends
+**exactly** at `save_checkpoint_state`'s first instruction — a hard boundary confirming
+the 10-byte size.
+
+**Restore order matters, and is not just the six fields.** `restore_checkpoint_state`
+does `bsr reset_player_state` (`0x4BF30`) **first**, then restores the six values, then
+`bsr spawn_player_entity` (`0x4BFAE`) — so the reset cannot be allowed to clobber the
+restored state, and the entity is (re-)spawned only afterwards. Reproduce the three
+steps in that order.
 
 > ⚠️ **Axes corrected 2026-08-28.** This table previously listed `+0` as "room-Y" and
 > `+2` as "room-X" — reversed. `process_level_transition_point` shifts `0x4A754`
@@ -194,9 +310,22 @@ design: dying respawns Rick at the start of the *current room*, not the level.
 
 | Offset | Field | Type | Notes |
 |--------|-------|------|-------|
-| 0x0 | `nTrack_type` | short | `1` = retrigger-style (toggles a per-channel state bit), `2` = tracked/pattern music (via `init_music_playback`), other = one-shot sample |
-| 0x2 | `nParam_index` | short | For type 2: index (`<<1`) into a parallel 2-byte-stride lookup table at `0x44FF0` (`instrument_index_lookup`, not further typed — low confidence on exact record shape) |
-| 0x4 | `dwData_ptr` | undefined4 | Data pointer (sequence/instrument data), consumed differently per track type |
+| 0x0 | `nTrack_type` | short | **Corrected 2026-08-30 — types 0 and 2 were swapped here, and type 1 mis-described.** Read straight off `play_music`'s dispatch (`cmpi.w #0x1,(A0)` @ `0x44CE0`, `cmpi.w #0x2,(A0)` @ `0x44CE8`, fallthrough = 0): **`0` = tracked/pattern music (a song)** → `jsr init_music_playback` @ `0x44D02`, sets engine state `0x45002 = 1`; **`1` = sound effect** → picks a voice via the alternator `0x45003`, indexes a 13-byte-stride descriptor, sets the SFX-priority bit (`bset #7,(0x18,A6)`), engine state `= 0`; **`2` = digi sample** → loads TACR/TADR and the PCM pointer, engine state `= 2` |
+| 0x2 | `nParam_index` | short | Meaning depends on the type. **Type 0**: song number, passed to `init_music_playback`, which scales it `×6` into the song table at `0x46932`. **Type 1**: SFX index, scaled `×13` into the descriptor table at `0x46426` (`mulu.w #0xd` @ `0x44D6C`). **Type 2**: index `<<1` into the **sample-rate table** at `0x44FF0` — `[0]` = TACR prescaler, `[1]` = TADR count (`0x44DD8`–`0x44DE8`). *(The old note called `0x44FF0` `instrument_index_lookup`; it is a sample-rate table, and the `<<1` applies to type 2 only.)* |
+| 0x4 | `dwData_ptr` | undefined4 | Used **only by type 2**, as the PCM sample start (`move.l (0x4,A0),(0x44FFC)` @ `0x44DF0`). Types 0 and 1 leave it zero |
+
+**Census of the 29 descriptors (2026-08-30), and two hard boundaries it settles:**
+
+| Type | Count | Params |
+|---|---|---|
+| 0 — song | **9** | exactly `0`–`8` |
+| 1 — SFX | 17 | `0`–`18`, gaps at 2 and 11 |
+| 2 — sample | 3 | all `0` (the three PCM tracks `0x4DF86` / `0x4FCF2` / `0x50DA8`) |
+
+- **9 songs** matches the song table at `0x46932` being `9 × 6` bytes exactly.
+- The SFX descriptor table needs indices up to 18, i.e. **20 entries** at 13 bytes:
+  `0x46426 + 20 × 13 = 0x4652A` — **precisely the pattern-data base**. A hard boundary
+  confirming both the 13-byte stride and the 20-entry count.
 
 `music_track_table` boundary confirmed at exactly 29 records (`0x44F08`–`0x44FEF`,
 232 bytes) — the table ends precisely where `instrument_index_lookup` begins at
@@ -277,7 +406,7 @@ boundary fit, with entry 74 as all-zero padding.
 
 | Offset | Field | Meaning |
 |--------|-------|---------|
-| +0 | `wTriggerSound` | Sound track played when a scripted trap triggers, bit 7 stripped. **Bit 7 = also replay at end of animation.** 0 = silent. Observed: 0x14/0x15/0x18/0x19/0x1A/0x1B, plus 0x9A on entry 64 (track 0x1A + replay flag) |
+| +0 | `wTriggerSound` | Sound track played when a scripted trap triggers, bit 7 stripped. **Bit 7 = also replay at end of animation.** 0 = silent. **Full census 2026-08-30** — the base values are `0x13`–`0x1C`, **ten consecutive tracks**, plus `0x9A` (= `0x1A` + replay) on two entries. Frequencies: `0x13`×1, `0x14`×19, `0x15`×4, `0x16`×1, `0x17`×3, `0x18`×5, `0x19`×1, `0x1A`×7, `0x1B`×1, `0x1C`×1, `0x9A`×2. *(The old note listed only six of the ten and said `0x9A` appeared once; both were wrong.)* |
 | +2 | `nHitboxW` | → `SpriteEntity.nHitboxW` (drives every overlap test) |
 | +4 | `nHitboxH` | → `SpriteEntity.nHitboxH` |
 | +6 | `anim_frame_table` | → `SpriteEntity.anim_frame_table`; if non-null its **first entry** also seeds `gfx_data` |
@@ -295,13 +424,34 @@ The table's contents independently validate the entity-handler pass:
 | 4–15 | Enemies: hitbox 24×21, **no** anim/path tables — `enemy_ai_update` uses hardcoded frame tables (`0x46C6A`/`0x46C7E`/`0x46C92`) |
 | 16–21 | Pickups: hitbox 24×21, no tables (handlers set `gfx_data` directly) |
 | 22–23 | Trigger zones: hitbox **0×0** (invisible) but trigger box 4×4 (= 32×32 px) |
-| 24–73 | Scripted traps: full anim (`0x46Dxx`–`0x46Fxx`) + path (`0x470xx`–`0x475xx`) pointers; hitboxes 4×21 … 32×16 |
-| 74 | All-zero terminator/padding |
+| 24–73 | Scripted traps: anim + path pointers, **measured 2026-08-30**: `anim_frame_table` spans `0x46C3A`–`0x4708A`, `movement_path_table` spans `0x47092`–`0x475BE`. *(The old "`0x46Dxx`–`0x46Fxx`" / "`0x470xx`–`0x475xx`" bands were wrong at both ends — anim starts below `0x46D00` and runs past `0x46FFF` into `0x470xx`, so the two ranges are adjacent, not in separate bands.)* **13 distinct hitbox pairs**, W 4–32, H 6–21; `(4,21)` and `(32,16)` both occur |
+| 74 | All-zero terminator/padding — consistent with the placement census: type 74 (the decorative sprite) is **never spawned from placement data**, so its template is never read |
 
-⚠️ **Entries 71–73 carry real data but lie beyond `sprite_type_dispatch`'s 70
-entries** (which ends at `0x4ABF8`, where `hide_entity` begins). Types 71–73 have no
-handler, so they must never appear in placement data — either unused/leftover
-content or an editor-side type range wider than the shipped dispatch table.
+**Types 67 and 68 share the dynamite explosion animation.** Their `anim_frame_table` is
+`0x46C3A`, which is a **null longword followed by the whole explosion table** that
+`player_dynamite_update` reads at `0x46C3E`, terminator included. The null entry 0 is
+exactly what `scripted_trap_update`'s "frame 0 is a one-time intro frame, the loop
+restarts at index 1" rule expects, and `gfx_data == 0` makes `render_sprites` clear the
+draw-enable bit (`cmpa.l #0x0,A6` @ `0x4B106`) — so these two types are **invisible
+until triggered, then play the explosion**. This sharing is why the anim range starts
+below the previously-claimed band.
+
+✅ **Corrected 2026-08-29 — the earlier warning here was wrong on every count.** It said
+`sprite_type_dispatch` had **70** entries ending at `0x4ABF8` "where `hide_entity`
+begins", and that types 71–73 therefore had no handler and "must never appear in
+placement data". None of that holds:
+
+- the table has **74** entries, `0x4AAE0`–`0x4AC07` (296 bytes), indexed by `wType − 1`;
+- `hide_entity` begins at **`0x4AC08`**, immediately *after* the table — `0x4ABF8` is
+  dispatch **index 70**, and the spurious function once created there is exactly what
+  truncated the table in earlier passes;
+- **every type 1–74 has a handler.** Indices 23–72 (types 24–73) are all
+  `scripted_trap_update`; index 73 (type 74) is `decorative_sprite_update`.
+
+Verified 2026-08-29 by dumping all 74 pointers from `atari_ram.bin`; the table
+decomposes into contiguous runs with no gaps. `re/entities.md` carries the full
+breakdown. So `ObjectTypeDef` holding real data for types 71–74 is expected, not
+anomalous.
 
 ### RoomHeader (14 bytes; `room_headers` = `RoomHeader[47]` at 0x47620)
 
@@ -327,6 +477,28 @@ left/right playfield edge. Links are bidirectional (each room lists its way back
 | +2 | `wRow` | World row; match requires `world_row_base + playerY/8` ∈ [wRow, wRow+2] |
 | +4 | `pNextRoomHeader` | Destination room, or **−1 = end of level** (advances `level_index`; after level 4: game complete) |
 | +8 | `wEntryRow` | `world_row_base −= wRow − wEntryRow` on transition |
+
+**Census — added 2026-08-30, and the region is exactly accounted for.** Walking all 47
+rooms' lists from `RoomHeader.pTransitions` to the `0x00FF` sentinel gives **106
+waypoints across 47 lists**, no runaways. That closes the region arithmetically:
+
+```
+106 waypoints x 10 bytes + 47 sentinels x 2 bytes = 1154 bytes
+0x478B2 .. 0x47D33                                = 1154 bytes   (ends exactly at
+                                                                  object_type_defs)
+```
+
+So the **sentinel is 2 bytes, not a full 10-byte record** — the arithmetic only closes
+that way — and there is no room for an unaccounted waypoint. Per-room counts are 2 for
+39 rooms, 3 for 4, and 4 for 4.
+
+**Independently corroborated twice by the xrick port.** Its `map_connect` decomposes
+into 47 lists whose per-list counts match ours in **46 of 47 positions, in the same
+order** — which also confirms the two projects' room orderings agree. And its own
+`MAP_NBR_CONNECT` is `0x99` = **153** = our 106 + 47. The port's *initialiser*,
+however, contains 107 connectors + 47 terminators = **154 records — one too many for the
+array it declares**, the surplus being a third connector in list 17 where we (and the
+port's own constant) have two. See `xrick/re/xref.md` -> *Settled*.
 
 ### LevelStartInfo (20 bytes × 5 at **0x4B522**)
 
@@ -377,7 +549,7 @@ decompiler hid these loads, which is why they went untraced in the entity pass):
 `world_row_base` (0x495CA — also saved in `CheckpointState.wSaved_95ca`),
 `spawn_scan_flags` (0x495C8), `level_index` (0x4B586 — **corrects** the earlier
 "life/attempt counter" guess: it's the current level number, 4 levels total),
-`player_pos_x_copy`/`player_pos_y_copy` (0x4A752/0x4A754 — note the CheckpointState
+`player.nPosX`/`player.nPosY` (0x4A752/0x4A754 — note the CheckpointState
 field notes below had these axis-swapped, consistent with the SpriteEntity axis
 correction).
 
@@ -493,16 +665,16 @@ entries in the old copy were stale; all below are current.
 |---------|------|-------|-------|
 | `0x4AAE0` | `sprite_type_dispatch` | `pointer[74]` | 296 bytes, `0x4AAE0`–`0x4AC07`. See `re/entities.md` |
 | `0x47D34` | `object_type_defs` | `ObjectTypeDef[75]` | **Resolved** — see "Level Data Structures" above |
-| `0x4B522` | `level_start_info` | 20 bytes × 4 (+ a 5th intro pointer) | **Fully laid out** — see "Level Data Structures" above |
-| `0x48E26` | high-score table | 8 × 0x1E bytes | word `score_hi`@+2, long `score_lo`@+4, name text follows |
+| `0x4B522` | `level_start_info` | `LevelStartInfo[5]`, 20 bytes each | **Fully laid out** — see "Level Data Structures" above. Five entries, not four: entry 4 is the game-complete pseudo-level. Ghidra carries the type as `LevelStartInfo[5]` |
+| `0x48E26` | high-score table | 8 × 0x1E bytes | word `score_hi`@+2, long `score_lo`@+4, **10 bytes of fixed decoration @+8**, 10-byte name **@+0x12**, `0xFF` terminator @+0x1C. Scores are *unpacked decimal digits*, one per byte. Full layout under `enter_highscore_name` in `algo-system.md` — the old "name text follows" implied +8 |
 | `0x48FA1` | name-entry char grid | 6 rows | Used by `enter_highscore_name`'s cursor picker |
 | `0x481E4` | `placement_table` | `PlacementRecord[523]` | **Resolved** — see "Level Data Structures" above; the old "block hit flags" interpretation is superseded |
 | `0x45720` | `note_period_table` | `word[84]` | Confirmed: 7 octaves × 12 semitones of PSG tone-period values (`0x0EEE`→`0x0020`), consumed by `resolve_channel_note_period` |
-| `0x46932` | per-channel instrument table | stride 6 | Indexed by `(D0&0xFF)*6` in `init_music_playback` |
-| `0x46B66` | arpeggio/vibrato table | 8 bytes/entry | Indexed by a 5-bit field in `resolve_channel_note_period` |
-| `0x463CC` | default instrument data | — | Referenced by `init_music_playback`/`process_sequence_command` |
+| `0x46932` | **song table** | 9 × 6 bytes | **Renamed 2026-08-30 — it is not an instrument table.** `init_music_playback` computes `n*6` (`0x4512E`–`0x45134`) and reads **three words**, each an offset *relative to `0x46932`* giving that song's per-channel data stream, stored into the three channel states at `0x45098`/`0x450BA`/`0x450DC` (`0x4513E`–`0x45158`). Nine songs, matching the nine type-0 track descriptors |
+| `0x46B66` | **pitch-envelope segment table** | 8 bytes/entry, ≤32 entries | Indexed `((slot << 3) & 0xFF)` by `resolve_channel_note_period` (`lea (0x1780,PC),A0` @ `0x453E4`). **Not the vibrato table** — vibrato is separate, driven by `channel_coroutine_state_c` from the instrument's own fields |
+| `0x463CC` | **instrument table** | **10 bytes/entry** | `init_music_playback` seeds all three channels' instrument pointers to the base (`lea (0x122e,PC),A0` @ `0x4519C`), i.e. instrument 0 is the default. The 10-byte stride is proven by the instrument-slot table it builds at `0x450FD`: three runs of `0,10,20,…,70` (`moveq 0xa,D1` @ `0x451B2`) |
 | `0x22FEE` | tile-graphics table | 16 bytes/tile, 4 de-interleaved bitplane longword arrays | Source for `decode_level_tiles_to_cache` |
-| `0x23FEE` | title screen bitmap | 32768 bytes | Source for `draw_title_picture`; inside the still-unmapped `0x1B01E-0x44BED` blob (see `re/memory_map.md`) |
+| `0x23FEE` | title screen bitmap | 32768 bytes | Source for `draw_title_picture`, which copies exactly `0x8000` bytes (`move.w #0x3ff` × 8 longwords). The `0x1B01E`–`0x44BED` region is **fully mapped with no gaps** — see `re/memory_map.md` |
 
 
 ---

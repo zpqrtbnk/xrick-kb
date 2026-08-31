@@ -17,9 +17,9 @@ behaviour*. Everything below is measured against that.
 | Structs applied | **10**, plus typed arrays over every hard-bounded data region |
 | Entity dispatch types | **74 / 74** characterised |
 | Placement table | 523 slots = 476 real records + 47 per-room terminators (reconciled) |
-| Knowledge base | **16 documents + 4 scripts** in `re/`, plus **11 documents** in `xrick/re/` about the prior C/SDL port |
-| Extracted assets | 12 graphic PNG sheets (185 sprite frames among them), 47 room maps + 47 entity overlays, 1 playable SNDH |
-| Byte-identity audits | **9 of 9 complete** — 15 defects found and fixed |
+| Knowledge base | **16 documents + 4 scripts** in `re/`, plus **12 documents** in `xrick/re/` about the prior C/SDL port |
+| Extracted assets | 12 graphic PNG sheets (**212** sprite frames among them, cell index = sprite number), 47 room maps + 47 entity overlays, 1 playable SNDH |
+| Byte-identity audits | **20 of 20 complete** — 49 defects found and fixed (10 = port cross-check; 10b–10k = assumption sweeps) |
 | Dynamic-verification probes | **7 of 8 resolved**; the 8th reduced to a nice-to-have |
 | Hatari harness | **Working** — boots the analysed build unattended, Rick driveable under script |
 
@@ -66,94 +66,114 @@ and the song-0 transpose. The eighth (trigger-bit semantics) is O2 below.
 
 ---
 
-## 3. Open
+## 3. Tasks
 
-Five items. None of them blocks a reimplementation; the knowledge base is not known to
-be missing anything structural.
+**One numbering scheme.** Everything actionable is a `T`-item, listed here and nowhere
+else. `xrick/re/xref.md` and the `re/` documents are **state**: they say what is true,
+not what to do. The history of what each pass found is in `re/byte-identity.md`.
 
-### O0. Compare against "the port" — **newly available, cheapest verification we have**
+None of these blocks a reimplementation. `re/` is not known to be missing anything
+structural.
 
-A second, independent reverse-engineering of Rick Dangerous exists and is now on disk:
-**xrick**, bigorno's 1998–2005 C/SDL clone, cloned into `xrick/` at commit `c2aef3d`.
-Its knowledge base is `xrick/re/` (11 documents; entry point `xrick/re/README.md`), and
-`xrick/re/xref.md` is the comparison worksheet. `MEMORY.md` §9 carries the standing
-rules.
+### T1 — Build the reimplementation and diff it against the live game ⭐ **the main event**
 
-**Why this is worth doing before O1.** It is a paper exercise — no emulator, no live
-run — and it is *independent*: the port was reversed from the PC executable by someone
-else, decades ago, with no shared method or tooling. Where the two agree, the fact is
-corroborated twice over. First reading already produced agreement on the 523-record
-placement table, all eight tile-attribute bits, all five common trigger bits, the enemy
-spawn-slot pools, the `-0x580` jump impulse, `+0x80`/`0x800` gravity, and the super-pad
-rebound `0xFE - vel` — the last two being arbitrary constants nobody guesses twice.
+Static auditing has reached diminishing returns: twenty audits, and the last several
+found nothing in the areas they covered. What remains is a *test*, not a read.
 
-**The caveat that governs everything.** The port's *logic* came from the **PC** version;
-only its artwork is ST. A difference is therefore three-ways ambiguous — PC-vs-ST, port
-error, or our error — and none of the three may be assumed. It also has no sound engine
-and no timing model, so it can say nothing about `re/algo-music.md` or anything measured
-in wall-clock time.
-
-Work already queued in `xrick/re/xref.md`:
-
-1. **Data first.** Decode `map_marks[523]`, `ent_entdata[74]`, `map_submaps[47]` and
-   `map_eflg_c[32]` from the port's C initialisers and diff field-by-field against the
-   same tables read out of `atari_ram.bin`. Level data should be identical across
-   platforms if anything is, so a clean match validates both sides' decoders at once.
-2. **Then the 17 numeric discrepancies (Q1–Q17)** — mechanical. The sharpest are the
-   stick-jab stun (port 20 vs our 25), the spawn latency seed (×32 vs ×25), the
-   dying-entity gravity (`+0x80` vs our `+0xC4` with no clamp), and the death launch
-   velocity (`-0x400` vs our `-0x300`).
-3. **Then `u_envtest` versus `probe_player_tile_collision`** — the highest-value single
-   routine, and very likely the same 8-pixel-column subtlety that audit 6 forced us to
-   transcribe literally, seen from the other side.
-4. **Then the four AI behaviours**, where genuine PC/ST divergence is most likely.
-
-**One finding already lands on us, not the port.** `re/data-structures.md` gives two
-conflicting readings of placement flag bit `0x02`: line 261 says "spawn into
-`sprite_list[0]` (the solid-block slot)", line 67 says "bullet passes through". The port
-independently reads it as `ENT_FLG_STOPRICK` — slot 0, solid, blocks Rick — corroborating
-line 261. Fix the inconsistency; it is ours either way. A second, weaker one: we
-attribute the skipped `|3` Y-alignment nudge to bit `0x04`, the port to bit `0x02`.
-
-### O1. Build the reimplementation and diff it against the live game — **the main event**
-
-Static auditing has reached diminishing returns: the last three audits found four
-defects between them, all in prose rather than in transcribed logic. The remaining
-verification is a *test*, not a read.
-
-The Hatari harness in `re/hatari.md` is the instrument. Boot `disks/chaos43/RICK.PRG`
+The Hatari harness (`re/hatari.md`) is the instrument. Boot `disks/chaos43/RICK.PRG`
 from a GEMDOS drive, re-measure the address delta (expect `-0x2054`, never hardcode),
-then breakpoint each major function, log register state, and diff against what
-`algo-*.md` predicts. That turns the ~98% estimate into a measurement.
+breakpoint each major function, log register state, and diff against what `algo-*.md`
+predicts. That turns the ~98% judgement into a measurement.
 
-### O2. Trigger-bit dynamic spot-check — *optional*
+**T1 subsumes several smaller items** — it exercises the blitter (T4), the trigger bits
+(T6) and the name-entry loop (T7) as a side effect of running the game.
 
-All 8 trigger bits are exercised in shipped data across all 4 levels (census in
-`re/entities.md`), so no transcribed path is unreachable. The *semantics* still rest on
-the code transcription alone. A spot-check — step `scripted_trap_update` on a known trap
-and watch a bit fire — would promote them from "transcribed" to "observed". Worth doing
-opportunistically during O1, not on its own.
+### T2 — Bullet probe points: one or two?
 
-### O3. Two minor unanswered questions
+We keep a single `bullet_point_x/y` (the leading edge). The port keeps **two** — the
+leading edge for enemy hits, and a separate centre point `x + 0x0C` for trigger boxes,
+boxes and bonuses. If the original really uses a centre point for triggers, we are
+testing the wrong point for those interactions.
 
-Both are curiosities about *observable* behaviour, not holes in the specification.
+**Method:** enumerate the readers of `0x4BF24`/`0x4BF26` and check whether any call site
+adjusts the point before use. Cheap, static, decisive.
 
-- **The name-entry commit loop at `0x491E2` over-runs the name field.** `dbf D3w` tests
-  the full word while `move.b (A2)+,D3` writes only the low byte, so the iteration count
-  depends on entry state as well as on the characters typed. A reimplementation just
-  emits `dbf D3w` and is correct by construction — the object code is the specification
-  — but *what the player actually sees* has never been characterised. Model the loop in
-  Python and confirm one case live. See `re/algo-system.md`.
-- **Some `ObjectTypeDef` entries have no placement record referencing them.** Unused
-  content, or types reachable only by paths not yet traced? Unresolved. See
-  `re/entities.md`.
+### T3 — Verify the third `0x19` site independently
 
-### O4. Accepted as-is
+`0x19` (25) appears in three places on our side — the stick-jab stun, the spawn latency
+seed, and the super-bonus tick divider — where the port has three *different* values
+(20, 32, 30). Two of ours are verified at instruction level (`move.b #0x19,(0x4a,A0)` @
+`0x4D574`; `mulu.w #0x19` @ `0x497FE`). **The third, the escape-timer divider at
+`0x4BE1A`, has not been.** Confirm it is a genuine third occurrence and not one reading
+propagated into three documents.
 
-Known, understood, and deliberately not being fixed:
+### T4 — Instruction-level check of the sprite blitter transcription
+
+`algo-render.md`'s `render_sprites` shift path is the one large transcription never
+compared against the disassembly line by line — 290 instructions of rotate-and-mask
+across two unrolled paths. The likeliest remaining home for a real defect.
+
+Audits 10h and 10i sampled the other hard transcriptions (`algo-system.md`'s eight small
+functions, `algo-music.md`'s sequence opcodes) and found none, so expectations should be
+modest — but this is the largest untested surface. Partly subsumed by T1.
+
+### T5 — Reconcile the entity-dispatch shapes
+
+Ours is 74 dispatch types; the port is 24 `ent_actf` entries plus a `>= 0x18` range plus
+`0x47`. Not known to be a behavioural difference — the shapes simply have not been put
+side by side. Documentation reconciliation, not analysis.
+
+### T6 — Observe the trigger bits firing
+
+All eight `bTriggerFlags` bits are exercised in shipped data across all four levels (the
+census is in `re/entities.md`), so no transcribed path is unreachable. But the
+*semantics* rest on the code transcription alone; no bit has been watched firing in a
+running game. Breakpoint `scripted_trap_update`'s trigger scan on a known trap.
+Opportunistic during T1.
+
+### T7 — Characterise the `dbf D3w` name-entry loop
+
+At `0x491E2` the commit loop's counter is the *character just copied*, so the iteration
+count depends on entry state as well as on what was typed, and the copy over-runs the
+10-byte name field. A reimplementation is correct by emitting `dbf D3w` — the object
+code is the specification — but **what the player actually sees has never been
+characterised.** Model it in Python, then confirm one case live. See `re/algo-system.md`.
+
+### T8 — Adjudicate the port differences (needs the PC side)
+
+Seventeen measured differences against the xrick port remain unadjudicated. They are
+tabulated as state in `xrick/re/xref.md` → *Unadjudicated*.
+
+**Our value is certain in every case** — each is read directly from instruction
+encodings. What is unknown is whether the port's differing value is a genuine PC-vs-ST
+difference or a port error, and **that is a question about the PC build.** An Atari run
+cannot answer it: it would only re-confirm the side that is not in dispute.
+
+**Method:** a DOSBox run of PC Rick Dangerous, or a disassembly of the PC executable.
+Neither is currently in scope. Until then this stays open by design, not by neglect.
+
+### T9 — Explain the `sni` → `sprbase` substitution
+
+When all four trigger flags are set *and* the slot is ≥ 9, `ent_actvis` replaces
+`sprbase` with `entdata.sni & 0xFF`. The port does the same and states plainly that it
+cannot explain why. **Neither side knows.** No obvious instrument; would likely fall out
+of watching a submap-3 trap under T1.
+
+### T10 — Report the port's `map_connect` overrun upstream *(courtesy, optional)*
+
+The port's connector table holds 154 records in an array it declares as 153
+(`MAP_NBR_CONNECT = 0x99`), the surplus being a third connector in list 17 where we and
+the port's own constant have two. Worth reporting to the upstream repository. No effect
+on our work.
+
+---
+
+## 4. Accepted — deliberately not tasks
+
+Known, understood, and not being pursued:
 
 - **161 scenery tiles at `0x1BBFE`–`0x1D01D`** (standard 8×8 four-plane format, rendered
-  to `scenery_tiles.png`) are referenced by **nothing in the program** — cut content or
+  to `scenery_tiles.png`) are referenced by **nothing** in the program — cut content or
   loader-stage artwork. Identified; use unresolved. No further asset sweep is worthwhile.
 - **The `LevelStartInfo` array type cannot be applied in Ghidra**: an auto-generated
   pointer label inside the range blocks it and Ghidra rightly refuses to evict a named
@@ -184,9 +204,21 @@ Known, understood, and deliberately not being fixed:
 | Index demotion | 08-28 | `functions.md`/`entities.md` demoted to indexes; authority order documented in `re/README.md` |
 | Audio complete | 08-28 | SNDH rebuilt from the 1 MB capture: all three PCM samples intact incl. the death sample; **confirmed by listening**; superimposed-'ding' defect fixed |
 | Room render fix | 08-28 | Rooms were cut short at the bottom; added the 6-block-row margin the player actually sees |
-| Asset + loose-end closure | 08-28 | Sprite extraction switched to a grid sweep (124 → **185** frames); the 5 KB post-font gap identified as 161 unreferenced scenery tiles; `level_start_info` proven to have **5** entries (entry 4 = the game-complete pseudo-level) |
+| Asset + loose-end closure | 08-28 | Sprite extraction switched to a grid sweep (124 → **185** frames — *later corrected to 212, see audit 10*); the 5 KB post-font gap identified as 161 unreferenced scenery tiles; `level_start_info` proven to have **5** entries (entry 4 = the game-complete pseudo-level) |
 | KB review + consistency pass | 08-28 | Stale content purged; `sprite_type_dispatch` corrected to **74** entries; `hide_entity` relocated; `CheckpointState` axes fixed |
 | Hatari harness | 08-28/29 | Commissioned, then switched to the analysed build (`chaos43/RICK.PRG`); `-0x2054` delta reproduced; gameplay driven under script by poking `joystick1_state` |
 | Dynamic-probe pass | 08-29 | 7 of 8 items resolved — several by Ghidra xref census rather than by watching |
-| **Byte-identity audit (9 audits)** | 08-29 | 15 defects found and fixed; both tile probes transcribed literally; signedness of the music engine established; struct widths and hidden dispatches proven clean |
-| **"The port" registered and analysed** | 08-29 | xrick (bigorno, C/SDL) cloned into `xrick/`; knowledge base written to `xrick/re/` (11 docs); PC-derived-logic caveat established; ~20 facts cross-validated on first reading; 17 numeric + 7 semantic questions queued in `xrick/re/xref.md`; one internal inconsistency found on **our** side (placement flag `0x02`) |
+| **Byte-identity audits 1–9** | 08-29 | 15 defects found and fixed; both tile probes transcribed literally; signedness of the music engine established; struct widths and hidden dispatches proven clean |
+| **"The port" registered and analysed** | 08-29 | xrick (bigorno, C/SDL) cloned into `xrick/`; knowledge base written to `xrick/re/` (12 docs); PC-derived-logic caveat established; ~20 facts cross-validated on first reading; 17 numeric + 7 semantic questions queued in `xrick/re/xref.md`; one internal inconsistency found on **our** side (placement flag `0x02`) |
+| **Port comparison, numeric pass (Q1–Q17)** | 08-29 | Every question answered on our side; 7 closed as agreement, 9 open as real differences, 1 closed as **our defect**: the sprite sheet was short by 21 frames and a density filter had been dropping sparse ones. `extract_assets.py` fixed, `sprites.png` re-rendered at **212** frames with cell index = sprite number. Gravity and corpse-drift questions narrowed to the dying path / enemy corpse only. New Q18 raised (bullet probe point: one on our side, two on the port's) |
+| **Audit 10 — consistency sweep vs the port** | 08-29 | First *external* cross-check. ~20 facts corroborated; **16 defects** found that nine self-referential audits had missed: sprite sheet 21 frames short + a density filter dropping real frames; `bTriggerFlags` bit `0x02` and bits `0x04`/`0x08` misdescribed; the dispatch-table row mislabelled type 70 (is 74) and `hide_entity` at the wrong address; `data-structures.md` still claiming 70 entries / unhandled types; a Ghidra plate still saying "column-major"; four naming splits between Ghidra and the docs; and **26 unapplied corrections** across four `algo-*.md` files, all now closed |
+| **Assumption sweep of the ST reverse-engineering** | 08-30 | Every claim re-derived rather than re-read. Fixed: the `nVelY` gravity note (had `+0xC4` on *living* enemies with a terminal clamp — actually living player/enemy `+0x80` clamp `0x800`, dead player `+0x80` no clamp, dying enemy `+0xC4` no clamp, all four verified at instruction level); the title bitmap (**32,768** bytes, not 32,000, and its stated range matched neither); the sprite region (**71,232** bytes, not "~32 KB"); `level_start_info` 4→**5** entries; the high-score name offset (+8 → **+0x12**); two "untraced" effect-callback claims long since traced; a rename-mangled sentence of my own making. Promoted 3 fields from *likely*/*unconfirmed* to **confirmed** by instruction census. **The 171 KB data region is now gapless and fully mapped**, every size measured, ending exactly at the first code byte. **O3 item 2 resolved**: the only unplaced types are the 4 code-spawned ones |
+| **Second assumption sweep (audit 10c)** | 08-30 | Re-derived the areas 10b had not covered. **One defect**: the 2 bytes at `0x4AADE` before `sprite_type_dispatch` are not padding but the `0xFFFF` **`sprite_list` terminator** — all three walkers (`render_sprites`, `clear_sprite_flags`, `blit_backgrounds`) stop on it and **none is bounded by a count of 13**; it has no xrefs, so it must be seeded in the initial state. Documented, and closes `xrick/re/xref.md` S3. Verified-exact with no change: all 47 `RoomHeader` pointer sets, the 29 music descriptors (incl. the three PCM pointers), `note_period_table`, the font and `level_start_info` boundaries, the 16-word palette, all five intro-text lengths, `strings.md`'s 66→64 extraction, and **all 16 tile-attribute bit counts** |
+| **Third assumption sweep (audit 10d)** | 08-30 | **Clean — zero defects in `re/`.** Measured four things never measured before: the dynamite fuse table (**17** entries) and explosion table (**10**), all 27 frame pointers on the sprite grid at indices 33–147, and a full `TransitionWaypoint` census (**106** across 47 lists). The transition region now **closes exactly** — 106×10 + 47×2 = 1154 = `0x478B2`–`0x47D33`, ending at `object_type_defs` — which also proves the sentinel is 2 bytes, not a 10-byte record. Re-walked the per-room placement lists: 476 + 47 = 523 confirmed room by room. Closed xref Q11 with real numbers and found **a defect in the port** (Q20): its `map_connect` has 154 records in a 153-declared array, differing from us in 1 of 47 lists |
+| **Fourth assumption sweep (audit 10e)** | 08-30 | Censused `ObjectTypeDef[75]` field by field — the largest table never checked. **2 defects**: the scripted-trap `anim_frame_table` range was wrong at *both* ends (really `0x46C3A`–`0x4708A`, overlapping the band the doc reserved for paths), and the `wTriggerSound` census listed only 6 of the **10** consecutive values `0x13`–`0x1C`. **New finding**: types **67/68 share the dynamite explosion table** via a null intro frame at `0x46C3A` — invisible until triggered, then they play the explosion; that is *why* the anim range starts low. **New open item O6**: 26 structured-but-unreferenced bytes between the two HUD structs. Fed xref Q21 — the port's guess of 10 entity sounds was right, but its `- 0x14` index base is one too high |
+| **Fifth assumption sweep (audit 10f)** | 08-30 | Audited the **music engine tables**, the last untouched surface. Started from a cheap mechanical signal — *two documents describing the same address differently* — and found **4 defects, all in `data-structures.md`**: `MusicTrackDescriptor` types **0 and 2 swapped** (0 = song, 1 = SFX, 2 = digi sample, per `play_music`'s dispatch), the `nParam_index` semantics, `0x46932` mislabelled a "per-channel instrument table" (it is the **song table**, 9×6), and `0x46B66` mislabelled "arpeggio/vibrato" (it is the **pitch-envelope segment table**). Sharpened `0x463CC` to a 10-byte-stride instrument table. **Two new hard boundaries**: 9 songs ↔ the 9×6 song table, and the SFX table's 20 entries × 13 bytes ending exactly at the pattern-data base `0x4652A`. `algo-music.md` was right throughout |
+| **Sixth assumption sweep (audit 10g)** | 08-30 | **Clean — zero defects.** Two mechanical scans came back empty: every `name`/`0xADDR` pair in `re/*.md` checked against Ghidra's symbol table (5 hits, all range-notation false positives — the scan that *would* have caught the `hide_entity` error), and access widths for the globals (6 spot-checked across every access in the program, all matching). **Resolved** `CheckpointState`'s four `DAT_…` placeholders — no `DAT_` names remain in `re/` — plus its hard boundary at `0x4BFC2` and the restore ordering (`reset_player_state` → restore → `spawn_player_entity`). **Made precise**: the `−0x2054` delta is a *relocation* — static data byte-identical, stored pointers shifted (74/74 dispatch, 141/141 RoomHeader), non-pointer fields identical (47/47). Relocate pointers, not data |
+| **Seventh sweep (audit 10h) — transcriptions, not tables** | 08-30 | First sweep to compare `algo-*.md` **transcriptions** against the disassembly instruction by instruction. Eight `algo-system.md` functions checked in full: `seed_prng_state` (constants recomputed), `update_prng`, `draw_string_xy`, `draw_string`, `draw_glyph_string`, `draw_glyph`, `set_palette`, `palette_fade_in`. **Zero defects** — the `bclr`/`bchg` old-bit semantics and `palette_fade_in`'s double-duty `D4` (blue threshold *and* outer `dbf` counter) were all already captured. One fidelity nuance recorded: `draw_glyph` is **unrolled** (7 advances for 8 rows, 32nd byte without post-increment) where the transcription is rolled — unobservable, since A4 is restored and both callers reload A1 |
+| **Eighth sweep (audit 10i)** | 08-30 | `algo-music.md`'s sequence opcodes, the second "hardest remaining" transcription. `process_sequence_command` verified instruction by instruction, PC-relative targets resolved. **Zero defects**, two fidelity notes: (1) both range tests are **signed**, so the unsigned C form is valid **only because every call site guards on bit 7** (`tst.b (A0); bpl` at `0x452C0`/`0x452CE`) — checked rather than assumed, and now stated at the function; (2) the `0xC2` case is `beq.w 0x451D8`, a branch into `init_music_playback`'s `rts`, not a local return. **`algo-render.md`'s blitter shift path is now the one large untested transcription** |
+| **S5/S6/S7 resolved (audit 10j)** | 08-30 | The three port-side hypotheses, settled against our disassembly. **S5 false** — the ST's two ladder-grab sites are *byte-identical*; the port's asymmetry is port-side, and the ST rule (`(x&8)==0 \|\| (x&7)==0`, then snap `x=(x&0xF0)\|4`) differs from both port forms → new **Q22**. **S6 false** — ours is a real two-longword PRNG (`update_prng`, 2 callers, 1 consumer, turn on 1-in-4); the port's mixer picks direction 1-in-2. Unrelated, though both step a generator per frame. **S7 true and exact** — tabulating bit reachability across {upper,foot}×{outer,centre}, **all 32 cells agree**: ladder-top only from the centre foot column, one-way only from the foot row, ladder only from the centre column. Strongest corroboration in the comparison |
+| **O6 resolved** | 08-30 | The "26 unexplained bytes" at `0x4B336`–`0x4B34F` turned out to be **four 8-byte HUD render buffers** (score/bullets/dynamite/lives — 6 glyph cells + `0xFF` `draw_string` terminator + pad), addressed by four `lea`s at `0x4B3C8`/`0x4B46C`/`0x4B4A0`/`0x4B4D4` and filled by `draw_hud_count`. Solved statically; **no Hatari run needed**. The earlier "nothing references it" claim was an artifact of an operand search using zero-padded addresses (`0x0004b34`) where Ghidra renders them unpadded (`0x4b340`) — a search that could not have matched. Lesson added to `MEMORY.md` §8 |

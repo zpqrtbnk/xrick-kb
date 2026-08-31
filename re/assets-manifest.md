@@ -57,7 +57,7 @@ right 8 px blank).
 | `tiles_bank1.png` | 256 × 8×8 | `0x1F01E` | Tile bank 1 — **levels 2–3** (Castle, Missile Base) |
 | `blocks_bank0.png` | 256 × 32×32 | `0x22FEE` + bank 0 | Blocks assembled from 4×4 tile grids — stone/temple |
 | `blocks_bank1.png` | 256 × 32×32 | `0x22FEE` + bank 1 | Same definitions, bank-1 tiles — castle/industrial |
-| `sprites.png` | **185** × 32×21 | frame grid sweep | The complete frame grid, `0x2BFEE`–`0x3BA9E`, stride `0x150` |
+| `sprites.png` | **212** × 32×21 | frame grid sweep | The complete frame grid, `0x2BFEE`–`0x3D62E`, stride `0x150`. **Cell index = sprite number** |
 | `scenery_tiles.png` | 161 × 8×8 | `0x1BBFE` | Unreferenced scenery artwork (see below) |
 | `title.png` | 320×200 | `0x23FEE` | The title screen |
 | `banner_congratulations.png` | 320×32 | `0x40FEE` | "CONGRATULATIONS!" |
@@ -90,11 +90,36 @@ what `blit_image_5120` copies, which explains that function's otherwise odd size
 Earlier notes calling `0x40FEE` "a title/menu bitmap" were half right: it is banner
 artwork, not a screen.
 
-### Sprite coverage — the complete grid (revised 2026-08-28)
+### Sprite coverage — the complete grid (revised 2026-08-29)
 Frames sit on **one regular grid**: stride `0x150`, every frame aligned to
 **110 mod 0x150** — verified across all 124 table-referenced frames without exception.
-Sweeping that grid from `0x2BFEE` to `0x3BA9E` yields **192 slots, 185 non-empty**,
-and the extractor now renders all of them.
+Sweeping that grid from `0x2BFEE` to `0x3D62E` yields **212 slots**, of which exactly
+one (slot **127**) is blank. The extractor renders every slot in grid order, blank
+included, so **sheet cell N is sprite number N** — which is what makes the sheet usable
+for cross-referencing `gfx_data` addresses.
+
+> **Corrected 2026-08-29 — the previous "185 frames" figure was wrong twice over,**
+> found while cross-checking against the xrick port (see `xrick/re/xref.md` -> *Where
+> the two agree*, sprite frame count).
+>
+> 1. **The grid was cut short.** The sweep ended at `0x3BA9E` (slot 190). Slots
+>    **191–211 are all non-empty** and hold genuine artwork; the first all-zero slot
+>    is 212, and every slot from there to the banners at `0x40FEE` is blank. The true
+>    end is `0x3D62E`. **21 frames were missing.**
+> 2. **A density filter silently discarded real frames.** The extractor kept only
+>    slots with `> 10%` non-zero bytes. Small sprites — the bullet and similar — carry
+>    only ~17–30 non-zero bytes out of `0x150` and were thrown away. Seven were lost
+>    inside the old range and twelve more would have been lost in the recovered range.
+>    "185 non-empty" was therefore a filter artifact, not a count of real frames. The
+>    filter is gone; emptiness is now tested as "no non-zero byte at all".
+>
+> The termination rule matters: **trim trailing blanks, do not stop at the first
+> blank.** Slot 127 is a genuine interior gap, and stopping there truncates the sheet
+> to 127 frames (observed while making this fix).
+>
+> Independent corroboration: the port declares `SPRITES_NBR_SPRITES = 0xD5 = 213`
+> for its ST sprite array, against our 212 occupied slots — agreement to within the
+> one trailing blank entry.
 
 The earlier table-walk found only 124. The gap is not orphaned content: treasures
 (`type*0x150 + 0x2F70E`) and the eight enemy sprite banks (`frame + bank`) are reached
@@ -102,7 +127,7 @@ by **computed** addresses that never exist as stored pointers, so neither a tabl
 nor a program-wide pointer scan can see them — a pointer scan finds just 118. The grid
 sweep sidesteps the question entirely and is the right method here.
 
-All 185 were inspected and every one is genuine artwork: Rick in many poses, guards,
+All 212 were inspected and every one is genuine artwork: Rick in many poses, guards,
 bats, boulders, barrels, dynamite, explosions, spikes, statues, the "SCORE GATE"
 signs and a "500" score popup. Nothing is noise.
 

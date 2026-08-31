@@ -25,7 +25,7 @@ order is preserved. Field names follow `re/data-structures.md`.
 | Address | Name | Notes |
 |---|---|---|
 | `0x4A702` | `sprite_list[0]` | solid block; `+4/+6` pos, `+0x10/+0x12` hitbox |
-| `0x4A74E` | `sprite_list[1].wType` | **the player-spawned flag** (see corrections) |
+| `0x4A74E` | `sprite_list[1].wType` | **the player-spawned flag** — `spawn_player_entity` (`0x4BFAE`) is a single `move.w #0x1,(0x4A74E).l`. The main loop's dying branch tests it to see whether the death tumble is still on screen |
 | `0x4A750`…`0x4A758` | player `nDirection`,`nPosX`,`nPosY`,`nVelY`,`nPosYFrac` | slot 1 fields |
 | `0x4A79A` | `sprite_list[2].wType` | bullet alive flag |
 | `0x4A7B0` / `0x4A7B6` | `sprite_list[2].bRender_flags_a/_b` | |
@@ -33,11 +33,11 @@ order is preserved. Field names follow `re/data-structures.md`.
 | `0x4BE1A` | `timer_tick_divider` (word) | reload `0x19` = 25 |
 | `0x4BE1C` | `timer_bcd_value` (2 BCD bytes) | |
 | `0x4BE1E` | `timer_bcd_decrement` (2 BCD bytes) | static data |
-| `0x4BF12`…`0x4BF15` | player state bytes | `0x4BF14` = crouching |
+| `0x4BF12`…`0x4BF15` | `climbing`, `on_ground`, `crouching`, `shoot_debounce` | named in `algo-player.md` → *Player state globals* |
 | `0x4BF18` | `player_dying` | |
-| `0x4BF1A`,`0x4BF1C` | dynamite-exploding, unnamed | |
+| `0x4BF1A` / `0x4BF1C` | `dynamite_exploding` / `stick_debounce` | both owned by `algo-player.md` |
 | `0x4BF1E` | `stick_attack_active` | with point `0x4BF20`/`0x4BF22` |
-| `0x4BF24`/`0x4BF26` | **bullet X / Y** | see corrections |
+| `0x4BF24`/`0x4BF26` | **bullet probe X / Y** | *(not `bullet_range_remaining` — that reading is retracted)* seeded at the muzzle and stepped ±8 with the sprite; `player_bullet_update` and `scripted_trap_update`'s bullet test both use it |
 | `0x4BF28`/`0x4BF2A`/`0x4BF2C` | `explosion_active` / `explosion_x` / `explosion_y` | |
 | `0x4BF2E` | `player_touched_hazard` | |
 | `0x4BFB8`…`0x4BFC1` | `CheckpointState` | |
@@ -691,42 +691,34 @@ Record layout: `{ duration.w, dX.w, dY.w, anim_frame_table.l }` = 10 bytes;
 
 ---
 
-# Corrections for the parent to apply
+# Corrections — all applied (closed 2026-08-29)
 
-These contradict current `re/` docs. I did **not** edit those files.
+Eight discrepancies this transcription pass found against the then-current `re/` docs.
+The fork that produced them deliberately did not edit the owning files, and **the block
+then sat unprocessed**, which is how a known-wrong reading of `bTriggerFlags` bit `0x02`
+survived nine byte-identity audits with the right reading two sections away. All eight
+are now folded in; nothing here is outstanding.
 
-1. **`bTriggerFlags` bits 2 and 3 are distinct.** `0x04` = lethal **while idle**;
-   `0x08` = lethal **while triggered**. `data-structures.md` lists them jointly as
-   "0x08/0x04 always-lethal".
-2. **`bTriggerFlags` bit 1 (`0x02`) is not "bullet passes through".** The bullet is
-   consumed either way (`sprite_list[2].wType = 0` happens first); the bit only
-   selects *how* it is cleaned up — `despawn_offscreen_entity` vs. setting the
-   erase-pending render bits.
-3. **The three enemy sub-types per visual are NOT identical.** Each wrapper passes a
-   distinct `D0.b` AI mode (0 = step-counted patrol, 1 = player-seeking, 2 = random
-   + chase-capable). `entities.md` says they "decompile identically — differences
-   come from placement data"; that is wrong.
-4. **`0x4A74E` is `sprite_list[1].wType`, not a generic "state_flag".**
-   `spawn_player_entity` writes `1` there. The main loop's "state_flag" dispatch is
-   really testing whether the player entity is spawned. Affects `functions.md`'s
-   main-loop description.
-5. **`0x4A752`/`0x4A754` are not "copies".** They are `sprite_list[1].nPosX` /
-   `.nPosY` directly (slot 1 base `0x4A74E`). The labels `player_pos_x_copy` /
-   `player_pos_y_copy` are misleading.
-6. **`0x4BF24` is the bullet's X coordinate, not `bullet_range_remaining`.**
-   `scripted_trap_update` passes `0x4BF24`/`0x4BF26` as the (x, y) point for the
-   bullet trigger test. New: `0x4BF20`/`0x4BF22` are the stick-attack point.
-7. **`probe_entity_tile_collision` returns no register value** — it restores all of
-   D0–D7 before `rts`. `enemy_ai_update`'s `cmp.b #2,D0b` is testing the *caller's*
-   `aiMode`, not a floor-type return code. `entities.md`'s "returns floor-type code"
-   is wrong, and so is the plate comment at `0x4DA40`.
-8. `kill_enemy` awards `add_score(0x50)` and plays track `0x13`; the explosion path
-   in `enemy_ai_update` awards a *second* `0x50` before calling it.
+**Rule adopted as a result: never leave a correction in "to apply" state.** Apply it to
+the owning document, or file it in `PLAN.md`. A correction parked in a leaf document is
+invisible to every later reader. See `MEMORY.md` §8.
+
+| # | Correction | Applied to |
+|---|---|---|
+| 1 | **`bTriggerFlags` bits 2 and 3 are distinct** — `0x04` = lethal **while idle** (`btst #2,(0x46,A0)` @ `0x4D168`, not-yet-animating branch); `0x08` = lethal **while triggered** (`btst #3,(0x46,A0)` @ `0x4D27C`, animating branch). The docs had conflated them as "0x08/0x04 always-lethal". | `data-structures.md` `0x46` cell |
+| 2 | **Bit 1 (`0x02`) is not "bullet passes through"** — the bullet is consumed either way (`clr.w (0x4A79A).l` @ `0x4D1FE` runs first); the bit picks the disposal route, `despawn_offscreen_entity` (`0x4D20C`) vs. erase-pending render bits (`0x4D21C`). **It also has a second, unrelated reader**: `spawn_level_entity` tests the same bit on the *placement record* (`btst.b #0x1,(0x3,A0)` @ `0x496B8`) to route the entity into `sprite_list[0]`. | `data-structures.md` — new section "The two readers of bit 0x02" |
+| 3 | **The three enemy sub-types per visual are NOT identical** — each wrapper passes a distinct `D0.b` AI mode: `move.b #0/1/2,D0b` @ `0x4D39C`/`0x4D3BE`/`0x4D3E0` (0 = step-counted patrol, 1 = player-seeking, 2 = random + the only chase-capable mode). Only modes 0 and 1 carry the bit-7 alt-bank test. `entities.md` had said they "decompile identically". | `entities.md` types 4–15 row |
+| 4 | **`0x4A74E` is `sprite_list[1].wType`, not a generic "state_flag"** — `spawn_player_entity` (`0x4BFAE`) is one instruction, `move.w #0x1,(0x4A74E).l`. The main loop's dying branch is testing whether the player entity is still spawned. | `algo-system.md` main loop; globals table above |
+| 5 | **`0x4A752`/`0x4A754` are not "copies"** — they are `sprite_list[1].nPosX` / `.nPosY` directly (slot 1 base `0x4A74E`, fields at +4/+6). The old labels `player_pos_x_copy` / `player_pos_y_copy` are **retired**; all 18 uses across five documents now read `player.nPosX` / `player.nPosY`. | `algo-entities.md`, `algo-level.md`, `algo-render.md`, `algo-system.md`, `data-structures.md` |
+| 6 | **`0x4BF24` is the bullet's probe X, not `bullet_range_remaining`** — seeded at the muzzle, stepped ±8 with the sprite; there is no travel budget. `0x4BF20`/`0x4BF22` are the stick-attack point. | already in `algo-player.md` §6; globals table above |
+| 7 | **`probe_entity_tile_collision` returns no register value** — the epilogue restores D0–D7/A0–A1, so the outputs are the carry flag and `tile_probe_result` only. `enemy_ai_update`'s `cmp.b #2,D0b` is therefore testing the *caller's* `aiMode`. The Ghidra plate comment at `0x4DA40` was already corrected on 2026-08-28; only `entities.md` still carried "returns floor-type code". | `entities.md` `0x4DA40` row |
+| 8 | **`kill_enemy` scoring is doubled on the explosion path** — it awards `add_score(0x50)` and plays track `0x13`, and `enemy_ai_update` adds a *second* `0x50` @ `0x4D548` before calling it. | `entities.md` `kill_enemy` row |
 
 # Unresolved
 
-- Exact per-shape offset sequences inside `probe_entity_tile_collision` (outlined
-  only; belongs with the tile map in `algo-level.md`).
+- ~~Exact per-shape offset sequences inside `probe_entity_tile_collision`~~ ✅
+  **resolved 2026-08-29** — all four sampling shapes are transcribed literally in §5 of
+  this file (`0x4DA7E`–`0x4DBB2`), so this item was already stale when written here.
 - ~~`tile_probe_result` bits and the `0x6F` mask~~ ✅ **resolved 2026-08-29.**
   `0x6F` = `~(0x10|0x80)`, a **row filter**: applied after the upper rows so one-way
   and ladder-top can only be contributed by the bottom row (feet). Bits `0x01`/`0x08`
@@ -734,5 +726,9 @@ These contradict current `re/` docs. I did **not** edit those files.
 - ~~The dying-enemy `nPosY += 1` asymmetry~~ ✅ **verified against disassembly
   2026-08-29** — `subi.w #1,(0x4,A0)` / `addi.w #1,(0x6,A0)`, transcription is
   byte-faithful. Reproduce literally.
-- `0x4BF12`, `0x4BF13`, `0x4BF15`, `0x4BF1C` are cleared by `reset_player_state`
-  but not read anywhere in my ranges; they belong to `algo-player.md`.
+- ~~`0x4BF12`, `0x4BF13`, `0x4BF15`, `0x4BF1C` are cleared by `reset_player_state` but
+  not read anywhere in my ranges~~ ✅ **closed 2026-08-29.** They are read heavily —
+  just by `player_controller` / `player_select_anim_frame`, outside this document's
+  range. An xref census gives 8 / 9 / 5 / 7 references respectively. All four are named
+  and documented in `algo-player.md` → *Player state globals*: `0x4BF12` `climbing`,
+  `0x4BF13` `on_ground`, `0x4BF15` `shoot_debounce`, `0x4BF1C` `stick_debounce`.

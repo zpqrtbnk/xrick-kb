@@ -944,24 +944,18 @@ if ((D0 & 0xD0) != 0) { pop; set_carry();   return; }   // bits 7,6,4 = blocked
 
 ---
 
-## Corrections to existing docs (for the orchestrator to apply)
+## Corrections — all applied (closed 2026-08-29)
 
-1. **`0x4BF24` is not `bullet_range_remaining`.** It is `bullet_point_x`, the bullet's
-   leading-edge probe X; `0x4BF26` is `bullet_point_y`. Seeded at fire time from the
-   muzzle, stepped ±8 per frame. There is no range budget. (`re/data-structures.md`
-   "Related globals" and any `functions.md` mention.)
-2. **`SpriteEntity.nSpawnX` is overloaded for the player**: `0x4A75A` holds
-   *pre-move X* for one frame so attacks can cancel a walk step. It is not a spawn
-   position in slot 1.
-3. **Tile map geometry confirmed**: `room_tile_map[(Y/8)*0x20 + (X/8)]`, 32 bytes per
-   8-pixel row, X range 0..255.
-4. **Input mapping resolved** (was "needs dynamic verification"): standard Atari
-   joystick bits — 0=UP, 1=DOWN, 2=LEFT, 3=RIGHT, 7=FIRE, read from the IKBD
-   joystick-1 report byte at `0x4922B`.
-5. **Tile attribute bits resolved**: 0x02 ladder, 0x04 lethal, 0x10 one-way,
-   0x20 landable floor, 0x40 solid, 0x80 ladder-top/one-way; blocked = `& 0xD0`.
-6. **`player_sprite_update` / `player_select_anim_frame` are continuations**, not
-   independent subroutines — they pop the 9 registers `player_controller` pushed.
-7. The **slot-0 block** is read as a solid obstacle by both player and bullet probes,
-   with a crouch special-case, but **nothing in this address range writes its
-   position** — the pushing logic is still unlocated.
+Seven items this pass raised against the then-current docs. All are resolved; one is
+superseded by a later finding rather than applied. (See `MEMORY.md` §8.)
+
+| # | Correction | Status |
+|---|---|---|
+| 1 | **`0x4BF24` is not `bullet_range_remaining`** — it is `bullet_point_x`, the bullet's leading-edge probe X (`0x4BF26` = Y), seeded from the muzzle and stepped ±8 per frame. There is no range budget. | ✅ applied — this file §6, `algo-entities.md` globals table |
+| 2 | **`SpriteEntity.nSpawnX` is overloaded in slot 1** — `0x4A75A` holds *pre-move X* for one frame so an attack can cancel that frame's walk step; it is not a spawn position for the player. | ✅ applied 2026-08-29 — `data-structures.md` `0x0C` row |
+| 3 | **Tile-map geometry**: `room_tile_map[(Y/8)*0x20 + (X/8)]`, 32 bytes per 8-pixel row, X range 0..255. | ✅ applied — `data-structures.md`; Ghidra plate at `0x4DA40` corrected 2026-08-29 |
+| 4 | **Input mapping resolved** (was "needs dynamic verification") — standard Atari joystick bits 0=UP, 1=DOWN, 2=LEFT, 3=RIGHT, 7=FIRE, from the IKBD joystick-1 report byte at `0x4922B`. | ✅ applied — global settled as **`joystick1_state`** across `re/` |
+| 5 | **Tile attribute bits resolved**: `0x02` ladder, `0x04` lethal, `0x10` one-way, `0x20` landable floor, `0x40` solid, `0x80` ladder-top; blocked = `& 0xD0`. | ✅ applied — `data-structures.md`; independently corroborated by the xrick port's identical eight-bit layout |
+| 6 | **`player_sprite_update` / `player_select_anim_frame` are continuations**, not independent subroutines — they pop the nine registers `player_controller` pushed. | ✅ applied — `functions.md` marks both "(continuation)" |
+| 7 | ~~The slot-0 block's pushing logic is still unlocated.~~ | ⛔ **SUPERSEDED 2026-08-28 — there is no block-pushing mechanic.** Slot 0 is the scripted crusher/boulder hazard, moved by `scripted_trap_update` through `A0`, which is why every address-based hunt came up empty. See `data-structures.md` "Slot 0" and `MEMORY.md` §7 |
+

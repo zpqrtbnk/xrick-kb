@@ -150,7 +150,7 @@ do {
   high byte is inherited from whatever `D3` held and then mutates on borrow. So the
   iteration count depends on the entry state as well as the characters typed, and the
   copy generally over-runs the 10-byte name field. The observable result is **not yet
-  characterised** (`../PLAN.md` O3); the plan is to model the loop exactly in Python and
+  characterised** (`../PLAN.md` T7); the plan is to model the loop exactly in Python and
   confirm one case live. A reimplementation is correct without that: emit `dbf D3w`.
 - Character grid `0x48FA1`, 6 cols × 5 rows: `ABCDEF` / `GHIJKL` / `MNOPQR` / `STUVWX`
   / `Y Z \ (blank) DEL END`, where `0x36`=DEL and `0x37`=END.
@@ -423,6 +423,16 @@ Writing single bytes at +0/+2/+4/+6 targets the *high* byte of each plane word, 
 the left 8 pixels of a 16-pixel group. The odd/even stepping in the callers selects the
 left or right half.
 
+> **Fidelity note (2026-08-30).** The real routine is **fully unrolled**, not a loop,
+> and differs from the rolled form above in two unobservable ways: it performs **seven**
+> `lea (0xa0,A1),A1` advances for eight rows (the eighth row needs none), and the
+> **32nd byte is read as `move.b (A4),(0x6,A1)` with no post-increment**. So on return
+> the real A1 is `7 × 0xA0` further on, not `8 × 0xA0`, and A4 has advanced 31 times,
+> not 32. Neither is observable: A4 is restored from the stack, and both callers reload
+> A1 (`draw_string` recomputes it per glyph; `draw_glyph_string` saves it in A2 and
+> restores it after the call). Reproduce either form — but if you emit the rolled loop,
+> do not also rely on A1's final value.
+
 ### 0x49466 `draw_string`
 
 `draw_string(A0 = 0xFF-terminated string, D0 = screen byte offset) -> void`
@@ -565,7 +575,8 @@ hud_update_lives();
 if (player_dying == 0) goto ALIVE;                    // 0x4BF18
 
     // --- dying ---
-    if (state_flag != 0) goto RENDER;                 // 0x4A74E: death anim running
+    if (player.wType != 0) goto RENDER;               // 0x4A74E: player entity still
+                                                      // spawned -> death tumble running
     if (HudCounters.bLives == 0) goto GAME_OVER;      // 0x4B32E
     clear_sprite_flags();
     restore_checkpoint_state();
@@ -574,8 +585,8 @@ if (player_dying == 0) goto ALIVE;                    // 0x4BF18
     goto MAIN_LOOP;
 
 ALIVE:                                                // 0x4DD0E
-    if (player_pos_y_copy <= 0x5F) { scroll_room_left();  goto MAIN_LOOP; }   // 0x4A754
-    if (player_pos_y_copy >= 0xCC) { scroll_room_right(); goto MAIN_LOOP; }
+    if (player.nPosY <= 0x5F) { scroll_view_up();  goto MAIN_LOOP; }   // 0x4A754
+    if (player.nPosY >= 0xCC) { scroll_view_down(); goto MAIN_LOOP; }
 
 RENDER:                                               // 0x4DD2E
     blit_backgrounds();
@@ -586,7 +597,7 @@ RENDER:                                               // 0x4DD2E
     vsync_wait();
 
     if (player_dying != 0) goto MAIN_LOOP;
-    if (player_pos_x_copy <= 0 || player_pos_x_copy >= 0xE8) {   // 0x4A752, out of bounds
+    if (player.nPosX <= 0 || player.nPosX >= 0xE8) {   // 0x4A752, out of bounds
         clear_sprite_flags();
         spawn_player_entity();
         process_level_transition_point();
@@ -619,8 +630,8 @@ AFTER_FADE:                                           // 0x4DDBE
     goto RESTART;
 ```
 
-**Constants:** room-scroll thresholds `0x5F` / `0xCC` on `player_pos_y_copy`;
-out-of-bounds bounds `0` / `0xE8` on `player_pos_x_copy`; title wait **176** frames
+**Constants:** room-scroll thresholds `0x5F` / `0xCC` on `player.nPosY`;
+out-of-bounds bounds `0` / `0xE8` on `player.nPosX`; title wait **176** frames
 (`dbf` with `0xAF`); game-over wait **61** frames (`dbf` with `0x3C`).
 
 ⚠️ **`dbf Dn` with `Dn = N` executes the body `N+1` times.** The `for (D = N; D >= 0; D--)`
@@ -702,50 +713,27 @@ for (D0 = 0x3FF; D0 >= 0; D0--) {
 
 ---
 
-## Corrections to existing documentation
+## Corrections — all applied (closed 2026-08-29)
 
-1. **`Mshrink` is wrong — it is `Super()`.** `main_init_and_loop` pushes long
-   `0x5324C`, word `0x20`, then `trap #1`. GEMDOS function **`0x20` is `Super()`**
-   (Mshrink is `0x4A`). So the game **enters supervisor mode with SSP = `0x5324C`**,
-   which is why it can touch MFP/ACIA/video registers directly.
-   **Consequence for the missing-memory question:** the supervisor stack grows
-   *downward from `0x5324C`* — i.e. into the uncaptured `0x50000`–`0x5324F` region.
-   That region is therefore **stack space as well as sample data**, which independently
-   explains why nothing points into its upper end. (Earlier notes described this call as
-   "Mshrink / memory-block shrink"; that was wrong and has been corrected.)
+Six items this pass raised against the then-current docs. All are folded in; nothing
+here is outstanding. (See the rule in `MEMORY.md` §8.)
 
-2. **Input is a JOYSTICK, not the keyboard.** `keyboard_isr` decodes IKBD joystick
-   packets. `0x4922B` (`joystick1_state`) is the player input byte with the standard
-   Atari bits UP/DOWN/LEFT/RIGHT/FIRE = 0x01/0x02/0x04/0x08/0x80. This closes the
-   "exact keyboard-scancode-to-action mapping for `player_input_bitmask`" item listed
-   once as **needing dynamic verification** — it is now resolved statically. Suggest
-   renaming `player_input_bitmask` → `joystick1_state`. Keyboard
-   scancodes are used only for ESC (0x01), P (0x19) and SPACE (0x39).
-
-3. **Game text IS ASCII**, merely `0xFF`-terminated rather than NUL-terminated, and the
-   font is indexed by the raw character byte. The standing advice in `re/README.md` and
-   `re/rick.md` ("text is font-index byte arrays, not ASCII — don't re-run string
-   search") is misleading: Ghidra found nothing only because its ASCII analyzer had
-   *Require Null Termination* enabled. A scan for `0xFF`-terminated printable runs
-   would recover **all** in-game text cheaply. Recommend adding that as a task.
-
-4. **Music ticks from VBlank**, not Timer A: `vblank_isr` calls `music_tick` (0x44E0C)
-   every frame. `re/functions.md` attributes music streaming to `timer_a_music_isr`;
-   both exist, but the 50 Hz driver is the VBlank path.
-
-5. **High-score record layout** is more specific than recorded: 30-byte records at
-   `0x48E26` with score stored as **unpacked decimal digit bytes** (word of 2 digits at
-   +2, long of 4 digits at +4), 10 bytes of fixed decoration at +8, and the 10-byte
-   **name at +0x12** (not "name text follows" at +8).
-
-6. **`0x498C4`** is the POOKY easter-egg flag (set to `0x00FF`); `0x498C2` is
-   `furthest_level`, cleared during init.
+| # | Correction | Status |
+|---|---|---|
+| 1 | **`Mshrink` is wrong — it is `Super()`.** `main_init_and_loop` pushes long `0x5324C`, word `0x20`, then `trap #1`; GEMDOS `0x20` is `Super()` (Mshrink is `0x4A`). The game enters supervisor mode with SSP = `0x5324C`, which is why it touches MFP/ACIA/video registers directly. **Consequence:** the supervisor stack grows *downward from `0x5324C`* into the uncaptured `0x50000`–`0x5324F` region, so that region is stack as well as sample data. | ✅ applied — `functions.md`; `MEMORY.md` §7 records "two traps total (`Super`, `Setscreen`)", and the missing-memory question is closed |
+| 2 | **Input is a JOYSTICK, not the keyboard.** `keyboard_isr` decodes IKBD joystick packets; `0x4922B` is the player input byte with Atari bits UP/DOWN/LEFT/RIGHT/FIRE = `0x01`/`0x02`/`0x04`/`0x08`/`0x80`. Keyboard scancodes are used only for ESC (`0x01`), P (`0x19`) and SPACE (`0x39`). Closes the "keyboard-scancode-to-action mapping" item once flagged as needing dynamic verification. | ✅ applied — global settled as **`joystick1_state`** throughout `re/` (the last four `player_input_bitmask` uses were retired 2026-08-29) |
+| 3 | **Game text IS ASCII**, merely `0xFF`-terminated rather than NUL-terminated, and the font is indexed by the raw character byte. Ghidra found nothing only because its ASCII analyzer had *Require Null Termination* enabled. | ✅ applied — the old "text isn't ASCII" advice is **retracted**; `re/strings.md` holds all 64 strings, and `MEMORY.md` §7 records both the retraction and the analyzer-option lesson |
+| 4 | **Music ticks from VBlank**, not Timer A — `vblank_isr` calls `music_tick` (`0x44E0C`) every frame. Both ISRs exist, but the 50 Hz driver is the VBlank path; Timer A drives sample playback. | ✅ applied — `functions.md` `music_tick` / `vblank_isr` / `timer_a_music_isr` rows |
+| 5 | **High-score record layout** is more specific than recorded: 30-byte records at `0x48E26`, score as **unpacked decimal digit bytes** (word of 2 digits at +2, long of 4 at +4), 10 bytes of fixed decoration at +8, and the 10-byte **name at +0x12** — not "name text follows" at +8. | ✅ applied — the full table is in this file under `enter_highscore_name` |
+| 6 | **`0x498C4`** is the POOKY easter-egg flag (set to `0x00FF`); **`0x498C2`** is `furthest_level`, cleared during init. | ✅ applied — `data-structures.md` globals; `functions.md` notes the level-select menu is gated by it |
 
 ## Unresolved
 
-- The effect of the POOKY flag `0x498C4` — it is set here but consumed outside my
-  range. **Needs tracing** (likely the level-select menu at `0x498C6`).
+- ~~The effect of the POOKY flag `0x498C4`~~ ✅ **resolved, and verified on hardware
+  2026-08-29** — it gates `run_selection_menu` (`0x498C6`), the level-select screen,
+  which is therefore unreachable in normal play. See `algo-level.md`.
 - The `dbf D3w` name-commit loop (item above) — behaviour is deterministic but odd;
   **needs dynamic verification** to describe the visible result.
-- `0x4DE2C`, the "return to attract mode" flag, is set by
-  `process_level_transition_point` (outside my range) and only read here.
+- ~~`0x4DE2C`, the "return to attract mode" flag~~ ✅ **resolved** — set to `0xFF` by
+  `process_level_transition_point` on the game-complete path (`algo-level.md`), cleared
+  and read here. The cross-range gap is closed.

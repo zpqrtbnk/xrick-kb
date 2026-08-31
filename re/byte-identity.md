@@ -247,6 +247,442 @@ The remaining 29 indirect-looking transfers are `jsr (abs).l` — ordinary direc
 So the hidden-callback class is **exhaustively closed**: there is nothing else dispatching
 through a register anywhere in the program.
 
+## Audit 10 — cross-check against an independent reversal ✅ DONE (2026-08-29)
+
+**Method, and why it is a different instrument.** Audits 1–9 all derive facts from the
+binary and diff them against our own documents. That cannot catch a fact we never
+derived, nor a number we derived once and then copied. Audit 10 diffs our documents
+against **a second, independent reverse-engineering of the same game** — the xrick C/SDL
+port (`../xrick/re/`), reversed from the *PC* executable by someone else, decades ago,
+with no shared method or tooling. Disagreement is then a signal that at least one side is
+wrong.
+
+**Caveat that shapes every conclusion:** the port's logic is PC-derived, so a difference
+is three-ways ambiguous — genuine PC-vs-ST, port error, or our error. Only differences
+that survive checking against the ST disassembly count as defects here.
+
+**Result: ~20 facts corroborated, and defects found that nine prior audits had missed.**
+
+| # | Defect | Class |
+|---|---|---|
+| 1 | Sprite grid swept only to `0x3BA9E`; the real extent is `0x3D62E` — **21 frames missing** | extraction |
+| 2 | The extractor's `> 10% non-zero bytes` density filter silently discarded genuine sparse frames; "185 non-empty" was a filter artifact, never a frame count | extraction |
+| 3 | `bTriggerFlags` bit `0x02` documented as "bullet passes through" — retracted; it has **two** readers (spawn-into-`sprite_list[0]` at `0x496B8`, bullet disposal at `0x4D204`) | prose |
+| 4 | Bits `0x08`/`0x04` conflated as "always-lethal"; they are lethal-**while-triggered** vs lethal-**while-idle** | prose |
+| 5 | `entities.md`: "the 3 sub-types per visual decompile identically" — they pass distinct AI modes | prose |
+| 6 | `entities.md`: `probe_entity_tile_collision` "returns floor-type code" — it returns no register value | prose |
+| 7 | `entities.md`: dispatch row labelled type **70**; it is type **74** (index 73) | prose |
+| 8 | `entities.md`: `hide_entity` at `0x4ABF8`; it is at `0x4AC08` (`0x4ABF8` is dispatch index 70) | prose |
+| 9 | `data-structures.md`: dispatch table "70 entries", "types 71–73 have no handler" — 74 entries, all types handled | prose |
+| 10 | Ghidra plate `0x4DA40` still called `room_tile_map` "column-major" long after the docs were fixed to row-major | plate |
+| 11 | `scroll_view_up`/`_down` renamed in Ghidra; three documents still said `scroll_room_left`/`_right` | naming |
+| 12 | `0x4922B` was `joystick1_state` in some documents, `player_input_bitmask` in others | naming |
+| 13 | `player_pos_x_copy`/`_y_copy` — misleading labels for `sprite_list[1].nPosX/.nPosY` | naming |
+| 14 | `SpriteEntity.nSpawnX`'s player overload (`0x4A75A` = pre-move X) undocumented | omission |
+| 15 | `0x4BF1C` "unnamed" in one document, `stick_debounce` in another | naming |
+| 16 | Four "Unresolved" items already resolved elsewhere in the same or a neighbouring file | stale marker |
+
+### Audit 10b — assumption sweep of the ST side (2026-08-30)
+
+A second pass over `re/` itself, re-**deriving** every checkable claim instead of
+re-reading it. Ten more defects, one of them consequential for a reimplementation.
+
+| # | Defect | Impact |
+|---|---|---|
+| 17 | **`SpriteEntity.nVelY`'s gravity note was backwards** — it credited *living* enemies with `+0xC4` **and** a terminal clamp. Verified at instruction level, the four cases are: living player `+0x80` clamp `0x800` (`0x4C148`/`0x4C18C`), living enemy `+0x80` clamp `0x800` (`0x4D684`), dead player `+0x80` no clamp (`0x4C8A8`), dying enemy `+0xC4` no clamp (`0x4D532`) | **High** — a reimplementation reading that row gives every walking enemy 1.5× gravity |
+| 18 | Title bitmap "32,000 bytes, `0x23FEE`–`0x2BB2D`" — wrong twice: `draw_title_picture` copies `0x400` × 8 longwords = **32,768**, and the stated range spans 31,552, matching neither | Medium |
+| 19 | Sprite region "~`0x2C000`–`0x34000`, ~32 KB" — actually `0x2BFEE`–`0x3D62D`, **71,232 bytes**; understated by more than half | Medium |
+| 20 | "`0x34000`–`0x40FED`, ~52 KB, largely zero" — the zero run actually starts at `0x3D62E` and is **entirely** zero (measured: 0 non-zero bytes in 14,784) | Low |
+| 21 | `0x1BBFE`–`0x1D01D` still listed as "Not identified" in `memory_map.md` though `assets-manifest.md` had identified it as 161 scenery tiles | Low |
+| 22 | `level_start_info` described as "20 bytes × 4 (+ a 5th intro pointer)"; it is `LevelStartInfo[5]` | Low |
+| 23 | High-score row said "name text follows" after +4, implying +8; the name is at **+0x12**, behind 10 bytes of fixed decoration | Low |
+| 24 | Title-bitmap row called the blob "still-unmapped" | Low |
+| 25 | Two entity types still described as having an "untraced" A2 callback, though all four callbacks are tabulated in `data-structures.md` | Low |
+| 26 | A sentence reading "the functions formerly called `scroll_view_up`/`_down` … have been renamed `scroll_view_up`/`_down`" — **self-inflicted**, by a blanket rename in audit 10 that also rewrote the historical mention | Low |
+
+**Also promoted, by instruction census rather than argument:** `nAiTimerReload` (0x30)
+and `bAiCooldown` (0x4A) from *likely* to **confirmed**, and `bUnk4B` from *unconfirmed*
+to **confirmed unused** — `(0x4b,A0)` returns zero matches across all 4,608
+instructions, so "untouched" is now measured, not assumed.
+
+**The 171 KB data region is now gapless.** All ten regions re-measured: every size
+matches its stated range, every region starts where the previous one ends, and the last
+ends at `0x44BEE` — the first byte of code. Nothing in `0x1B01E`–`0x44BED` is
+unaccounted for.
+
+**The unreferenced-`ObjectTypeDef` question, closed by census.** Walking all 523 placement slots gives 70
+distinct types, none outside 1–74. The four never placed are exactly 1, 2, 3 and 74 —
+player, bullet, dynamite, decorative sprite — all spawned by code. No unused content,
+no untraced path.
+
+**Method note.** Every one of these had been read past repeatedly. They fell out in a
+single pass once the rule changed from *read the claim* to *re-derive the claim*. Two
+were arithmetic contradictions visible in the document itself (a stated range that did
+not match its stated size), which no amount of re-reading had caught.
+
+### Audit 10c — second assumption sweep (2026-08-30)
+
+Ran the same re-derive-don't-re-read method again over the areas 10b had not touched.
+**One missing fact, and a large body of claims that verified exactly.**
+
+**The defect — an undocumented, load-bearing sentinel.** `sprite_list` is
+`SpriteEntity[13]` at `0x4A702`, ending at `0x4AADD`; `sprite_type_dispatch` starts at
+`0x4AAE0`. The 2 bytes between had been read as alignment padding. They are not: they
+hold `FF FF`, a 14th `wType` word, and **all three list walkers terminate on it alone**
+— `render_sprites` (`cmp.w #-0x1,D0w` @ `0x4B03E`), `clear_sprite_flags` (`0x4AC1E`),
+`blit_backgrounds` (`0x4AC98`), each stepping `lea (0x4c,A0),A0`. **None uses a count of
+13.** The word has no xrefs, so nothing sets it at runtime — it must be part of the
+initial state. A reimplementation that allocates exactly 13 entries and relies on the
+sentinel walks into the dispatch table. Now documented in `data-structures.md`; also
+closes the slot-12 question in `xrick/re/xref.md`.
+
+**Everything else checked out, exactly.** Recorded because "verified" is only meaningful
+if the negative results are listed too:
+
+| Claim | Result |
+|---|---|
+| `RoomHeader[47]` @ `0x47620` ends at `transition_tables` | exact |
+| All 47 `pTileMap` inside `0x2101E`–`0x22FED`, distinct, first at `0x2101E` | exact; deltas 72–584 (packed variable-length) |
+| All 47 `pTransitions` inside the transition-table region | exact |
+| All 47 `pPlacements` inside `placement_table`, first at `0x481E4` | exact |
+| `wTileBankVariant` ∈ {0, 1} | exact |
+| `MusicTrackDescriptor[29]` type field all ∈ {0,1,2} | exact — validates `build_sndh.py::find_delta()`'s heuristic |
+| The 3 type-2 descriptors carry the PCM pointers `0x4DF86` / `0x4FCF2` / `0x50DA8` | exact, and matches `memory_map.md`'s independent derivation; `0x50DA8` lies past the 320 KB snapshot, which is why the 1 MB capture was needed |
+| `note_period_table` `0x0EEE` → `0x0020`, 84 entries, monotonic | exact |
+| Font `byte[95][32]` @ `0x1B01E` ends exactly at the scenery block | exact |
+| `level_start_info[5]` ends at `0x4B586` = `level_index` (9 xrefs), then code at `0x4B588` | exact — **independently confirms the 5-entry count**; 4 entries would leave 20 bytes unexplained |
+| Palette @ `0x4DEE2`: 16 words, all valid `0x0RGB`, channels 0–7 | exact |
+| All five level-intro texts, byte length to the `0xFE` terminator | all five exact (280 / 270 / 260 / 235 / 259) |
+| `strings.md`'s own extraction script: 66 runs, 2 named false positives → 64 strings | reproduces exactly; `GAME`/`OVER` addresses correct (the regex's stray leading `p` is the tail of a `bra.w`) |
+| **All 16 tile-attribute bit counts** across both LUTs | all 16 exact |
+| Attribute exclusivity: only `0x60` and `0x82` are multi-bit | exact, both banks |
+| Every tile has a non-zero classification | exact — zero zero-valued entries in either bank |
+
+**Method note.** 10b found ten defects; 10c found one. That is the expected shape of a
+converging audit, and the negative results above are the evidence that the remaining
+surface was actually examined rather than skipped.
+
+### Audit 10d — third assumption sweep (2026-08-30)
+
+**No defects found in `re/`.** Three previously-unmeasured quantities were measured, one
+open question closed, and one defect found in *the port*.
+
+**Measured for the first time:**
+
+| Quantity | Result |
+|---|---|
+| Dynamite fuse table `0x46BF2` | **17 entries**, terminator `0x46C36` |
+| Dynamite explosion table `0x46C3E` | **10 entries**, terminator `0x46C66` |
+| All 27 dynamite frame pointers | every one on the `0x150` sprite grid, indices **33–147** — an independent re-check of the 212-slot extent found in audit 10 |
+| `TransitionWaypoint` census | **106 waypoints across 47 lists**, no runaways |
+
+**The transition region now closes exactly**, which it never had before:
+`106 × 10 + 47 × 2 = 1154` bytes `= 0x478B2`–`0x47D33`, ending precisely at
+`object_type_defs`. This also *proves the sentinel is 2 bytes rather than a full 10-byte
+record* — the arithmetic closes no other way — and leaves no room for an unaccounted
+waypoint.
+
+**Re-verified, unchanged:** the per-room placement walk really does give
+**476 records + 47 terminators = 523**, walked room by room from
+`RoomHeader.pPlacements` rather than taken on trust from the earlier note.
+
+**A defect in the port, not in us** (`xref.md` -> *Settled*, connector count). The port's `map_connect` holds 107
+connectors + 47 terminators = **154 records in an array it declares as
+`MAP_NBR_CONNECT = 0x99` = 153**. Per-list counts match ours in **46 of 47 positions in
+the same order** — which incidentally confirms the two projects' room orderings agree —
+with the sole difference at list 17 (port 3, ours 2). Two independent arguments put us
+right: our region arithmetic closes exactly, and **the port's own constant equals our
+106 + 47**. So the surplus record overruns the port's own declaration.
+
+**Method note.** This is what a converging audit looks like: 10 defects, then 1, then 0.
+The value of this pass was not defect-finding but *quantification* — three numbers that
+had never been measured, and a hard boundary that now confirms the transition table the
+same way `placement_table` and `object_type_defs` were already confirmed.
+
+### Audit 10e — fourth assumption sweep (2026-08-30)
+
+Target: `ObjectTypeDef[75]`, the largest table never field-censused, plus the HUD
+structs. **Two documentation defects, one new structural finding, one new open item.**
+
+| # | Defect | Detail |
+|---|---|---|
+| 27 | **`anim_frame_table` range was wrong at both ends** | Doc said scripted-trap anim tables live in `0x46Dxx`–`0x46Fxx`. Measured: **`0x46C3A`–`0x4708A`** — below `0x46D00` *and* past `0x46FFF` into the `0x470xx` band the doc reserved for paths. The two ranges are adjacent (`path` = `0x47092`–`0x475BE`), not separated |
+| 28 | **`wTriggerSound` census was 40 % complete** | Doc listed "0x14/0x15/0x18/0x19/0x1A/0x1B, plus 0x9A on entry 64". Actual: **ten consecutive values `0x13`–`0x1C`**, plus `0x9A` on **two** entries. Four values (`0x13`, `0x16`, `0x17`, `0x1C`) were missing and the `0x9A` count was wrong |
+
+**New structural finding — types 67 and 68 share the dynamite explosion animation.**
+Their `anim_frame_table` is `0x46C3A`: a **null longword followed by the entire
+explosion table** `player_dynamite_update` uses at `0x46C3E`, terminator included. The
+null entry 0 is precisely what `scripted_trap_update`'s "frame 0 is a one-time intro
+frame, loop restarts at index 1" rule expects, and `gfx_data == 0` makes `render_sprites`
+clear the draw-enable bit (`cmpa.l #0x0,A6` @ `0x4B106`). So these two trap types are
+**invisible until triggered, then play the explosion**. This sharing is *why* the anim
+range starts below the previously-claimed band — defect 27 and this finding are the same
+fact seen from two directions.
+
+**New open item — 26 undocumented bytes at `0x4B336`–`0x4B34F`.** Between `HudCounters`
+(ends `0x4B335`) and `HudDirtyFlags` (starts `0x4B350`). Not blank: a regular `FF` +
+seven `00` pattern at **stride 8**. No instruction references any address in the range
+(operand searches for `0x0004b33…` return only the six score digits; `0x0004b34…`
+returns nothing). Per `MEMORY.md` §8 an empty absolute search does not prove absence —
+this may be register-indirect, as the slot-0 hazard was. **Recorded as unresolved, not
+as padding.**
+
+**Verified exact, no change:** every other `ObjectTypeDef` claim — entry 0, entries 2–3
+and entry 74 all-zero; entry 1 and entries 4–21 hitbox 24×21 with no tables; entries
+22–23 hitbox 0×0 with a 4×4 trigger box; `movement_path_table` range; 13 distinct
+hitbox pairs with W 4–32 and both `(4,21)` and `(32,16)` present; entry 64's `0x9A`. Also
+`HudCounters` and `HudDirtyFlags` are complete and correct as documented — all four
+dirty flags including `bScore_dirty`, ending exactly at `init_hud_state` code.
+
+**And it fed the port comparison** (`xref.md` -> *Settled*, trigger-sound table): the ten-value sound set confirms the
+port author's guess of "10 of them", while showing his `- 0x14` index base is one too
+high — the single `0x13` entity would read `WAV_ENTITY[-1]`.
+
+### Audit 10f — fifth assumption sweep (2026-08-30)
+
+Target: the **music engine tables**, the largest surface never mechanically checked.
+`algo-music.md` and `data-structures.md` turned out to describe the *same three
+addresses differently*, so the sweep began by adjudicating those from `play_music` and
+`init_music_playback`. **Four defects, all in `data-structures.md`; `algo-music.md` was
+right throughout.**
+
+| # | Defect | Detail |
+|---|---|---|
+| 29 | **`MusicTrackDescriptor.nTrack_type` — types 0 and 2 were swapped** | Doc: "`2` = tracked/pattern music, other = one-shot sample". `play_music`'s dispatch (`cmpi.w #0x1,(A0)` @ `0x44CE0`, `cmpi.w #0x2` @ `0x44CE8`, fallthrough = 0) shows **`0` = song** (`jsr init_music_playback` @ `0x44D02`), **`1` = SFX**, **`2` = digi sample**. A reimplementation following the old text routes songs to the sampler and samples to the tracker |
+| 30 | **`nParam_index` semantics wrong** | The `<<1` into `0x44FF0` applies to **type 2 only**, and `0x44FF0` is the **sample-rate table** (TACR/TADR), not `instrument_index_lookup`. Type 0's param is a song number (`×6`), type 1's an SFX index (`×13`, `mulu.w #0xd` @ `0x44D6C`) |
+| 31 | **`0x46932` called a "per-channel instrument table"** | It is the **song table**: `n*6`, then three words read as offsets *relative to `0x46932`* giving each channel's stream (`0x4513E`–`0x45158`). Nine songs |
+| 32 | **`0x46B66` called the "arpeggio/vibrato table"** | It is the **pitch-envelope segment table** (`lea (0x1780,PC),A0` @ `0x453E4`). Vibrato is separate, in `channel_coroutine_state_c` |
+
+**Also sharpened:** `0x463CC` is the **instrument table at 10 bytes/entry** — proven by
+the instrument-slot table `init_music_playback` builds at `0x450FD`, three runs of
+`0,10,20,…,70` (`moveq 0xa,D1` @ `0x451B2`) — not merely "default instrument data".
+
+**Two new hard boundaries, from a census of all 29 descriptors** (9 songs with params
+exactly `0`–`8`; 17 SFX with params `0`–`18`; 3 samples, all param `0`):
+
+- 9 songs ↔ the song table at `0x46932` being exactly `9 × 6` bytes;
+- SFX indices reach 18, so the descriptor table needs **20** entries at 13 bytes:
+  `0x46426 + 20 × 13 = 0x4652A` — **precisely the pattern-data base**, confirming both
+  the stride and the count.
+
+**Verified exact, no change:** every PC-relative target in `init_music_playback` lands
+on an `algo-music.md` claim — channel states `0x45098`/`0x450BA`/`0x450DC` (stride
+`0x22`), song table `0x46932`, instrument base `0x463CC`, instrument-slot table
+`0x450FD` (3×8), song-active flag `0x45096`; and in `play_music`, voice state `0x4543C`
+(stride `0x1A`) and the SFX table `0x46426`.
+
+**Method note.** The trigger here was not a suspicious number but **two documents
+disagreeing about one address**. That is a cheap, mechanical thing to scan for, and it
+found four defects in a subsystem four previous sweeps had left alone.
+
+### Audit 10g — sixth assumption sweep (2026-08-30)
+
+**No defects in `re/`.** Two mechanical scans came back clean, one long-standing
+placeholder was resolved, and one loosely-stated fact was made precise.
+
+**Scan 1 — every `name`/`0xADDR` pair in `re/*.md` against Ghidra's symbol table.**
+Five hits, **all false positives**: range notations of the form
+`` `0x4D00C`/`0x4D020` … `destructible_pickup_16`/`17` `` where the regex paired the
+first name with the last address. No document names a function at another function's
+start address. *(This is the scan that would have caught the `hide_entity` `0x4ABF8`
+error from audit 10 — it is now clean.)*
+
+**Scan 2 — access widths of the 25 globals carrying a stated type.** Spot-verified six
+across the range, every access in the program: `vblank_counter` (6 × byte),
+`scroll_active` (6 × byte), `scroll_delta` (4 × word), `stick_attack_active`
+(7 × word), `world_row_base` (10 × word), `furthest_level` (7 × word). All match.
+`scroll_view_up`/`_down` were confirmed to do `subi.w #8` / `addi.w #8` on
+`world_row_base` and `+8` / `−8` on `scroll_delta` — the −8/+8 note in
+`data-structures.md` is exact.
+
+**Resolved — `CheckpointState`'s four `DAT_…` placeholders.** The struct listed four
+destination globals as raw Ghidra auto-names although all four are named elsewhere in
+the same document: `0x4A750` = `sprite_list[1].nDirection`, `0x495CA` =
+`world_row_base`, `0x4D00B` = `ceiling_flag`, `0x4BF14` = `player_crouching`. Layout
+re-verified against `save_checkpoint_state` (six moves, word×4 + byte×2) and the struct
+**ends exactly at `0x4BFC2`**, that function's first instruction — a hard boundary for
+the 10-byte size. Also newly recorded: `restore_checkpoint_state` calls
+`reset_player_state` **first**, then restores, then `spawn_player_entity` — an ordering
+a reimplementation must preserve. No `DAT_` placeholders remain anywhere in `re/`.
+
+**Made precise — what the `−0x2054` delta actually does.** Every document said the 1 MB
+dump is "shifted by −0x2054" without saying what shifts. Measured:
+
+- static data is **byte-identical** (font, sprite grid, `placement_table`,
+  `object_type_defs`, `music_track_table` — 64-byte samples at five bases);
+- stored **pointers** shift by exactly −0x2054 — `sprite_type_dispatch` **74/74**,
+  `RoomHeader` pointer fields **141/141**;
+- non-pointer struct fields are identical — `wTileBankVariant` **47/47**.
+
+**Relocate pointers, not data.** A naive byte-diff shows the pointer tables as
+"different", which is correct, not corruption — that is exactly what flagged
+`sprite_type_dispatch` mid-check here before the cause was identified. Recorded in
+`memory_map.md`.
+
+### Audit 10h — seventh sweep: literal transcription check (2026-08-30)
+
+A different instrument from 10b–10g. Those censused *tables*; this one compares
+`algo-system.md`'s **transcriptions** against the disassembly instruction by instruction
+— the surface I had flagged as remaining. Eight functions checked in full.
+
+**Zero defects. One fidelity nuance recorded.**
+
+| Function | Result |
+|---|---|
+| `seed_prng_state` `0x49574` | **exact**, including the derived constants. Recomputed independently: `0x09121967 << 8 = 0x12196700`; `D7.w := 0x6700`; `− 7 = 0x66F9`; `0x6700 ^ 0x66F9 = 0x01F9`. Final `prng_a = 0x121901F9`, `prng_b = 0x160566F9` — both as documented |
+| `update_prng` `0x49596` | **exact** — `exg`, `rol.l #3`, `subq.w #7`, `eor.w`, and the store order (`prng_a` receives the *old* `prng_b`) |
+| `draw_string_xy` `0x49446` | **exact**, including the `bclr #0,D0` subtlety where Z reflects the **old** bit. The stated formula `(x>>1)*8 + (x&1) + y*1280` is arithmetically identical to the code's `lsl#8 → copy → lsl#2 → add` |
+| `draw_string` `0x49466` | **exact**, including the `bchg #0,D0` old-bit semantics and the `+8` step |
+| `draw_glyph_string` `0x494AC` | **exact** — the `A1→A2` save/restore around the call, and the same `bchg` stepping applied to a pointer |
+| `draw_glyph` `0x494E2` | behaviourally exact; see the nuance below |
+| `set_palette` `0x4937C` | **exact** — 16 words to `0xFF8240` via `dbf` |
+| `palette_fade_in` `0x49394` | **exact**, and notably it already captured that **`D4` does double duty** as both the blue threshold and the outer `dbf` counter (D2/D3 are decremented explicitly, D4 by the `dbf`). The "a component with target `T` is incremented on exactly `T` of the 8 steps" claim verifies: the increment fires when `T > D4` and `D4` runs 7→0 |
+
+**The nuance — `draw_glyph` is unrolled, and the transcription is rolled.** The real
+routine performs **seven** `lea (0xa0,A1),A1` advances for its eight rows (the eighth
+needs none) and reads its **32nd byte with no post-increment** (`move.b (A4),(0x6,A1)`).
+The rolled `for (row = 0; row < 8; row++) { …; A1 += 0xA0; }` therefore leaves A1 one
+scanline further on and advances A4 32 times rather than 31. **Unobservable**: A4 is
+restored from the stack and both callers reload A1 — `draw_string` recomputes it per
+glyph, `draw_glyph_string` saves it in A2 across the call. Recorded at the function so a
+reimplementer does not depend on A1's exit value.
+
+**Method note.** This is the first sweep to test transcriptions rather than tables, and
+it is markedly slower per claim — eight functions for one nuance, against whole tables
+per defect in 10b–10f. It also came back essentially clean, which is the more useful
+signal: the transcription pass that produced these documents was accurate at the
+instruction level, and audits 6/6b/8 had already swept the two tile probes and the
+signedness class. The remaining untested transcriptions are `algo-render.md`'s blitter
+and `algo-music.md`'s sequence opcodes.
+
+### Audit 10i — eighth sweep: `algo-music.md` sequence opcodes (2026-08-30)
+
+The second of the two transcriptions flagged as untested. **Zero defects; two fidelity
+notes, both about *why* a correct-looking C form is correct.**
+
+**`process_sequence_command` `0x45342` — verified instruction by instruction.** Every
+branch, every PC-relative target resolved: `lea (-0x255,PC)` → `0x450FD`
+(instrument-slot table), `lea (0x1072,PC)` → `0x463CC` (instrument table). The opcode
+map — `0x80`–`0x88` select instrument, `0xFF` end-of-pattern, `0x89`–`0xBF` mixer
+nibble, `0xC2` return, else skip 3 — is exactly as transcribed.
+
+**Note 1 — the transcription depends on an unstated precondition.** *Both* range tests
+are **signed** (`cmp.b #-0x78; bgt` and `cmp.b #-0x40; bge`), and the unsigned C forms
+(`<= 0x88`, `< 0xC0`) agree with them **only over `0x80`–`0xFF`**. A byte in
+`0x00`–`0x7F` would take the mixer path in C but the 3-byte skip in the original. The
+document annotated the *first* comparison as signed but not the second, and stated no
+precondition.
+
+It is safe, and I checked why rather than assuming: **every call site guards on bit 7.**
+`advance_channel_sequence` does `tst.b (A0); bpl` before both `bsr`
+(`0x452C0`→`0x452C2`, `0x452CE`→`0x452D0`), so `0x00`–`0x7F` are consumed as *notes*
+and never reach the routine. Now recorded at the function, with the warning that calling
+it from anywhere else re-opens the signedness question.
+
+**Note 2 — the `0xC2` case is not a local return.** It is `beq.w 0x451D8`, a branch into
+`init_music_playback`'s `rts` — a shared-tail optimisation. Behaviourally a return, so
+the transcription is right, but control flow leaves the function. The same trick appears
+at `0x45330` (`bne.w 0x451D8`).
+
+**Assessment.** Both of the "hardest remaining" transcriptions have now been sampled at
+instruction level (`algo-system.md`'s eight functions in 10h, the sequence opcodes here)
+and **neither produced a defect** — only preconditions and control-flow idioms that were
+true but unstated. Combined with audits 6/6b (the two tile probes, transcribed
+literally) and 8 (signedness, swept exhaustively), the transcription layer is now
+sampled across its hardest cases. `algo-render.md`'s blitter shift path remains the one
+large untested transcription.
+
+### Audit 10j — the three port-side hypotheses (S5, S6, S7), 2026-08-30
+
+The last untested items in the comparison worksheet: three claims about the *port* that
+could only be settled against our disassembly. **All three resolved; no defect in
+`re/`, and one very strong corroboration.**
+
+**S5 — "type-2 enemies use two different ladder-grab masks". FALSE for the ST.** The
+port has `(x & 0x07) == 0x04` after a fall and `(x & 0x0e) == 0x04` from the ground.
+`enemy_ai_update`'s two sites are **byte-identical instruction pairs** — `btst.l #0x3,D6`
+(`08060003`) at `0x4D6B4` and `0x4D72C`, `andi.b #0x7,D5b` (`02050007`) at `0x4D6BC` and
+`0x4D734`. One rule, both sites: accept ⟺ `(x & 8) == 0` OR `(x & 7) == 0`, then snap
+`x = (x & 0xF0) | 4`. The asymmetry is port-side; the rule itself differs from both port
+forms and the enemy x-snap is absent from the port. Now tabulated in `xref.md` ->
+*Unadjudicated*.
+
+**S6 — "the port's randomiser shape is a testable hypothesis". FALSE.** Ours is a real
+two-longword PRNG (`update_prng` `0x49596`, verified exact in audit 10h), seeded to fixed
+constants, with exactly **two callers** — `main_init_and_loop` `0x4DD3A` (per frame) and
+`enemy_ai_update` `0x4D79E` (per decision) — and exactly **one** consumer of its output,
+`move.b (0x495C7).l,D5b; andi.b #0x3` at `0x4D7A2`: a mode-2 enemy turns on a **1-in-4**
+chance. The port's ad-hoc byte mixer picks a *direction* 1-in-2. Different generator,
+consumption and decision rule. *One design point does agree:* both step a global
+generator once per frame and consult it per decision.
+
+**S7 — "the tile-probe asymmetry is the same subtlety seen from both sides". TRUE, and
+exactly so.** The two sides express the masking completely differently — the port with
+explicit per-column/per-row masks, we with `0x6F` on the accumulated upper rows plus the
+3-wide-only `D0 &= ~0x80; D0 &= ~0x02; D0 |= D1` (centre column accumulated separately in
+`D1`). Tabulating which of the 8 attribute bits can reach the result across
+{upper,foot} × {outer,centre}: **all 32 cells agree.** The identical three-way
+asymmetry — ladder-top only from the **centre column of the foot row**, one-way only
+from the **foot row**, ladder only from the **centre column** — is exactly what forced
+audits 6/6b to re-transcribe both probes literally after an "equivalent" formulation
+broke ladder detection on 8-pixel boundaries.
+
+**Why S7 matters more than the rest.** It is a non-obvious three-bit asymmetry, encoded
+two entirely different ways, in two independent reversals of two different executables,
+decades apart — and it matches cell for cell. Of everything in this comparison, it is
+the strongest evidence that both sides have the tile probe right.
+
+### Audit 10k — O6 resolved: the "unexplained" HUD region (2026-08-30)
+
+**One defect, and it was mine from audit 10e.** The 26 bytes at `0x4B336`–`0x4B34F`,
+filed as an open unknown with an `FF`-at-stride-8 pattern that "no instruction
+references", are **four 8-byte HUD render buffers**:
+
+| Buffer | Terminator | Contents | `lea` |
+|---|---|---|---|
+| `0x4B330`–`0x4B335` | `0x4B336` | score, 6 digits | `hud_update_score` @ `0x4B3C8` |
+| `0x4B338`–`0x4B33D` | `0x4B33E` | bullets | `hud_update_bullets` @ `0x4B46C` |
+| `0x4B340`–`0x4B345` | `0x4B346` | dynamite | `hud_update_dynamite` @ `0x4B4A0` |
+| `0x4B348`–`0x4B34D` | `0x4B34E` | lives | `hud_update_lives` @ `0x4B4D4` |
+
+The `FF`s are `draw_string` terminators. `draw_hud_count` (`0x4B4FC`) blanks six cells
+with glyph `0x5E`, writes `D1` icon glyphs right-aligned, and calls `draw_string`. The
+values are constant, which is why nothing writes them and why the region is identical
+across both captures — a fact I had already measured and misread as evidence of mystery
+rather than of constancy.
+
+**The methodological failure is the real content here.** The claim "no instruction
+references any address in the range" rested on an operand search for `0x0004b34…`.
+Ghidra renders absolute operands **without leading zeros** — `lea (0x4b340).l, A0` — so
+that query **could not have matched anything in the range**, whatever the truth. I
+reported a negative from a search incapable of returning a positive, and then reasoned
+from it (invoking the register-indirect precedent to explain an absence that was an
+artifact of my own pattern).
+
+`MEMORY.md` §8 now carries the rule: **when a search returns nothing, first prove the
+search can find something** — run it against a case known to exist. Two earlier searches
+in this same session had used the padded form successfully (`0x0004b33` did match
+`(0x0004b330).l` where the operand happened to be rendered padded), which is exactly what
+made the inconsistency invisible.
+
+**Cost/benefit note.** This was solved statically in a few minutes by scanning the image
+for longwords pointing into the range — three hits, all inside `hud_update_*`. The
+planned Hatari watchpoint run would have found the same thing more slowly. Scan for
+pointer constants *before* reaching for the emulator.
+
+**The structural finding.** Four of the six `algo-*.md` files ended with a block of
+corrections the authoring fork had deliberately *not* applied — 26 items in total, none
+ever processed. Defects 3–6 were sitting in those blocks, correctly identified, while the
+wrong text stayed in the documents they corrected. **A correction parked in a leaf
+document is invisible to every audit.** That is now a standing rule (`MEMORY.md` §8), and
+all 26 items are applied or explicitly superseded.
+
+**What this says about the "diminishing returns" judgement below.** It was wrong in one
+specific way: static auditing had reached diminishing returns *against our own
+documents*. It had not reached diminishing returns against an outside source. The nine
+audits were all self-referential; the first genuinely external check found sixteen
+problems in an afternoon, at zero emulator cost.
+
 ## Audit status — all planned audits complete
 
 | # | Audit | Status |
@@ -257,12 +693,26 @@ through a register anywhere in the program.
 | 7 | `dbcc` loop bounds | ✅ **done — 40 sites, 4 off-by-one prose defects fixed** |
 | 8 | Sign-extension / immediate signedness | ✅ **done — 7 sites, exhaustive; 2 more defects fixed** |
 | 9 | Instructions the decompiler hides | ✅ **done — only 4 indirect dispatches, all documented** |
+| 10 | Cross-check against an independent reversal (the xrick port) | ✅ **done — ~20 facts corroborated, 16 defects fixed** |
+| 10b | Assumption sweep: re-derive every checkable claim in `re/` | ✅ **done — 10 defects fixed, 3 fields promoted, region map closed** |
+| 10c | Second sweep: tables, strings, palette, attribute LUTs | ✅ **done — 1 defect (the `0x4AADE` sentinel); ~16 claim groups verified exact** |
+| 10d | Third sweep: fuse/explosion tables, transition + placement census | ✅ **done — 0 defects in `re/`; 4 quantities measured, transition region closed, 1 port defect found** |
+| 10e | Fourth sweep: `ObjectTypeDef[75]` field census, HUD structs | ✅ **done — 2 defects, 1 structural finding, 1 new open item** |
+| 10f | Fifth sweep: music engine tables, cross-document conflicts | ✅ **done — 4 defects, 2 new hard boundaries** |
+| 10g | Sixth sweep: name/address scan, global widths, relocation model | ✅ **done — 0 defects; placeholders resolved, relocation model measured** |
+| 10h | Seventh sweep: literal transcription check, `algo-system.md` (8 functions) | ✅ **done — 0 defects, 1 fidelity nuance** |
+| 10i | Eighth sweep: `algo-music.md` sequence opcodes | ✅ **done — 0 defects, 2 fidelity notes** |
+| 10j | S5/S6/S7 — the three port-side hypotheses | ✅ **done — 0 defects; S5 and S6 false, S7 an exact 32/32 match** |
+| 10k | O6 — the "unexplained" `0x4B336`–`0x4B34F` region | ✅ **done — 1 defect (mine, from 10e); four HUD render buffers, solved statically** |
 
-**All nine planned audits are now complete: 15 defects found and fixed.** What remains
-is not an audit but a *test*: build the reimplementation and diff its behaviour against
-the live game using the Hatari harness (`hatari.md`). Static auditing has reached the
-point of diminishing returns — the last three audits found 4 defects between them, all
-in prose rather than in transcribed logic.
+**All audits are complete: 49 defects found and fixed** (15 from audits 1–9, 16 from
+audit 10, 10 from 10b, 1 from 10c, 0 from 10d, 2 from 10e, 4 from 10f, 1 from 10k). What remains is not an audit but a *test*: build the reimplementation and diff
+its behaviour against the live game using the Hatari harness (`hatari.md`).
+
+Static auditing against *our own documents* has reached the point of diminishing returns
+— audits 7–9 found 4 defects between them, all in prose. Static auditing against an
+*outside* source has not: audit 10 found 16 in one pass. Prefer external diffs over
+further self-review.
 
 **Precedent for #8:** the music transpose was documented as
 `note_period_table[b + transpose + 12]`, but the engine does `add.b` / `addi.b` / `ext.w`

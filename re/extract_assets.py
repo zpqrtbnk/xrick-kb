@@ -166,15 +166,34 @@ for bank, base in enumerate((0x1D01E, 0x1F01E)):
 # better than walking animation tables, because treasures and enemy variants are
 # reached by COMPUTED addresses (type*0x150 + base, frame + bank) that never appear
 # as stored pointers -- a table walk or a pointer scan both miss them.
-FRAME_LO, FRAME_HI, STRIDE, FRAME_ALIGN = 0x2BFEE, 0x3BA9E + 0x150, 0x150, 110
-grid = [a for a in range(FRAME_LO, FRAME_HI, STRIDE)]
-frames = [a for a in grid if sum(1 for b in D[a:a + STRIDE] if b) > STRIDE * 0.10]
-cells = [sprite_frame(f) for f in frames]
-cells = [c for c in cells if len(c) == 21]
+#
+# Extent (corrected 2026-08-29): the grid runs to 0x3D62E, i.e. slots 0..211.
+# It was previously cut at 0x3BA9E (slot 190), losing 21 real frames. The end is
+# now derived, not assumed: sweep to the next known asset (the banners at 0x40FEE)
+# and trim TRAILING blanks. Trailing, not first -- slot 127 is a genuine interior
+# blank, so stopping at the first all-zero slot truncates the sheet to 127 frames.
+# 212 slots corresponds to the port's SPRITES_NBR_SPRITES = 0xD5 = 213 (see
+# xrick/re/xref.md Q14).
+#
+# NO DENSITY FILTER. The old `> 10% nonzero bytes` test silently discarded seven
+# sparse-but-genuine frames (the bullet and similar small sprites are only ~17-30
+# nonzero bytes out of 0x150) and would have discarded twelve more of the newly
+# recovered ones. Every slot is rendered in grid order, blanks included, so
+# **sheet cell N is sprite number N** -- which is what makes the sheet usable for
+# cross-referencing against gfx_data addresses and against the port.
+FRAME_LO, STRIDE, FRAME_ALIGN, FRAME_LIMIT = 0x2BFEE, 0x150, 110, 0x40FEE
+grid = [a for a in range(FRAME_LO, FRAME_LIMIT - STRIDE + 1, STRIDE)]
+while grid and not any(D[grid[-1]:grid[-1] + STRIDE]):
+    grid.pop()                                    # trim trailing blank slots
+FRAME_HI = grid[-1] + STRIDE
+cells = [sprite_frame(f) for f in grid]
+assert all(len(c) == 21 for c in cells)
+blanks = [i for i, f in enumerate(grid) if not any(D[f:f + STRIDE])]
 n = "sprites.png"
 report.append((n, *save(sheet(cells, 32, 21, 20, PAL, transparent0=True), n),
                f"{len(cells)} sprite frames — the complete 32x21 frame grid "
-               f"(0x{FRAME_LO:05X}-0x{grid[-1]:05X}, stride 0x150)"))
+               f"(0x{FRAME_LO:05X}-0x{FRAME_HI:05X}, stride 0x150); "
+               f"cell index = sprite number"))
 
 # --------------------------------------------------- unreferenced scenery tiles
 # 0x1BBFE-0x1D01D, immediately after the font: 161 cells in the same 8x8 4-plane
@@ -231,7 +250,8 @@ report.append(("palette.png", *save(pimg, "palette.png"),
 # -------------------------------------------------------------- report
 print(f"palette @0x{PALETTE_ADDR:05X}: " +
       " ".join("#%02X%02X%02X" % c for c in PAL))
-print(f"frame grid: {len(grid)} slots, {len(cells)} non-empty rendered")
+print(f"frame grid: {len(grid)} slots 0x{FRAME_LO:05X}-0x{FRAME_HI:05X}, "
+      f"all rendered in index order; blank slots: {blanks}")
 print()
 for name, fname, size, desc in report:
     print(f"  {fname:22s} {str(size):12s} {desc}")

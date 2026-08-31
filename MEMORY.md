@@ -25,6 +25,18 @@ we work under, decisions that are settled, and lessons that cost something to le
 
 ## 2. Hard rules
 
+- **NEVER ASSUME ANYTHING — ALWAYS CHECK.** The first rule, added to `CLAUDE.md` on
+  2026-08-29 at the user's explicit instruction after repeated violations. Before
+  writing any claim, run the check that proves it: read the bytes, run the xref, list
+  the files. Never write "verified"/"confirmed" unless the check actually ran; never
+  state a count or address from memory or from another document; never call something
+  unused, absent or safe to delete without a lookup. When two sources disagree, go to
+  the disassembly rather than picking the more plausible one. If a check is
+  impractical, say so and mark the claim unverified.
+  **Violations that prompted this rule:** claiming "confirmed by an xref census" for
+  `0x4BF12/13/15/1C` before running one (the census, once run, disproved the claim);
+  nearly adding `*.gbf` to `.gitignore` on the assumption it was Ghidra scratch, when
+  `git ls-files` shows those files are tracked database content.
 - **This is a 68K assembly project.** We reverse-engineer to *documented assembly*.
   Never decompile to C; never call `decompile_function` or `force_decompile`. All
   analysis stays in the assembly domain.
@@ -32,7 +44,9 @@ we work under, decisions that are settled, and lessons that cost something to le
 - **Never open, read or reference `ghidra.xrick2` / `xrick2-prg`** (on disk at
   `ghidra.xrick2/`, or `mac/ghidra.xrick2/`). It is an untracked leftover and is
   permanently out of scope, in this session and any future one.
-- Do not modify `CLAUDE.md` or `README.md`.
+- Do not modify `CLAUDE.md` or `README.md`. **One authorised exception exists:** the
+  "never assume" rule at the top of this section was added to `CLAUDE.md` on 2026-08-29
+  on the user's explicit instruction. Do not revert it as a rule violation.
 
 ## 3. The target bar
 
@@ -114,6 +128,42 @@ Two overrides on top of that:
 - **Derive facts mechanically, then diff against the documents.** Reading transcriptions
   to check transcriptions does not work — most byte-identity defects were invisible to
   that approach and only appeared under enumeration of the raw encodings.
+- **A disagreeing outside source finds what self-review cannot.** Nine byte-identity
+  audits never noticed that the sprite sheet was 21 frames short; the port disagreeing
+  about a count did, immediately. Where a second reversal exists, diff numbers against it
+  before auditing prose again.
+- **A correction written into a leaf document but never folded into the document it
+  corrects is invisible.** Four of the six `algo-*.md` files ended with a block of
+  corrections the authoring fork deliberately did not apply — 26 items in total. **None
+  of the blocks was ever processed**, which is exactly how the wrong reading of
+  `bTriggerFlags` bit `0x02` survived nine audits while the right one sat two sections
+  away in the same file. **Never leave a correction in "to apply" state** — apply it to
+  the owning document, or file it in `PLAN.md`. All 26 were swept on 2026-08-29 and the
+  four blocks are now closed records, not to-do lists.
+- **A rename applied in Ghidra but not in the documents is the same failure in reverse.**
+  `scroll_view_up`/`scroll_view_down` had been renamed in the program while three
+  documents still said `scroll_room_left`/`scroll_room_right`; `0x4922B` was
+  `joystick1_state` in some files and `player_input_bitmask` in others. Ghidra is
+  authoritative (§5), so **after any rename, sweep `re/` for the old name.**
+- **A fact corrected in the documents can still be stale in the Ghidra plate comments.**
+  `room_tile_map` was fixed to row-major in `data-structures.md` long before the plate at
+  `0x4DA40` stopped saying "column-major". Corrections propagate in both directions.
+- **When two documents disagree about one bit, suspect two readers before suspecting an
+  error.** Bit `0x02` genuinely has two unrelated consumers (`0x496B8` spawn routing,
+  `0x4D204` bullet disposal); each document had found one of them and generalised.
+- **Validate the query before trusting a negative result.** "No instruction references
+  `0x4B336`–`0x4B34F`" was asserted from an operand search for `0x0004b34…`, but Ghidra
+  renders absolute operands **without leading zeros** (`lea (0x4b340).l, A0`) — the
+  pattern could not have matched whatever the truth was. The region turned out to be four
+  HUD render buffers with four `lea`s pointing at them. **When a search returns nothing,
+  first prove the search can find something**: run it against a case you know exists.
+- **Beware filters in the extraction scripts, not just in the analysis.** The sprite
+  sweep discarded genuine frames on a `> 10% non-zero bytes` heuristic, and the reported
+  "185 frames" was that filter's output presented as a fact about the game. Any threshold
+  in a tool becomes a claim in a document unless it is stated.
+- **When sweeping for the end of a table, trim trailing blanks — do not stop at the
+  first blank.** The sprite grid has a genuine interior gap at slot 127; stopping there
+  truncates a 212-frame sheet to 127.
 - **Cross-check structures against raw bytes.** The `SpriteEntity` X/Y axis swap and the
   `LevelStartInfo` 4-byte base error both survived multiple passes because prose was
   never checked against the table contents.
@@ -143,7 +193,7 @@ Registered 2026-08-29. A second, independent reverse-engineering of Rick Dangero
 already exists: **xrick**, by "bigorno" (Arnaud Nolen), 1998–2005, re-coded in C on SDL.
 It is cloned into `xrick/` (its own nested git repo, remote
 `https://github.com/zpqrtbnk/xrick.git`, commit `c2aef3d`, version string `050500`).
-Our analysis of it lives in `xrick/re/` — 11 documents mirroring `re/`'s structure, with
+Our analysis of it lives in `xrick/re/` — 12 documents mirroring `re/`'s structure, with
 `xrick/re/xref.md` as the comparison worksheet.
 
 Facts worth not rediscovering:
@@ -168,13 +218,30 @@ Facts worth not rediscovering:
   README that carries no terms. Use the port as a reference for understanding only; do
   not copy its code into this project's output without settling this.
 
-Already cross-validated on first reading (both sides independent): the 523-record
-placement table, 47 rooms, all eight tile-attribute bits, all five common trigger bits,
-the enemy spawn-slot pools 9–11 / 4–8, the placement X/Y bit packing, the `-0x580` jump
-impulse, `+0x80` gravity with a `0x800` clamp, and the super-pad rebound `0xFE - vel`.
-Seventeen numeric discrepancies and seven semantic ones are listed in `xrick/re/xref.md`.
+Cross-validated (both sides independent): the 523-record placement table, 47 rooms, all
+eight tile-attribute bits, all five common trigger bits, the enemy spawn-slot pools
+9–11 / 4–8, the placement X/Y bit packing, the `-0x580` jump impulse, `+0x80` gravity
+with a `0x800` clamp, the super-pad rebound `0xFE - vel`, bullet speed ±8, the 50/500/2000
+score values, the 3-row room-transition window, the `0xCC` and `0xE8` thresholds, the
+player hitbox vertically, and the dynamite `+4/+5` / `-4/-5` offsets with the
+`(+0x0C, +0x0A)` explosion centre. The numeric pass is complete: **7 agree, 9
+remain open, 1 was our defect.** Seven semantic questions are still open. Worksheet:
+`xrick/re/xref.md`.
 
-**One finding lands on our side, not the port's:** `re/data-structures.md` gives two
-conflicting readings of placement flag bit `0x02` (line 261 "spawn into `sprite_list[0]`"
-vs line 67 "bullet passes through"). The port corroborates the first. This is an internal
-inconsistency to fix regardless of the comparison.
+- **A port comment saying "this is a fix for the ST version" may be describing the ST
+  version faithfully.** The dynamite `+4/+5` spawn offset is written in the port as a
+  `GFXST` fudge to compensate for ST sprite centring; the ST original performs exactly
+  that offset, and its inverse at detonation. Read the port's *code*, not its
+  rationalisations.
+- **The nine surviving differences are all small integers in otherwise identical
+  algorithms** (20 vs 25, `-0x400` vs `-0x300`, a 5 px blast edge, a 1 px hitbox shift).
+  That pattern reads as two builds tuned differently, not as either side misreading. The
+  one difference that did *not* fit — a count off by 27 — was ours.
+
+**Two findings landed on our side and are fixed:** the sprite sheet was 21 frames short
+(see §8), and `re/data-structures.md` carried two conflicting readings of placement flag
+bit `0x02`. The latter is resolved — **the bit has two unrelated readers**, which is why
+two half-right descriptions coexisted: `spawn_level_entity` (`0x496B8`) routes the
+placement into `sprite_list[0]`, and `scripted_trap_update` (`0x4D204`) picks the spent
+bullet's disposal route. "Bullet passes through" is retracted; the bullet is consumed
+either way.

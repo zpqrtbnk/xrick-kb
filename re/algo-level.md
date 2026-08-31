@@ -146,8 +146,8 @@ if (spawn_scan_flags & 0x01)       // bit 0: scrolled down → band at offset 0x
 ```
 Notes: `D0` is the **lookahead row offset** added to `world_row_base` when matching
 `PlacementRecord.wSpawnBand`. `spawn_scan_flags` (`0x495C8`) is set to `7` by
-`init_screen_pointers` (populate everything), `4` by `scroll_room_left`, `1` by
-`scroll_room_right`.
+`init_screen_pointers` (populate everything), `4` by `scroll_view_up`, `1` by
+`scroll_view_down`.
 
 ## `spawn_level_entity` — 0x4964C
 
@@ -292,19 +292,19 @@ D2 = 0; D1 = 9;
 for (;;) {                                     // cursor loop
     draw_string_xy(D0=?, D1, A0 = 0x48F48);    // draw cursor
     vsync_wait(); vsync_wait(); vsync_wait(); vsync_wait();
-    if (player_input_bitmask & 0x80) break;    // FIRE → confirm
+    if (joystick1_state & 0x80) break;    // FIRE → confirm
     draw_string_xy(A0 = 0x48F4A);              // erase cursor
-    if (player_input_bitmask & 0x01) {         // UP
+    if (joystick1_state & 0x01) {         // UP
         D2--; D1 -= 3;
         if (D2 < 0) { D2 = 0; D1 = 9; }        // clamp to top
-    } else if (player_input_bitmask & 0x02) {  // DOWN
+    } else if (joystick1_state & 0x02) {  // DOWN
         D2++; D1 += 3;
         if (D2 > max_level_reached) { D2--; D1 -= 3; }   // clamp to bottom
     }
 }
 level_select_choice = D2;
 ```
-Notes: **partial input-bit mapping recovered here** — `player_input_bitmask`
+Notes: **partial input-bit mapping recovered here** — `joystick1_state`
 (`0x4922B`) bit 0 = UP, bit 1 = DOWN, bit 7 = FIRE/confirm. (The player-controller
 transcription owns the full mapping; this is independent corroboration.)
 Menu label stride is `0x1A` bytes, rows 3 apart. Gated by `0x498C4` — the flag set by
@@ -369,9 +369,9 @@ process_level_transition_point()
 ```
 ```c
 D4 = 0;                                          // "fade in at end" flag
-D0 = (player_pos_y_copy >> 3) + world_row_base;  // 0x4A754 → world row
+D0 = (player.nPosY >> 3) + world_row_base;  // 0x4A754 → world row
 A0 = cur_room_header_ptr->pTransitions;          // (0x6, header)
-D2 = (player_pos_x_copy > 0) ? 1 : 0;            // 0x4A752 → exit side
+D2 = (player.nPosX > 0) ? 1 : 0;            // 0x4A752 → exit side
                                                  // off the left makes X ≤ 0
 for (;;) {
     D3 = A0->wExitSide;                          // (A0).w
@@ -411,8 +411,8 @@ D0 = A0->wRow - A0->wEntryRow;                   // (0x2,A0) − (0x8,A0)
 world_row_base -= D0;
 
 reposition:
-if (D2 != 0) player_pos_x_copy = 0x02;           // came out the right → enter left
-else         player_pos_x_copy = 0xE6;           // came out the left  → enter right
+if (D2 != 0) player.nPosX = 0x02;           // came out the right → enter left
+else         player.nPosX = 0xE6;           // came out the left  → enter right
 do_init:
 init_screen_pointers();
 finish:
@@ -466,10 +466,10 @@ Notes: "twice" = both screen buffers are painted, so the double buffer is cohere
 after a room change. `0x66010` becomes the sprite-free backdrop that
 `blit_backgrounds` later restores from.
 
-## `scroll_room_left` — 0x49BD6  ⚠️ **misnomer: this scrolls the view UP**
+## `scroll_view_up` — 0x49BD6  ⚠️ **misnomer: this scrolls the view UP**
 
 ```
-scroll_room_left()                 // really: scroll_view_up
+scroll_view_up()                 // really: scroll_view_up
 ```
 ```c
 world_row_base -= 8;               // 0x495CA — 8 tile rows = 64 px
@@ -496,10 +496,10 @@ spawn_scan_flags = 0x04;           // 0x495C8 — spawn the newly-revealed band
 finish_scroll_transition();
 ```
 
-## `scroll_room_right` — 0x49C78  ⚠️ **misnomer: this scrolls the view DOWN**
+## `scroll_view_down` — 0x49C78  ⚠️ **misnomer: this scrolls the view DOWN**
 
 ```
-scroll_room_right()                // really: scroll_view_down
+scroll_view_down()                // really: scroll_view_down
 ```
 ```c
 world_row_base += 8;
@@ -653,22 +653,17 @@ row uses `move.b (A2),(0x6,A3)` without post-increment (harmless; the pointer is
 
 ---
 
-## Corrections for the orchestrator
+## Corrections — all applied (closed 2026-08-29)
 
-1. **`re/data-structures.md` — `CheckpointState` axes are swapped.** It says
-   `wSaved_a752` = "player room-Y" and `wSaved_a754` = "player room-X". The reverse is
-   true: `process_level_transition_point` shifts `0x4A754` right by 3 and adds it to
-   `world_row_base` (a row → Y), and tests `0x4A752` for the left/right exit side (X).
-   The `player_pos_x_copy` / `player_pos_y_copy` labels already in Ghidra are correct;
-   only the CheckpointState prose is wrong.
-2. **`re/data-structures.md` — spawn pool B is slots `[9..11]`, not `[9..12]`.** The
-   loop bound `0x4AA92` is slot 12 and the test is strict (`A1 < bound`). Slot 12 is
-   reserved for the decorative sprite, consistent with `re/entities.md`.
-3. **`scroll_room_left` / `scroll_room_right` are misnomers** — they scroll the view
-   **up** and **down** respectively (`world_row_base −= 8` / `+= 8`). Suggested names:
-   `scroll_view_up` / `scroll_view_down`.
-4. **`room_tile_map` is 32 columns × 44 rows**, `0x20` bytes per **row** (row-major).
-   `re/data-structures.md` describes it as "0x20 bytes per 8px column, column-major".
-5. The level-select menu is **cheat-gated** by `0x498C4` (the `POOKY9999` flag), so it
-   is unreachable in normal play — relevant to the outstanding
-   "`run_selection_menu`'s exact trigger condition" question.
+Five discrepancies this pass found against the then-current docs. All are now folded
+into the owning files; nothing here is outstanding. (See the rule in `MEMORY.md` §8:
+never leave a correction in "to apply" state.)
+
+| # | Correction | Status |
+|---|---|---|
+| 1 | **`CheckpointState` axes were swapped** — `0x4A752` is the player's **X**, `0x4A754` the **Y**, proven by `process_level_transition_point` shifting `0x4A754` right by 3 into `world_row_base` (a row) while testing `0x4A752` for the exit side. | ✅ applied — `data-structures.md` `CheckpointState` rows |
+| 2 | **Spawn pool B is slots `[9..11]`, not `[9..12]`** — the loop bound `0x4AA92` is slot 12 and the test is strict. | ✅ applied — `data-structures.md` spawn-pool note |
+| 3 | **`scroll_room_left`/`scroll_room_right` are misnomers** — they scroll the view **up**/**down** (`world_row_base` −8/+8). | ✅ applied — renamed **`scroll_view_up` (`0x49BD6`) / `scroll_view_down` (`0x49C78`)** in Ghidra *and*, as of 2026-08-29, throughout `re/` |
+| 4 | **`room_tile_map` is row-major**, 32 cols × 44 rows, `0x20` bytes per **row** — not "0x20 bytes per 8px column, column-major". | ✅ applied — `data-structures.md`; the stale wording also survived in the Ghidra plate at `0x4DA40` and was corrected there 2026-08-29 |
+| 5 | **The level-select menu is cheat-gated** by `0x498C4` (the `POOKY9999` flag), so it is unreachable in normal play. | ✅ applied — `functions.md` `run_selection_menu`, `data-structures.md` POOKY flag |
+

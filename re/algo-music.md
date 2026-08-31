@@ -481,6 +481,24 @@ A0 += 3;                                            // unknown 3-byte command: s
 The `<= 0x88` test is the *signed* comparison `cmp.b #-0x78; bgt`, so it selects the
 byte range 0x80–0x88 exactly.
 
+> **Fidelity notes (verified instruction-by-instruction 2026-08-30).**
+>
+> **1. The C form above is only valid because of an unstated precondition: D0 ≥ 0x80.**
+> *Both* range tests are signed — `cmp.b #-0x78; bgt` and `cmp.b #-0x40; bge` — and the
+> unsigned C (`<= 0x88`, `< 0xC0`) agrees with them **only** on `0x80`–`0xFF`. For a
+> byte in `0x00`–`0x7F` the assembly falls through to the 3-byte skip while the C would
+> take the mixer path. That never happens because **every call site guards on bit 7**:
+> `advance_channel_sequence` does `tst.b (A0); bpl` before both `bsr` (`0x452C0` →
+> `0x452C2`, and `0x452CE` → `0x452D0`), so bytes `0x00`–`0x7F` are handled as *notes*
+> and never reach here. **If you call this routine from anywhere else, re-check the
+> signedness** — or write the comparisons signed as the original does.
+>
+> **2. The `0xC2` case is not a local return.** It assembles as
+> `beq.w 0x451D8` — a branch into `init_music_playback`'s `rts` at `0x451D8`, a
+> shared-tail optimisation. Behaviourally identical to `return`, so the transcription is
+> right, but the control flow leaves the function. The same trick appears at `0x45330`
+> (`bne.w 0x451D8`). Expect Ghidra's flow analysis to look odd around both.
+
 ---
 
 ## 11. `resolve_channel_note_period` — 0x4538C

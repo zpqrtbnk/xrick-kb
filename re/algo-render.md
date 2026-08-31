@@ -475,8 +475,8 @@ BCD idiom (ABCD only ever *clears* Z).
 ```c
 LevelStartInfo *L = (LevelStartInfo*)0x4B522 + level_index;   /* stride 20 */
 
-player_pos_x_copy  = L->wStartX;         /* +0x04 -> 0x4A752 */
-player_pos_y_copy  = L->wStartY;         /* +0x06 -> 0x4A754 */
+player.nPosX  = L->wStartX;         /* +0x04 -> 0x4A752 */
+player.nPosY  = L->wStartY;         /* +0x06 -> 0x4A754 */
 world_row_base     = L->wStartWorldRow;  /* +0x08 -> 0x495CA */
 cur_room_header_ptr= L->pRoomHeader;     /* +0x0A -> 0x495D8 */
 
@@ -644,10 +644,12 @@ so each buffer's restore always uses the geometry that was actually drawn into i
 
 ## Notes / uncertainties
 
-- `hide_entity` has no callers and its Ghidra entry point is wrong (see Corrections).
+- `hide_entity` (`0x4AC08`) has no callers — dead code. *(Its entry point was once
+  recorded as `0x4ABF8`, which is really dispatch index 70; corrected 2026-08-29.)*
 - The unrolled 21-row fast paths in `blit_backgrounds` are pure optimisation.
 - The `0x1941` / `0x500` banner offsets and the intro-screen glyph strides are
   reproduced literally; their *pixel* meaning depends on `draw_string` /
-  `draw_glyph_string` — **needs dynamic verification** or the system fork's write-up.
+  `draw_glyph_string`, both now transcribed in `algo-system.md` (`0x49466` / `0x494AC`).
+  ✅ No longer open — resolved 2026-08-29 by the system write-up, not by a live run.
 - `0x45096` (music-busy word) and `0x4922B` (input bitmask) are read here but owned
   by other subsystems.

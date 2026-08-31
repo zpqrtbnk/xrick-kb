@@ -49,6 +49,24 @@ drop-in replacement. This file and the whole knowledge base use `atari_ram.bin`
 numbering; **decided: we do not re-base**. Convert with
 `1M_address = doc_address − 0x2054`.
 
+**What "shifted" actually means — measured 2026-08-30.** The delta is a *relocation*,
+so the two dumps differ selectively, and this had never been stated precisely:
+
+| Content | Between the two dumps |
+|---|---|
+| Static data (font, sprite grid, `placement_table`, `object_type_defs`, `music_track_table`) | **byte-identical** — verified over 64-byte samples at five bases |
+| Stored **pointers** | **shifted by exactly −0x2054** — `sprite_type_dispatch` **74/74** entries, `RoomHeader`'s `pTileMap`/`pTransitions`/`pPlacements` **141/141** fields |
+| Non-pointer struct fields | identical — e.g. `RoomHeader.wTileBankVariant` **47/47** |
+
+So when reading the 1 MB dump: **relocate pointers, do not relocate data.** A naive
+byte-diff of the two files will show the pointer tables as "different" and that is
+correct behaviour, not corruption — it is what flagged `sprite_type_dispatch` in this
+check before the cause was identified.
+
+The track-19 PCM sample at `0x50DA8` (past the 320 KB snapshot) sits at 1M offset
+`0x4ED54` and is real waveform data there — confirming it is recoverable only from the
+1 MB capture.
+
 The runtime buffers (`0x63800`+, screen buffers `0x70000`/`0x78000`) are outside both
 captures but derivable from code.
 
@@ -154,22 +172,25 @@ no loader at all** — just the resident tables.
 
 ---
 
-## The 171KB Undefined Data Region (0x1B01E–0x44BED)
+## The 171KB Data Region (0x1B01E–0x44BED) — **fully mapped**
 
-**Now largely mapped** (asset-extraction pass, 2026-08-28). Every region below was
-confirmed by decoding it and looking at the result — see `re/assets-manifest.md`.
+**Completely accounted for, with no gaps** (asset-extraction pass 2026-08-28;
+boundaries re-measured from the binary 2026-08-30). Every region below was confirmed by
+decoding it and looking at the result — see `re/assets-manifest.md` — and every start
+address equals the previous region's end, from `0x1B01E` through to the first byte of
+code at `0x44BEE`.
 
 | Range | Size | Contents |
 |---|---|---|
 | `0x1B01E`–`0x1BBFD` | 3,040 | **Font**: 95 glyphs × 32 bytes (8×8, 4 planes, byte-per-plane) |
-| `0x1BBFE`–`0x1D01D` | ~5 KB | Not identified |
+| `0x1BBFE`–`0x1D01D` | 5,152 | **Scenery tiles**: 161 × 32 bytes, same 8×8 format. Real artwork (sky, clouds, pyramids, dunes) — **referenced by nothing in the program**; see `assets-manifest.md`. *(Was "Not identified" until 2026-08-28.)* |
 | `0x1D01E`–`0x1F01D` | 8,192 | **Tile bank 0**: 256 × 32-byte tiles — levels 0–1 |
 | `0x1F01E`–`0x2101D` | 8,192 | **Tile bank 1**: 256 × 32-byte tiles — levels 2–3 |
-| `0x2101E`–`0x22FED` | ~8 KB | **Room tilemaps**, all 47 rooms, contiguous |
+| `0x2101E`–`0x22FED` | 8,144 | **Room tilemaps**, all 47 rooms, contiguous |
 | `0x22FEE`–`0x23FED` | 4,096 | **Block definitions**: 256 × 16 bytes (4×4 tile indices) |
-| `0x23FEE`–`0x2BB2D` | 32,000 | **Title screen** (320×200, standard ST screen format) |
-| ~`0x2C000`–`0x34000` | ~32 KB | **Sprite frames**, `0x150` bytes each, plane-major |
-| `0x34000`–`0x40FED` | ~52 KB | Largely zero — see note below |
+| `0x23FEE`–`0x2BFED` | **32,768** | **Title screen.** `draw_title_picture` copies exactly `0x400` iterations × 8 longwords = `0x8000` bytes (`move.w #0x3ff,D0w` … `dbf` at `0x4DF6C`–`0x4DF80`). The *visible* screen is 32,000 bytes; the extra 768 land in the buffer's slack, since the two screen buffers are `0x8000` apart (`bchg #15`). **Corrected 2026-08-30** — was "32,000, `0x23FEE`–`0x2BB2D`", which matched neither the blit size nor its own end address |
+| `0x2BFEE`–`0x3D62D` | **71,232** | **Sprite frames**: 212 × `0x150`, plane-major. **Corrected 2026-08-30** — was "~`0x2C000`–`0x34000`, ~32 KB", understating the region by more than half |
+| `0x3D62E`–`0x40FED` | 14,784 | **Entirely zero** — measured, not estimated: zero non-zero bytes in the whole range. Padding, not an unfilled buffer (see note below) |
 | `0x40FEE`–`0x44BED` | 15,360 | **Three 320×32 banners** (5120 bytes each) |
 
 The banner block ends at exactly `0x44BEE`, which is the first byte of code

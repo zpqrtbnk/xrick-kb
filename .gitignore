@@ -10,6 +10,8 @@ mac/
 *.lock
 *.lock~
 **/tmp*.ps
+# Per-write change/snapshot journals inside the project database (regenerable).
+**/*.db/*.grf
 
 # Third-party SNDH player (downloaded for testing) and its UI state.
 # Kept on disk, not versioned — re-add deliberately if you want it tracked.

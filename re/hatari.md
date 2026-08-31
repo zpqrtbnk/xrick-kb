@@ -8,7 +8,7 @@ probes (§6) that were flagged as needing the game *running*.
 gameplay, the address base reproduces the Ghidra dump exactly, and Rick is driveable
 under script. Of the eight probes, **7 are resolved and 1 is optional** — several fell
 to Ghidra xref censuses rather than to watching. The harness's remaining job is
-validating the transcriptions against the running game (`../PLAN.md` O1).
+validating the transcriptions against the running game (`../PLAN.md` T1).
 
 ---
 
