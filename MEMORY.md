@@ -40,6 +40,48 @@ we work under, decisions that are settled, and lessons that cost something to le
   this produced T11-T17; re-run it with the assumption-language regex in the work log
   before claiming the knowledge base is clean.
 
+  **As of 2026-09-04 that sweep is clean: T11 was the last one, and it is measured.**
+  Every assumption promoted to a T-item (T11-T17) is now resolved. Two of them turned out
+  to contain their own defects — the T11 write-up wrongly claimed "every tempo figure"
+  depended on the prescaler (music is VBL-driven; only the digi-sample rate depends on
+  it), and T16's source passage had the type-0 track census wrong. **Check the claim that
+  motivates a task, not just the task.**
+- **T9 solved 2026-09-04: the `sni`->`sprbase` overload is a PC-only consequence of the
+  PC's 8-byte `entdata_t` holding sprite *numbers* where the ST's 16-byte `ObjectTypeDef`
+  holds *pointers*.** Not a behavioural divergence. When the two builds appear to differ
+  structurally, check whether the data models differ before calling it a divergence.
+- **Parsing C initialisers with a `\{([^{}]*)\}` regex counts brace pairs inside
+  comments.** It made `ent_entdata` look like 76 records against a declared 74 — the same
+  shape as the real `map_connect` bug — and I nearly reported a second instance. Stripping
+  comments and tracking brace depth gives the true count, **74, exactly as declared**.
+  Re-derive with a second method before reporting a defect that pattern-matches a known
+  one. **And when a method is found unsound, re-run every earlier result that used it** —
+  the same regex had produced the `map_connect` "overrun" on 2026-08-30, which stood for
+  five days and got as far as a drafted upstream bug report before being retracted on
+  2026-09-04. The table was correct all along; the phantom 154th record was a
+  commented-out line the port's author had already removed.
+- **Net result: not one difference found against the xrick port in this entire project
+  turned out to be a port error.** All 17 T8 rows are genuine PC-vs-ST divergences, T9 is
+  a data-model consequence, and the two "port defects" we thought we had — the connector
+  overrun and the `ent_entdata` excess — were both our own miscounts. The remaining real
+  port bugs are the ones the author flagged himself plus the `rndseed +2` pointer.
+- **T1 was rescoped on 2026-09-04: no new reimplementation.** The task is to review and
+  align the **existing xrick port** against `re/` — data structures and variable widths
+  first, then algorithms. Plan in `review-plan.md`; `PLAN.md` T1 points at it. Surface is
+  ~7k lines of real logic; the rest is generated tables and SDL glue.
+- **T1 ground rules set by the user 2026-09-04:** (a) target is **switchable** —
+  `PLATFORM_ST` / `PLATFORM_PC`, both behaviours coexist, neither deleted; (b) **the
+  licence question is closed** — the user holds the rights to the PC version; (c) **the
+  port's comments are not evidence** — they record what its authors *believed* the PC did
+  and may be wrong, so verify in Ghidra (`atari_ram.bin` ST, `ibmpc_cs.bin` PC); (d) the
+  provenance of the generated `dat_*.c` tables is unknown and may need re-extracting from
+  the ST binary.
+- **Measured on the table question (2026-09-04):** the port's `map_marks` is
+  **value-identical** to our `placement_table` (523/523 on every comparable field) and
+  `map_connect` matches in all 47 lists — but `ent_entdata` `w`/`h` differ in 3 of 74
+  entries (indices 3, 22, 23: ST `0/0`, port `24/21`). So the map data is common to both
+  versions and the entity templates are not.
+
   **`atari_ram.bin` is trusted absolutely and needs no provenance check** — the user
   dumped it themselves from Hatari with the game running correctly (attested
   2026-08-31). Do not re-raise it as an assumption; the layer-2 LSD decompressor never
@@ -172,6 +214,17 @@ Two overrides on top of that:
   **Search the bare hex substring** (`4be1a`), which matches both — and **when a search
   returns nothing, first prove the search can find something**: run it against a case you
   know exists. Both traps have now bitten once each, in opposite directions.
+- **Fourth instance, 2026-09-04 (review of the port):** a scan for the ST tile banks used
+  `range(0x1A000, 0x2C000, 32)`, which is 32-aligned to `0x1A000` — and `0x1D01E` is not
+  congruent mod 32, so the sweep **never tested the documented bases**. It produced
+  "20/256, the artwork does not match", which I reported. Testing the bases directly gives
+  **256/256**. The rule is now sharper: **put the known-expected answer inside the search
+  space and confirm the search finds it, before reporting any absence.**
+- **Settled: the port's `dat_tilesST.c` is genuine ST artwork.** Bank 1 = ST `0x1D01E`,
+  bank 2 = ST `0x1F01E` (both 256/256 exact), bank 0 = the font/HUD region at `0x1B01E`,
+  all present but permuted — and the permutation is recorded in the port's own per-tile
+  comments (`/* 0x11 */` = ST glyph 17). Port tile format is `U32[8]`, 8 pixels at 4bpp,
+  leftmost pixel in the high nibble.
 - **Beware filters in the extraction scripts, not just in the analysis.** The sprite
   sweep discarded genuine frames on a `> 10% non-zero bytes` heuristic, and the reported
   "185 frames" was that filter's output presented as a fact about the game. Any threshold
@@ -231,6 +284,19 @@ Facts worth not rediscovering:
   loop — is far more reliable than searching for a constant, because the same constant
   may not exist as a literal at all. `FUN_0000_11bc` = `u_envtest`, `FUN_0000_12bc` =
   `u_boxtest`, `FUN_0000_2089` = `ent_actvis`.
+- **The port's `ASM nnnn` comments are offset by `+0x17E` over the code region** —
+  confirmed on `u_envtest` (`103E`→`0x11BC`), `u_boxtest` (`113E`→`0x12BC`), `e_bomb_hit`
+  (`11CD`→`0x134B`), `e_bomb_action` (`18CA`→`0x1A48`), `e_rick_gozombie`
+  (`1851`→`0x19CF`). **Not global**: `map_resetMarks` (`0025`) sits at `0x0025` with no
+  offset. Use it as a per-routine hypothesis, always confirmed by structure at the target.
+  This is what finally closed T8 — it turns the comments into a lookup table.
+- **T8 finished 17/17: every difference was a genuine PC-vs-ST divergence, zero port
+  errors.** When the port disagrees with us on a constant, assume the builds differ.
+- **The failed-query trap has now bitten four times.** Latest: searching `MOV AL,0xE2` and
+  a byte store to absolute `0x7E80` for the submap re-entry X, when the real instruction is
+  `C7 44 02 E2 00` — a **word** store through **`[SI+2]`**. Wrong operand width *and*
+  wrong addressing mode at once. Before trusting any negative, ask what encodings the
+  thing could plausibly have, and validate against a known-present control.
 - **`ASM nnnn` comments do not map onto ST addresses.** No constant offset exists; they
   are different executables for different CPUs. Never try to translate them.
 - **The port is a playable reconstruction, not a fidelity project.** It normalises struct

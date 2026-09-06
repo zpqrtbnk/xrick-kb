@@ -75,18 +75,18 @@ not what to do. The history of what each pass found is in `re/byte-identity.md`.
 None of these blocks a reimplementation. `re/` is not known to be missing anything
 structural.
 
-### T1 — Build the reimplementation and diff it against the live game ⭐ **the main event**
+### T1 — Align the xrick port with the ST reverse engineering ⭐ **in progress**
 
-Static auditing has reached diminishing returns: twenty audits, and the last several
-found nothing in the areas they covered. What remains is a *test*, not a read.
+**Plan and live status: [`review-plan.md`](review-plan.md); evidence log:
+[`review-log.md`](review-log.md).**
 
-The Hatari harness (`re/hatari.md`) is the instrument. Boot `disks/chaos43/RICK.PRG`
-from a GEMDOS drive, re-measure the address delta (expect `-0x2054`, never hardcode),
-breakpoint each major function, log register state, and diff against what `algo-*.md`
-predicts. That turns the ~98% judgement into a measurement.
+As of 2026-09-05: phases 0 and 2 complete, 3a and 3b complete at the level attempted, and
+the `xref.md` sweep done. **38 differences catalogued, 26 `PLATFORM_ST` switch sites, 6
+port defects fixed.** Both platforms build and run.
 
-**T1 subsumes several smaller items** — it exercises the blitter (T4), the trigger bits
-(T6) and the name-entry loop (T7) as a side effect of running the game.
+Remaining: ~70 functions in system/render/player/sound, five unchecked data tables, and
+six open findings — one of which (the score-overflow representation) needs a user
+decision. See `review-plan.md` §11.
 
 ### T2 — ~~Bullet probe points: one or two?~~ ✅ **RESOLVED 2026-08-31**
 
@@ -127,15 +127,31 @@ operands **padded** (`(0x0004be1a).l`) — the mirror of the O6 trap, where they
 unpadded. Searching the bare substring `4be1a` matches both forms, and the query was
 validated against `4be18` (7 hits) before the negative was trusted.*
 
-### T4 — Instruction-level check of the sprite blitter transcription
+### T4 — Sprite blitter transcription ✅ **RESOLVED 2026-09-04 — 0 defects**
 
-`algo-render.md`'s `render_sprites` shift path is the one large transcription never
-compared against the disassembly line by line — 290 instructions of rotate-and-mask
-across two unrolled paths. The likeliest remaining home for a real defect.
+`render_sprites` (`0x4B032`) was read instruction by instruction against
+`algo-render.md`. The function is **290 instructions**; the two unrolled blit paths are
+**122** (shifted) and **48** (aligned). **The transcription is faithful — no defects.**
 
-Audits 10h and 10i sampled the other hard transcriptions (`algo-system.md`'s eight small
-functions, `algo-music.md`'s sequence opcodes) and found none, so expectations should be
-modest — but this is the largest untested surface. Partly subsumed by T1.
+This was the largest untested surface in `re/` and the likeliest remaining home for a real
+defect. It is now checked, so that expectation is retired.
+
+Verified in particular: `bchg.l #0xF,D0` supplies *both* the page flip and the branch
+condition, and the `block_a`/`block_b` sense is right; all four despawn bounds and both
+visibility bounds match including comparison strictness (`<=` vs `<` on the top clip,
+`>=` vs `>` on the bottom); the `A`/`B` mask pair is built exactly as documented; and both
+row advances total 160 (`3 x (A2)+ + 0x9A`, `1 x (A2)+ + 0x9C`).
+
+One latent hazard was checked rather than assumed: `ya * 160` is computed with `.w` shifts
+on a longword, so a carry out of bit 15 would be silently lost. `ya` is bounded to
+`8..0xC7` by the preceding clip, giving a maximum of `0x7C60` — **no overflow is
+reachable**.
+
+Five **fidelity notes** were added to `algo-render.md` for things the C model cannot
+express: `A1` is destroyed by `movea.w D6w,A1` right after `bset #1`; the shift count
+lives in `D6` for the mask and plane 0 but `D0` for planes 1-3; plane 3's stores omit the
+post-increment; the two paths count rows differently (`D7` directly vs shuttling through
+`A5`); and `A3`/`A4` are recomputed from `A2` every row.
 
 ### T5 — ~~Reconcile the entity-dispatch shapes~~ ✅ **RESOLVED 2026-08-31**
 
@@ -162,82 +178,225 @@ the placement census, where 71 appears as a normal trap type.
 The other asymmetry is our **type 74** (`decorative_sprite_update`, intro screens), which
 the port has no equivalent for because it builds its map intro from `screen_imapsteps`.
 
-### T6 — Observe the trigger bits firing
+### T6 — Observe the trigger bits firing ✅ **RESOLVED 2026-09-04 — watched live**
 
-All eight `bTriggerFlags` bits are exercised in shipped data across all four levels (the
-census is in `re/entities.md`), so no transcribed path is unreachable. But the
-*semantics* rest on the code transcription alone; no bit has been watched firing in a
-running game. Breakpoint `scripted_trap_update`'s trigger scan on a known trap.
-Opportunistic during T1.
+Two Hatari runs (`re/hatari_probe.py triggers`, `triggers2`; delta `-0x2054` re-measured
+and self-checked both times, cheats left off).
 
-### T7 — Characterise the `dbf D3w` name-entry loop
+**Method that made it meaningful:** each bit's `btst` site executes for every trap entity
+every frame regardless of the bit's value, so breakpointing it proves nothing. The probe
+instead sits on each bit's **taken branch**, and on the `*_fired` sites where the hit test
+also succeeded — 14 `:trace :once` detectors, so whatever `b` still lists at the end
+provably never fired.
 
-At `0x491E2` the commit loop's counter is the *character just copied*, so the iteration
-count depends on entry state as well as on what was typed, and the copy over-runs the
-10-byte name field. A reimplementation is correct by emitting `dbf D3w` — the object
-code is the specification — but **what the player actually sees has never been
-characterised.** Model it in Python, then confirm one case live. See `re/algo-system.md`.
+**Run 1 caught the whole chain, in causal order in the log:**
 
-### T8 — Adjudicate the port differences — **15 of 17 done; 2 remain**
+```
+0x4D19A  0x80 set         armed for player-touch
+   ... joystick := RIGHT ...
+0x4D1B4  0x80 FIRED       player inside the trigger box
+0x4D258  TRAP TRIGGERED   move.b #-1,(0x47,A0)
+0x4D284  0x08 armed       lethal while TRIGGERED
+```
 
-**Unblocked 2026-08-31**: `re/ibmpc_cs.bin`, a dump of the game's PC **code segment**, is
-in the Ghidra project as `x86:LE:16:Real Mode`. Correspondence with the port's cited
-addresses is verified — see `xrick/re/provenance.md`.
+**Run 2 caught `0x04`** (lethal while **IDLE**), the counterpart.
 
-**Result: the port read its build correctly every single time. Not one difference turned
-out to be a port error.** Fourteen are now confirmed **genuine PC-vs-ST divergences** —
-stun 20/25, latency seed x32/x25, dying gravity +0x80/+0xC4, death launch -0x400/-0x300,
-corpse drift, ladder-exit -0x300/-0x200, bonus divider 30/25, dynamite fuse 45-counter vs
-17-frame table, hitbox +0x11/+0x12, scroll threshold 0x60/0x5F, trigger probe
-+0x0C/+0x0B, the type-2 ladder-grab masks, and the two closed in the final pass:
+**Why this is the confirmation worth having.** `0x04` vs `0x08` is precisely the
+distinction *Correction #1* in `algo-entities.md` had to introduce after the docs
+conflated them as "always-lethal" — a wrong reading that, by that document's own account,
+"survived nine byte-identity audits with the right reading two sections away". Both halves
+are now **observed** on their respective branches: in level 1's opening room `0x08` fired
+only *after* the boulder triggered, and `0x04` never fired there at all.
 
-- **the spawn Y-nudge bit** — `ent_actvis` at `0x212D` does
-  `TEST byte[DI+2],0x2 / JNZ` around `ADD DX,0x3`, so the PC uses bit **`0x02`** where we
-  read bit `0x04` (`btst.b #0x2,(0x3,A0)` @ `0x497B8`);
-- **the bullet's second probe point** — the PC really does keep **two**: a stored centre
-  `x + 0x0C` at `[0x7D7E]` (written `0x1A17`, read by the trigger code at `0x2602` and
-  `0x27FF`) *and* an inline leading edge `+0x18` in the enemy-hit path (`ADD BL,0x18` @
-  `0x233B`, `0x2899`). We keep one.
+**Not reached — five bits: `0x40` (stick jab), `0x20` (bullet), `0x10` (explosion), `0x02`
+(both disposal routes), `0x01` (one-shot).** Each needs Rick to *land* an attack on a trap
+carrying that bit; blind scripted play does not manage it (run 1 ended `GAME OVER` in the
+opening room). Their semantics continue to rest on the transcription — which for several
+is independently corroborated by the PC binary under T8. Forcing them by poking
+bullet-active flags and coordinates would demonstrate reachability, which the census in
+`re/entities.md` already establishes, not semantics; it was deliberately not done.
 
-The pass also produced **one new difference nobody had noticed** — the ceiling-bonk
-velocity, PC zeroes it, ST sets `0x80` — **eight new three-way agreements** including the
-arbitrary super-pad constants `0xFE` and `-0x800`, and a full instruction-level
-confirmation of the tile-probe asymmetry: `u_envtest` is `FUN_0000_11bc`, and its masks
-`0x6D`/`0x6F`/`0x7D` with strides `0x1E`/`0x1F` agree with our reading in all 32
-reachability cells.
+**One honest gap:** run 2 showed the Missile Base intro but ended in level 1 after a
+`GAME OVER`, and the `level_index` dump covered the word's high byte only (`00`,
+uninformative). So `0x04` is confirmed to fire in shipped gameplay, but the room is not
+pinned down. Full detail in `re/hatari.md` -> *Probe 4 in detail*.
 
-**Remaining two** — the bomb blast box and the submap re-entry X. Unlike before, the
-searches behind them are now **validated**: the same instruction forms locate other
-constants elsewhere in the segment, so the port's values are genuinely not present as
-8-bit immediates. Rick's x (`0x7E80`) is only ever written *through AL*, so the re-entry
-value is computed, not literal. Closing these needs the two routines located by
-structure; the constants cannot be found by search alone. Low value — both are small
-behavioural details already documented on our side with certainty.
+### T7 — The `dbf D3w` name-entry loop ✅ **RESOLVED 2026-09-02 — statically, no live run needed**
 
-### T9 — Explain the `sni` → `sprbase` substitution
+**The loop is benign.** The concern was that the counter is the character just copied, so
+the iteration count depends on entry state and the copy "generally over-runs the 10-byte
+name field". It does over-run — by **exactly two bytes, onto their correct destinations**.
 
-When all four trigger flags are set *and* the slot is ≥ 9, `ent_actvis` replaces
-`sprbase` with `entdata.sni & 0xFF`. The port does the same and states plainly that it
-cannot explain why. **Neither side knows.** No obvious instrument; would likely fall out
-of watching a submap-3 trap under T1.
+`D3`'s high byte decides everything, and it is provably always `0x00`: `D3` reaches
+`COMMIT` holding the grid **row**, clamped to `0..4`; `move.b` never writes bits 8-15; and
+`dbf` on `0x00XX` with `XX > 0` yields `0x00(XX-1)`. So the loop reduces exactly to
+**"copy until the byte just copied is `0x00`"**, and terminates on a static sentinel:
+`0x48FCA` = `FF`, `0x48FCB` = `00`, neither of which has **any** absolute reference in the
+program (the buffer's three initialisers cover only the 10 bytes at `0x48FC0`).
 
-### T10 — Report the port's `map_connect` overrun upstream *(courtesy, optional)*
+Result: **always 12 bytes**, whatever is typed. Verified by modelling the loop
+instruction-for-instruction in Python across typed names and both extremes of `D3`. The
+destination absorbs them because the source mirrors the record tail — 10 name bytes to
+`+0x12`..`+0x1B`, `FF` to `+0x1C` (the terminator slot, **correct value**), `00` to
+`+0x1D` (pad). That is the last byte of the `0x1E`-byte record: **the next record is never
+touched.**
 
-The port's connector table holds 154 records in an array it declares as 153
-(`MAP_NBR_CONNECT = 0x99`), the surplus being a third connector in list 17 where we and
-the port's own constant have two. Worth reporting to the upstream repository. No effect
-on our work.
+Also noted: `move.w #0x0009,D2` at `0x491D0` is **dead** — `D2` is never read by the loop,
+almost certainly a leftover from an intended `dbf D2`.
 
-### T11 — The MFP TACR prescaler encoding is taken on trust
+**The live confirmation planned for this item is unnecessary** — the behaviour is fully
+determined by static data. Full write-up in `re/algo-system.md`.
 
-`algo-music.md` derives the timer rate from the 68901 TACR prescaler divisors, but those
-divisors are **standard hardware behaviour, not read out of this code**. The rate formula
-depends on them, so if the encoding is wrong every tempo figure in that document is wrong
-by a constant factor.
+### T8 — Adjudicate the port differences ✅ **RESOLVED 2026-09-02 — 17 of 17**
 
-**Method:** confirm against the MFP 68901 datasheet, then measure — breakpoint the Timer-A
-interrupt under Hatari, count interrupts per second, and check the observed rate against
-the formula. A measurement settles it without trusting any datasheet reading.
+**Every one of the 17 measured differences is a genuine PC-vs-ST divergence. Not one was
+an error by the port.**
+
+The last two fell once the **`0x17E` address delta** was noticed: the port's `ASM nnnn`
+comments are systematically `0x17E` low over the code region, so adding it lands on the
+function entry. That turns the comments from vague landmarks into a lookup table. (It is
+*not* global — `map_resetMarks` at `ASM 0025` sits at `0x0025` with no offset — so it is a
+hypothesis to test per routine. Recorded in `xrick/re/provenance.md`.)
+
+- **Bomb blast box** — `e_bomb_hit` at **`0x134B`** (`ASM 11CD` + `0x17E`):
+  `MOV AL,[0x7EE0]` / `MOV AH,AL` / `SUB AL,4` (clamp 0 on borrow) / `ADD AH,0x20` (clamp
+  `0xFF` on carry), then `MOV AX,[0x7EE2]` / `SUB AX,4` (clamp 0) / `ADD BX,0x1D`. So the
+  PC box is x `[-4, +0x20]` clamped at `0xFF`, y `[-4, +0x1D]` — **the port's values
+  exactly**. Ours is x `[-4, +0x1B]`, y `[-4, +0x18]`, unclamped.
+- **Submap re-entry X** — `MOV word[SI+2],0x00E2` @ `0x19B9` (prev submap) and
+  `MOV word[SI+2],0x0004` @ `0x19C9` (next submap): **`0xE2` / `0x04`, the port's values**.
+  Ours is `0x02` / `0xE6`.
+
+**Why the earlier searches missed it.** I had searched for `MOV AL,0xE2` (`b0 e2`) and for
+a byte store to the absolute address `0x7E80`. The real instruction is
+`C7 44 02 E2 00` — a **word** store through **`[SI+2]`**. The search was wrong in operand
+width *and* addressing mode at once, so the validated-looking negative meant nothing. This
+is the fourth instance of the same failure mode; see `MEMORY.md`.
+
+**Two corrections produced by this pass:**
+
+1. **A misattributed citation.** The `ADD AL,2` / `CMP AL,0xE8` at `0x1912`, previously
+   cited as evidence for the *enemy corpse drift* row, is nothing of the kind: it is
+   **Rick's own right-edge submap test**, inside `e_rick`'s movement code, which calls
+   `u_envtest` at `0x191E`. The corpse-drift row still stands on its other evidence
+   (`0x2563`/`0x2570`); the bad citation is removed.
+2. **The port omits a store the original makes.** At both exits the PC writes
+   `[0x7D77]` (`0x00` prev, `0x01` next) — precisely the `/*6dbd = 0x00;*/` and
+   `/*6dbd = 0x01;*/` lines the port has **commented out**. That variable *is* read, at
+   `0x0D99` (`MOV BL,[0x7D77]` / `CMP BL,[SI]`). The port substitutes `game_dir`, which
+   may well be equivalent, but the omission is real and is now recorded.
+
+### T9 — The `sni` → `sprbase` substitution ✅ **RESOLVED 2026-09-04 — explained**
+
+Both sides had recorded this as unexplained; the port's author wrote *"FIXME what is this?
+... Why? What is the point?"*. It is now understood, and it is **not a divergence**.
+
+**The condition selects exactly the type-1a/1b walking enemies**, and both halves are
+deterministic:
+
+- **`e >= 9` is not allocation luck** — `ent_actvis`'s allocator routes on the entity
+  number: `mark.ent >= 0x10` → `ent_creat1` → slots 4-8; `mark.ent < 0x10` →
+  `ent_creat2` → slots 9-C. So `e >= 9` **is** `mark.ent < 0x10`.
+- **All four trigger bits is the natural encoding for a live enemy** — killable by touch,
+  jab, bullet and explosion. Not an arbitrary sentinel.
+
+**Shipped ST data confirms it**: of the 78 `PlacementRecord`s with `bTriggerFlags & 0xF0
+== 0xF0`, **75** have type `< 0x10`, and their types are exactly `4,5,7,8,10,11,13,14` —
+the port's own `e_them` type 1a (`4,7,a,d`) and 1b (`5,8,b,e`). The other 3 are types
+40/43, which are `>= 0x10` and route to slots 4-8 where the substitution is correctly
+skipped. The port's FIXME guessed "type 1 and 2"; the data says **1a and 1b only**.
+
+**What `sni` really holds.** For the reachable indices it is not a movement index at all
+but a **second sprite number**: `spr` = `0x2F`/`0x37`/`0x41`/`0x4B` by enemy bank seeds
+`ent.sprite`, while `sni` = `0x8E`/`0x7E`/`0x86`/`0x86` becomes `sprbase`, the base of
+`sprite = sprbase + ent_sprseq[...]`. Type-1 enemies move under AI rather than along
+`ent_mvstep` paths, so the field is dead and gets reused. This also explains the artifact
+the port's author saw — a spawned-falling enemy changes sprite on landing, because
+`ent.sprite` keeps its `spr`-derived value until the handler recomputes it.
+
+**Why the ST has none of it — structural, not behavioural.** `init_entity_from_placement`
+(`0x49742`) has no all-four-bits test and no slot test; the only three `andi.b #0xF0`
+sites in the ST code region are the X-snap `(x & 0xF0) | 0x04`; and ST entity `+0x20` is
+`wScreen_offset_b`, not a sprite base. The ST `ObjectTypeDef` is **16 bytes of real
+pointers** (`anim_frame_table` `+6`, `movement_path_table` `+0xA`) against the PC's
+**8 packed bytes** of sprite numbers. No "base + offset" formula ⇒ no second base ⇒
+nothing to overload.
+
+**Latent difference, unreachable in shipped data:** the PC writes only the low byte
+(`MOV [SI+0x20],CL` @ `0x2198`), the port assigns the whole `U16`. They differ only if a
+`spr` exceeds `0xFF`; the maximum across all 74 `ent_entdata` entries is `0x0080`.
+
+Full write-up in `xrick/re/xref.md`.
+
+### T10 — ~~Report the port's `map_connect` overrun~~ ❌ **RETRACTED 2026-09-04 — the defect does not exist**
+
+**This was my error, and the report drafted on 2026-09-02 is void.** Nothing was sent
+upstream, so no correction is owed to anyone but this document.
+
+**What went wrong.** I counted the initialiser records in `dat_maps.c` with a
+`\{([^{}]*)\}` regex over the **raw** text. That matches brace pairs inside **comments**.
+One record in the table is commented out, and the author's note says exactly what it is:
+
+```c
+/* was {0000, 0x38, 0x13, 0x68} ?? - now OK */
+```
+
+That is the surplus list-17 connector — **already found and removed by the port's author**,
+with "now OK" recording the fix. My "154 records vs a declared 153" was that dead comment.
+
+**The truth, re-derived with comments stripped and brace depth tracked:**
+
+| | port | ours |
+|---|---|---|
+| records | **153** | 153 |
+| connectors + terminators | **106 + 47** | 106 + 47 |
+| lists | 47 | 47 |
+| `MAP_NBR_CONNECT` | `0x99` = 153 ✓ | — |
+| per-list lengths | **all 47 agree**, list 17 included (2 = 2) | |
+
+So `map_connect` is **correct**, its declared bound is **correct**, and it agrees with our
+ST transition tables in every list. The earlier "46 of 47 match" was the same artifact.
+
+**Consequences, all corrected:** `xrick/re/xref.md`'s *Settled* table listed this as the
+one "Port defect" — it is now an agreement, which means **not a single difference found
+against the port in this entire project turned out to be a port error.**
+`re/data-structures.md` and `re/byte-identity.md` are corrected too.
+
+**Method lesson (now in `MEMORY.md`):** I had *already* recorded this exact trap on
+2026-09-04 after it nearly produced a phantom `ent_entdata` bug — and had not gone back to
+recheck the earlier `map_connect` count made the same way. **When a parsing method is
+found to be unsound, re-run every earlier result that used it.**
+
+### T11 — The MFP TACR prescaler ✅ **RESOLVED 2026-09-04 — measured**
+
+**Measured, not argued from a datasheet.** The Timer-A ISR advances `0x457C8` by exactly
+one byte per interrupt, so that pointer *is* the interrupt counter. Holding the loop flag
+`0x45004` non-zero makes the sample rewind instead of stopping, giving an unlimited
+measuring window — and the whole thing needs no gameplay, since poking exactly what
+`play_music`'s type-2 branch writes starts a sample deterministically.
+
+**24 readings over 19.6 s fit a line at 4915.7 bytes/s. The documented table predicts
+4915.2 Hz. Ratio 1.0001.** The nearest alternative divisor (`/64` → 7680 Hz) is 56 % away,
+so `prescaler(6) = /100` and the 2457600 Hz clock are both confirmed.
+
+**The scope is narrower than feared, in two ways:**
+
+1. **Only entry [0] of `0x44FF0` is ever used.** All three type-2 tracks (8, 10, 19) carry
+   `nParam_index = 0`, so `TACR=6, TADR=5` is the only pair the shipped game programs —
+   and it is the pair measured. Entries [1]–[5] (7680 / 9600 / 14985 / 19819 / 30720 Hz)
+   are unused data, so the divisors for TACR 1, 2 and 5 are not depended on anywhere.
+2. **The old claim that "every tempo figure depends on it" was wrong** — a defect in the
+   T11 write-up itself, now corrected in `algo-music.md`. Tracked music runs off the
+   **50 Hz VBL** (`music_tick`), not Timer A. The prescaler governs the **digi-sample
+   rate alone**.
+
+A free cross-check fell out: unwrapping the looping pointer required the sample length,
+and the gunshot measures `0x4DF86`–`0x4FCF0` = **7530 bytes** to its `0x00` terminator,
+matching `assets-manifest.md`. A wrong length could not have yielded a 0.01 % linear fit.
+
+⚠️ **Measured under Hatari's MFP emulation, not real silicon.** If Hatari's own divisor
+table were wrong, the measurement would faithfully reproduce that error. Confirming on
+real hardware would need an actual ST; noted rather than claimed away.
 
 ### T12 — `palette_fade_in`'s precondition ✅ **RESOLVED 2026-08-31 — verified, not assumed**
 

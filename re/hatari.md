@@ -146,13 +146,56 @@ F4 turns out to patch code.
 | 1 | Tile-attribute bits; the `0x6F` mask | `0x6F` = `~(0x10\|0x80)`, a **row filter** so one-way/ladder-top register only at the feet. Bits `0x01`/`0x08` are two background classes that **no reader tests** (all three LUT readers enumerated via Ghidra xrefs). | ✅ **resolved** |
 | 2 | POOKY easter egg effect | Sets `menu_enabled` (`0x498C4`). With `max_level_reached` (`0x498C2`) non-zero it opens the game's own **SELECT LEVEL** screen — observed on screen, all four levels. | ✅ **resolved** |
 | 3 | Enemy-variant → creature mapping | Resolved statically: 476-record placement scan gives bank-per-level, and each bank rendered (`enemy_banks.png`). Tribesman / white-robed fez guard / two green soldiers; Castle and Missile Base share both soldier banks. | ✅ **resolved** |
-| 4 | Trigger-bit behaviour | Census: **all 8 bits exercised** across all 4 levels, so no transcribed path is unreachable. Semantics still from code; dynamic spot-check optional. | ⚪ largely closed |
+| 4 | Trigger-bit behaviour | Census: **all 8 bits exercised** across all 4 levels. **Spot-check done 2026-09-04** (`triggers`, `triggers2`): the `0x80` -> trigger -> `0x08` chain and the `0x04`/`0x08` idle-vs-triggered split were all watched firing. Five bits (`0x40`/`0x20`/`0x10`/`0x02`/`0x01`) need a landed attack and were not reached. | ✅ **resolved** |
 | 5 | Landing rebound `nVelY = 0xFE - nVelY` | **Not the normal landing path.** Gated on attribute `0x20`, carried by only 4 tiles game-wide (5 rooms). Ordinary ground is `0x40` and branches away at `4C1C0`. These are **bounce surfaces**; gravity `+0x80`/frame clamps at `0x800`, so the max rebound is `-0x702`. Breakpoint never fired across repeated falls at `nVelY` `0x08xx`–`0x0Cxx`. | ✅ **resolved** |
 | 6 | Four name-entry glyphs | `0x36` = ◄ RUBOUT; `0x37`/`0x3A`/`0x3B` = `E`,`N`,`D` spelling "END". Only `0x36`/`0x37` are selectable codes; the other two are display-row continuation glyphs. | ✅ **resolved** |
 | 7 | `player_touched_hazard` consumer | Exactly **one reader**: `player_controller` at `0x4C06A` (Ghidra xrefs; 6 writers). Was already correct in `algo-player.md` — the plan entry was stale. | ✅ **resolved** |
 | 8 | Song-0 transpose | Transpose `0x1C` targets **pattern 8** = `80 06 10 FF`, a single note `b=6` → index 46, period `0x010C` ≈ 466 Hz. In range, deliberate: one high closing accent. No overflow. | ✅ **resolved** |
 
 Items 2 and 6 end in screenshots — **visual verification is the user's call**.
+
+### Probe 4 in detail — the trigger bits, watched firing (2026-09-04)
+
+The `btst` site for each bit executes for **every** trap entity **every** frame no matter
+what the bit holds, so breakpointing it proves nothing. `probe_triggers` therefore sits on
+each bit's **taken branch**, and on the `*_fired` sites where the associated hit test also
+succeeded — 14 detectors, all `:trace :once`, so whatever `b` still lists at the end never
+fired.
+
+**Run 1 — level 1, walking right.** Four fired, and the log shows them in causal order:
+
+```
+pc = $4b146   (0x4D19A)  0x80 set        -- armed for player-touch, every frame
+  ... memwrite joystick = $08 (RIGHT) ...
+pc = $4b160   (0x4D1B4)  0x80 FIRED      -- player inside the trigger box
+pc = $4b204   (0x4D258)  TRAP TRIGGERED  -- move.b #-1,(0x47,A0)
+pc = $4b230   (0x4D284)  0x08 armed      -- lethal while TRIGGERED
+```
+
+That is the documented chain end to end: walk right -> player enters the box -> bit `0x80`
+succeeds -> `bAnimActive = 0xFF` -> the entity now takes the *animating* branch at
+`0x4D278` -> bit `0x08` arms `wHazardActive`. **`0x04` never fired in that room** — the
+boulder is not lethal while idle, only once rolling.
+
+**Run 2 — via the game's own level select.** `0x04` (lethal while **IDLE**) fired, together
+with `trig_fired` and `0x08` again.
+
+**Together these confirm the `0x04`/`0x08` split in both directions.** That split is
+exactly what *Correction #1* in `algo-entities.md` established after the docs had
+conflated the two as "always-lethal" — a wrong reading that, by its own note, "survived
+nine byte-identity audits". It is now observed, not merely re-read.
+
+**Not reached: `0x40` (stick jab), `0x20` (bullet), `0x10` (explosion), `0x02` (both
+disposal routes), `0x01` (one-shot).** Each needs Rick to *land* an attack on a trap
+carrying that bit. Blind scripted play does not manage it — run 1 ended `GAME OVER` in the
+opening room. Forcing them by poking bullet-active flags and coordinates would prove
+reachability, which the census already establishes, not semantics; it was not done.
+
+**Caveat on run 2's location.** The intro screen shown was the Missile Base, but the final
+gameplay screenshot is level 1's opening room, so the run spanned a level-4 start and a
+post-`GAME OVER` return to level 1. The `level_index` dump was taken over the word's
+**high** byte only and read `00`, which is uninformative either way. So `0x04` is
+confirmed to fire in shipped gameplay, but **which room it fired in is not pinned down**.
 
 ### Beyond the probes
 
@@ -162,6 +205,18 @@ turns the ~98% estimate from a judgement into a measurement — which is exactly
 `analyze_function_completeness` could not do.
 
 ## 7. Findings log
+
+**2026-09-04 — T11, the Timer-A sample rate, measured.** `probe_timera`. No gameplay
+needed: poking what `play_music`'s type-2 branch writes (`0x45000`/`0x45001` TACR/TADR,
+`0x44FFC` sample start, `0x45002 = 2`) starts a digi sample deterministically, and holding
+`0x45004` non-zero loops it indefinitely. The ISR advances `0x457C8` one byte per
+interrupt, so the pointer is the counter. 24 readings / 19.6 s → **4915.7 bytes/s** vs the
+**4915.2 Hz** predicted for `TACR=6, TADR=5`; ratio **1.0001**. Confirms
+`prescaler(6) = /100` and the 2457600 Hz clock. Note `memdump $a-$b` returns **b−a bytes**,
+not b−a+1, so a 4-byte request yields 3 — the low byte of the pointer was never read, and
+the 256-byte resolution is why the fit is over many samples rather than one pair.
+
+**2026-09-04 — T6, trigger bits watched firing.** See §6 probe 4 for detail.
 
 **2026-08-28 — harness commissioned (against the wrong disk).** Environment verified;
 nothing needed installing. Automated a boot chain for `rd.st` and measured its

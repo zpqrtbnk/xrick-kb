@@ -351,6 +351,15 @@ else {
   rare bounce surface (4 tiles game-wide), `0x40` solid, `0x10` one-way. See
   `data-structures.md` → *Tile attribute bits*.
 
+  ✅ **Re-confirmed 2026-09-04 from the consumer side**, which is stronger than the
+  original LUT-reader xref: `probe_player_tile_collision` stores the whole accumulated
+  byte to `player_collision_flags` (`0x4D00A`), so `0x01`/`0x08` *do* reach it — but every
+  one of the seven consumers is a `btst.b #n` on bits **7, 6, 5, 2, 1** (`0x4C1BA`,
+  `0x4C24C`, `0x4C300`, `0x4C71A`, `0x4C752`, `0x4C7A4`, `0x4C8B4`), and the blocked test
+  is `andi.b #0xD0` (bits 7, 6, 4). Union of bits with any effect = **`0xF6`**; `0x01` and
+  `0x08` are read by nothing. *(The xrick port, by contrast, uses `0x08` as FGND for
+  foreground masking — a PC-only feature. See `../review-log.md` D6c.)*
+
 ## `enemy_update_4`…`15` — `0x4D39C`–`0x4D4E2` (12 wrappers)
 
 Each is: set `D0.b` = aiMode, set `gfx_data` = bank base, optionally swap to the

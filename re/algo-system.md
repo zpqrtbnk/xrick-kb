@@ -145,13 +145,56 @@ do {
   copied*, not the counter `D2` that was set to 9 immediately before. Reproduce
   `dbf D3w` literally; the object code is the specification.
 
-  Note the loop control is subtler than "counts down from the character": `move.b
-  (A2)+,D3` writes only the **low byte**, while `dbf` tests the **full word**, whose
-  high byte is inherited from whatever `D3` held and then mutates on borrow. So the
-  iteration count depends on the entry state as well as the characters typed, and the
-  copy generally over-runs the 10-byte name field. The observable result is **not yet
-  characterised** (`../PLAN.md` T7); the plan is to model the loop exactly in Python and
-  confirm one case live. A reimplementation is correct without that: emit `dbf D3w`.
+  ✅ **Fully characterised 2026-09-02 (T7) — the loop is benign, and the "over-run" is
+  exactly two bytes that land on their correct destinations.**
+
+  `move.b (A2)+,D3` writes only the **low byte**, while `dbf` tests the **full word**.
+  The high byte is therefore the whole question — and it is provably **always zero**:
+
+  - `D3` reaches `COMMIT` holding the **grid row**, which the menu clamps to `0..4`
+    (`D3 = 4` initially; UP/DOWN keep it in range). So `D3.w = 0x000r` on entry.
+  - `move.b` never touches bits 8-15, so the high byte stays `0x00`.
+  - `dbf` decrements `0x00XX`; for `XX > 0` the result is `0x00(XX-1)`, high byte still
+    `0x00`. It can only reach `0xFFFF` from `0x0000`.
+
+  So the high byte never becomes non-zero, and the loop is exactly equivalent to
+  **"copy bytes until the byte just copied is `0x00`"**. The typed characters can never
+  be `0x00` (letters, or `0x39` placeholders rewritten to `0x5E`), so termination comes
+  from the source data:
+
+  ```
+  0x48FC0  10 bytes  name buffer
+  0x48FCA  FF        static sentinel  <- copied, terminates nothing (non-zero)
+  0x48FCB  00        static sentinel  <- copied, terminates the loop
+  ```
+
+  `0x48FCA`/`0x48FCB` are **static** — a program-wide search for absolute references to
+  either returns **zero** writers, while the buffer's three initialisers (`0x48FC0`,
+  `0x48FC4`, `0x48FC8`) account for exactly the 10 buffer bytes.
+
+  The loop therefore always copies **exactly 12 bytes**, whatever is typed and whatever
+  row `D3` held. Modelled in Python over the plausible inputs, all give 12 bytes — e.g.
+  typing `POOKY` yields `50 4F 4F 4B 59 5E 5E 5E 5E 5E FF 00`.
+
+  And the destination absorbs all 12 correctly, because the source layout mirrors the
+  record tail:
+
+  | Source | Bytes | Destination | Record field |
+  |---|---|---|---|
+  | `0x48FC0`+0..9 | name | `A1+0x12`..`+0x1B` | name (10 bytes) |
+  | `0x48FCA` | `FF` | `A1+0x1C` | string terminator — **correct value** |
+  | `0x48FCB` | `00` | `A1+0x1D` | pad |
+
+  12 bytes span `+0x12`..`+0x1D`, which is the last byte of the `0x1E`-byte record — it
+  **does not touch the next record**. Nothing is corrupted and the player sees nothing
+  wrong.
+
+  **`move.w #0x0009,D2` at `0x491D0` is dead** — `D2` is never read by the loop, almost
+  certainly a leftover from an intended `dbf D2`.
+
+  **For a reimplementation:** emitting `dbf D3w` literally is correct, but so is "copy 12
+  bytes" or "copy until a copied byte is zero" — they are equivalent given this source
+  layout. What must be preserved is that the `FF` and `00` reach `+0x1C`/`+0x1D`.
 - Character grid `0x48FA1`, 6 cols × 5 rows: `ABCDEF` / `GHIJKL` / `MNOPQR` / `STUVWX`
   / `Y Z \ (blank) DEL END`, where `0x36`=DEL and `0x37`=END.
 - The easter egg requires the buffer to read `POOKY` followed by five untouched `9`

@@ -366,6 +366,51 @@ row iteration; only `A2` is advanced (3 × `(A2)+` = +6, then `lea 0x9A` = +154,
 total **160**). The row counter lives in `A5` across the body because `D7` is used
 as scratch (`move.w A5w,D7w` then `dbf D7w` then `movea.w D7w,A5` on re-entry).
 
+### ✅ Instruction-level audit — 2026-09-04 (T4)
+
+The whole function (**290 instructions**, of which **122** are the shifted blit and **48**
+the aligned blit) was read against this transcription line by line, from Ghidra's
+disassembly of `atari_ram.bin`. **No defects.** Every constant, every branch sense and
+every register role above is as the object code has it. Spot-checks that could most
+easily have been wrong, and were not:
+
+- `bchg.l #0xF,D0` at `0x4B0DC` both computes `target = d ^ 0x8000` *and* sets `Z` from
+  the **original** bit, so `beq -> 0x4B0E8` picks `block_b` (`+0x1C`) when bit 15 was
+  clear and `block_a` (`+0x16`) when set — the ternary above has the sense right.
+- All four despawn bounds (`-8`, `0xF0`, `0`, `0x142`) and both visibility bounds
+  (`0`, `0xE8`) match, including the strictness of each comparison (`bge`/`ble`).
+- Top clip `if (nPosY <= 0x40 - rows)` is `cmp.w D6w,D2w / bgt` — `<=` not `<`.
+- Bottom clip `if (nPosY >= 0xFF)` is `cmp.w #0xff,D2w / blt` — `>=` not `>`.
+- The mask pair really is built as documented:
+  `moveq -1,D5 / move.w D4w,D5w` gives `B = 0xFFFF0000 | m_lo`, then
+  `move.w #-1,D4w / swap D4` gives `A = 0xFFFF0000 | m_hi`.
+- `ya * 160` as `(ya<<5) + ((ya<<5)<<2)` uses `.w` shifts on a longword, so a carry out
+  of bit 15 would be lost — but `ya` is bounded to `8..0xC7`, making the maximum `0x7C60`.
+  No overflow is possible.
+- Both row advances total exactly 160: shifted `3 x (A2)+ = +6` then `lea 0x9A`; aligned
+  one `(A2)+ = +4` then `lea 0x9C`.
+
+**Fidelity notes** — true of the object code, not captured by the C above, and harmless
+to a reimplementation that follows the C:
+
+1. **`A1` is destroyed in the shifted path.** `movea.w D6w,A1` at `0x4B1B8` overwrites the
+   `RenderBlock` pointer with the shift count immediately after `bset #1,(A1)`. The block
+   pointer is never needed again, but do not assume it survives.
+2. **The shift count lives in two different registers.** `D6` carries it for the mask and
+   plane 0; `D0` is reloaded from `A1` at `0x4B218` and carries it for planes 1-3, because
+   `D6` becomes the read-modify-write scratch. Only the low word is set
+   (`move.w A1w,D0w`), which is safe because `ror.l Dn,Dm` takes the count **mod 64** and
+   the shift is `0..15`.
+3. **The shifted path is fully unrolled per plane**, not a loop; plane 3's three stores use
+   `(A2)`/`(A3)`/`(A4)` with **no** post-increment, which is what makes the `lea 0x9A`
+   arithmetic come out at 160.
+4. **The two paths count rows differently.** The aligned path uses `D7` directly for its
+   `dbf`; the shifted path must shuttle through `A5` (`movea.w D7w,A5` at the loop top,
+   `move.w A5w,D7w` before the `dbf`) because `D7` is scratch in the body. `movea.w`
+   sign-extends, which is harmless as `rows-1 >= -1`.
+5. **`A3`/`A4` are recomputed from `A2` every row** in the shifted path, so only `A2` is
+   advanced.
+
 ### The transparency rule — confirmed
 
 There is **no stored mask**. For every row the blitter derives

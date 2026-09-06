@@ -314,6 +314,35 @@ Tone and noise are fully disabled first, so only the DC volume levels are heard.
 MFP prescaler (1→/4, 2→/10, 3→/16, 4→/50, 5→/64, 6→/100, 7→/200). Both values come
 from `0x44FF0[nParam_index*2]`, so rate is per-sample data, not code.
 
+✅ **Measured 2026-09-04 (T11), not assumed.** The ISR advances `0x457C8` by exactly one
+byte per interrupt, so that pointer *is* the interrupt counter. Holding `smp_loop`
+(`0x45004`) non-zero makes the sample rewind instead of stopping, giving an unlimited
+window; 24 readings over **19.6 s** fit a straight line at **4915.7 bytes/s** against the
+**4915.2 Hz** the table predicts for entry [0] (`TACR=6`, `TADR=5`) — a ratio of
+**1.0001**. The nearest alternative divisor (`/64` → 7680 Hz) is 56 % away, so the
+identification is unambiguous.
+
+| `0x44FF0` entry | TACR | TADR | predicted rate | used by |
+|---|---|---|---|---|
+| **[0]** | 6 (`/100`) | 5 | **4915.2 Hz** | **all three digi samples** |
+| [1] | 5 (`/64`) | 5 | 7680.0 Hz | — |
+| [2] | 5 (`/64`) | 4 | 9600.0 Hz | — |
+| [3] | 1 (`/4`) | 41 | 14985.4 Hz | — |
+| [4] | 1 (`/4`) | 31 | 19819.4 Hz | — |
+| [5] | 2 (`/10`) | 8 | 30720.0 Hz | — |
+
+All three type-2 tracks (8, 10, 19) carry `nParam_index = 0`, so **entry [0] is the only
+one the shipped game ever programs** — and it is the one measured. Entries [1]–[5] are
+unused data, so nothing in this project depends on the divisors for TACR 1, 2 or 5.
+
+The unwrapping needed the sample length, which came out independently: the gunshot runs
+`0x4DF86`–`0x4FCF0` to its `0x00` terminator = **7530 bytes**, matching
+`assets-manifest.md`. A wrong length would not have produced a 0.01 % linear fit.
+
+⚠️ **Measured under Hatari's MFP emulation, not on real hardware.** If Hatari's divisor
+table were itself wrong the measurement would reproduce its error. Real-silicon
+confirmation would need an actual ST.
+
 Samples are **0-terminated**, not length-counted.
 
 ---
@@ -795,9 +824,14 @@ the table stride exactly, confirming the format.
   A MOVE *destination* EA is encoded in different bits and so is not covered, but that is
   a write, not a read. **Conclusion: the field is write-only within the music engine.**
   A port must still allocate it (the write happens), but nothing depends on the value.
-- The exact MFP prescaler encoding for TACR is standard 68901 behaviour, not read out
-  of this code; the rate formula given assumes it. ⚠️ **Assumption — tracked as
-  `../PLAN.md` T11.** Every tempo figure in this document depends on it.
+- The exact MFP prescaler encoding for TACR is standard 68901 behaviour, not read out of
+  this code. ✅ **No longer an assumption — measured 2026-09-04 (T11)**: the Timer-A
+  interrupt rate was clocked at **4915.7 Hz** against the **4915.2 Hz** predicted for the
+  entry the game actually uses, confirming `prescaler(6) = /100` and the 2457600 Hz clock.
+  See §6. **Correction while resolving it:** this bullet used to claim "every tempo figure
+  in this document depends on it". It does not — **tracked music runs off the 50 Hz VBL**
+  (`music_tick`), not Timer A. The prescaler governs the **digi-sample playback rate
+  alone**.
 - `music_tick` tests `0x45096` as a **word** while every writer touches only the byte
   at `0x45096`. The adjacent byte `0x45097` is therefore read as part of the test.
   ✅ **Measured 2026-08-31**, replacing the earlier "appears to be always zero":

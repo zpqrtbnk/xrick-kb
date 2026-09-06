@@ -85,6 +85,38 @@ REF = {
     "player_collision_flags":  0x4D00A,   # byte: 02 ladder 04 lethal 10 one-way
                                           #       20 floor 40 solid 80 ladder-top
     "scripted_trap_update":    0x4D15C,
+
+    # --- T11: MFP Timer-A digi-sample rate -----------------------------------------
+    "smp_rate_table":   0x44FF0,   # 2 bytes/entry: [0]=TACR prescaler sel, [1]=TADR count
+    "smp_tacr":         0x45000,   # pending sample's TACR
+    "smp_tadr":         0x45001,   # pending sample's TADR
+    "snd_state":        0x45002,   # 0 idle / 1 tracked music / 2 start sample / 0xFF playing
+    "smp_loop":         0x45004,   # ISR: 0 = stop at terminator, non-0 = rewind
+    "smp_track":        0x45005,
+    "smp_start_ptr":    0x44FFC,   # long: sample start
+    "smp_cur_ptr":      0x457C8,   # long: ISR advances this by 1 byte per interrupt
+    "timer_a_isr":      0x45022,
+    "song_active":      0x45096,
+
+    # --- T6: the eight bTriggerFlags bits, addressed by their TAKEN branch ---------
+    # The btst site itself executes for every trap entity every frame regardless of the
+    # bit's value, so breakpointing it proves nothing. These are the addresses control
+    # only reaches when the bit is actually SET (and, for the *_fired ones, when the
+    # associated hit test also succeeded).
+    "trig_fired":       0x4D258,   # a trap actually triggered: move.b #-1,(0x47,A0)
+    "b80_set":          0x4D19A,   # 0x80 player-touch: bit set, probing player+(0x0B,0x0A)
+    "b80_fired":        0x4D1B4,   #   ... and the player was inside the trigger box
+    "b40_set":          0x4D1C0,   # 0x40 stick jab: bit set
+    "b40_fired":        0x4D1DA,   #   ... and the jab point hit
+    "b20_set":          0x4D1E4,   # 0x20 bullet: bit set
+    "b20_hit":          0x4D1FE,   #   ... and the bullet hit (clr.w bullet_active)
+    "b02_despawn":      0x4D20C,   # 0x02 SET   -> despawn_offscreen_entity route
+    "b02_erase":        0x4D21C,   # 0x02 CLEAR -> bset erase-pending render bits
+    "b10_set":          0x4D236,   # 0x10 explosion: bit set
+    "b10_fired":        0x4D250,   #   ... and the blast overlapped
+    "b04_lethal_idle":  0x4D170,   # 0x04 lethal while IDLE     -> wHazardActive = 0xFF
+    "b08_lethal_trig":  0x4D284,   # 0x08 lethal while TRIGGERED-> wHazardActive = 0xFF
+    "b01_oneshot":      0x4D368,   # 0x01 one-shot: despawn at path end
     "landing_rebound_pc":      0x4C1DE,   # move.w #0xfe,D4 ; sub.w nVelY,D4
     "nVelY":                   0x4A756,   # word
     "resolve_channel_note_period": 0x4538C,
@@ -324,7 +356,140 @@ def probe_rebound(s):
         s.shot("(step %d)" % i)
 
 
+TRIG_SITES = [
+    ("trig_fired",      "A TRAP TRIGGERED (any cause)"),
+    ("b80_set",         "0x80 player-touch   bit set"),
+    ("b80_fired",       "0x80 player-touch   TRIGGERED"),
+    ("b40_set",         "0x40 stick jab      bit set"),
+    ("b40_fired",       "0x40 stick jab      TRIGGERED"),
+    ("b20_set",         "0x20 bullet         bit set"),
+    ("b20_hit",         "0x20 bullet         HIT (bullet consumed)"),
+    ("b02_despawn",     "0x02 SET   -> despawn route"),
+    ("b02_erase",       "0x02 CLEAR -> erase-pending route"),
+    ("b10_set",         "0x10 explosion      bit set"),
+    ("b10_fired",       "0x10 explosion      TRIGGERED"),
+    ("b04_lethal_idle", "0x04 lethal while IDLE      armed"),
+    ("b08_lethal_trig", "0x08 lethal while TRIGGERED armed"),
+    ("b01_oneshot",     "0x01 one-shot       despawn at path end"),
+]
+
+
+def probe_triggers(s):
+    """T6: watch the bTriggerFlags bits actually fire in a running game.
+
+    The census in re/entities.md already proves all eight bits appear in shipped data;
+    what has never been done is watching one FIRE. Each detector sits on the taken
+    branch, so a hit means the bit was set and (for *_fired / *_hit) the associated
+    test succeeded. Anything still listed by the final `b` never fired.
+    """
+    print("[trig] delta %+#x" % s.delta)
+    for name, what in TRIG_SITES:
+        print("[trig] arm %-16s %#08x  %s" % (name, s.addr(name), what))
+        s.watch(name, once=True)
+
+    # Level 1 opens with a boulder trap armed for player-touch, then spikes and darts.
+    # Walk right in bursts; jab, shoot and drop dynamite along the way so the 0x40,
+    # 0x20 and 0x10 paths get a chance too.
+    for i in range(10):
+        print("[trig] --- leg %d: walk right ---" % i)
+        s.hold(J_RIGHT, rounds=14)
+        s.joy(0); time.sleep(1.0)
+
+        s.tap(J_FIRE)                       # stick jab  -> 0x40
+        time.sleep(0.6)
+        s.tap(J_FIRE | J_UP)                # shoot      -> 0x20
+        time.sleep(0.8)
+        if i % 3 == 2:
+            s.tap(J_FIRE | J_DOWN)          # dynamite   -> 0x10 (after its fuse)
+            time.sleep(2.5)
+        s.shot("leg %d" % i)
+
+
+def probe_triggers2(s):
+    """T6 second pass: the six bits the first run never reached.
+
+    Run 1 confirmed the 0x80 -> trigger -> 0x08 chain but Rick never left the opening
+    room (GAME OVER by leg 9 -- he died to the boulder), so 0x40/0x20/0x10/0x04/0x02/0x01
+    were never given a trap that carries them. Use the game's OWN level select (POOKY +
+    max_level_reached, no code patching) to reach Egypt, then stand still first: 0x04
+    (lethal while IDLE) arms every frame for any idle entity carrying it and needs no
+    player action at all.
+    """
+    for nm, val in [("pooky_flag", "00ff"), ("max_level_reached", "0003")]:
+        s.cmd("memwrite w $%x $%s" % (s.addr(nm), val)); time.sleep(0.4)
+    print("[trig2] entering the game's level-select menu")
+    s.tap(J_FIRE); time.sleep(3)
+    s.tap(J_DOWN); time.sleep(0.6)          # level 1 -> level 2 (Egypt)
+    s.tap(J_FIRE); time.sleep(6)
+    s.shot("(expect: Egypt)")
+    s.cmd("memdump $%x-$%x" % (s.addr("level_index"), s.addr("level_index") + 1))
+    time.sleep(0.6)
+
+    remaining = ["b40_set", "b40_fired", "b20_set", "b20_hit", "b02_despawn",
+                 "b02_erase", "b10_set", "b10_fired", "b04_lethal_idle",
+                 "b01_oneshot", "trig_fired", "b08_lethal_trig"]
+    for name in remaining:
+        print("[trig2] arm %-16s %#08x" % (name, s.addr(name)))
+        s.watch(name, once=True)
+
+    print("[trig2] standing still (0x04 needs no input at all)")
+    time.sleep(6)
+    s.shot("idle")
+
+    for i in range(8):
+        print("[trig2] --- leg %d ---" % i)
+        s.tap(J_FIRE | J_UP);   time.sleep(1.2)     # shoot   -> 0x20 / 0x02
+        s.tap(J_FIRE);          time.sleep(0.8)     # jab     -> 0x40
+        if i % 2 == 1:
+            s.tap(J_FIRE | J_DOWN); time.sleep(3.0) # dynamite-> 0x10
+        s.hold(J_RIGHT, rounds=22, gap=0.07)        # keep moving, do not pause
+        s.joy(0); time.sleep(0.5)
+        s.shot("leg %d" % i)
+
+
+def probe_timera(s):
+    """T11: measure the MFP Timer-A interrupt rate and check the prescaler table.
+
+    algo-music.md states rate = 2457600 / (prescaler(TACR) * TADR) with TACR selecting
+    1->/4 2->/10 3->/16 4->/50 5->/64 6->/100 7->/200. Those divisors are hardware
+    convention, never read out of the game -- the one assumption left in re/.
+
+    No gameplay needed: poke exactly what play_music's type-2 branch writes, then let
+    the VBL music_tick start Timer A. The ISR advances smp_cur_ptr by one byte per
+    interrupt, so the pointer IS the interrupt counter. smp_loop is held non-zero so the
+    sample rewinds instead of stopping, giving an arbitrarily long measuring window.
+
+    All three type-2 tracks carry nParam_index 0 -> table entry [0] = TACR 6, TADR 5,
+    which the documented table predicts as 2457600/(100*5) = 4915.2 Hz.
+    """
+    tacr, tadr = 6, 5
+    print("[timera] arming sample: TACR=%d TADR=%d (table entry 0)" % (tacr, tadr))
+    for nm, val in [("song_active", 0x00), ("smp_loop", 0xFF), ("smp_track", 0x08),
+                    ("smp_tacr", tacr), ("smp_tadr", tadr)]:
+        s.cmd("memwrite $%x $%02x" % (s.addr(nm), val)); time.sleep(0.25)
+    # sample start = track 8's data pointer, rebased
+    s.cmd("memwrite l $%x $%08x" % (s.addr("smp_start_ptr"), 0x0004DF86 + s.delta))
+    time.sleep(0.3)
+    s.cmd("memwrite $%x $02" % s.addr("snd_state"))       # 2 = "start sample"
+    time.sleep(1.0)
+    s.cmd("memdump $%x-$%x" % (s.addr("snd_state"), s.addr("snd_state")))
+    time.sleep(0.5)
+
+    print("[timera] sampling the ISR pointer; each MARK is followed by its memdump")
+    for i in range(24):
+        s.cmd("memwrite $%x $ff" % s.addr("smp_loop"))     # keep it looping
+        t = time.time()
+        print("[timera] MARK %02d t=%.4f" % (i, t))
+        sys.stdout.flush()
+        s.cmd("memdump $%x-$%x" % (s.addr("smp_cur_ptr"), s.addr("smp_cur_ptr") + 3))
+        time.sleep(0.45)
+    print("[timera] done; sample pointer base = $%x" % (0x0004DF86 + s.delta))
+
+
 PROBES = {
+    "timera": probe_timera,
+    "triggers2": probe_triggers2,
+    "triggers": probe_triggers,
     "rebound":  probe_rebound,
     "levelsel": probe_levelsel,
     "boot":  probe_boot,
@@ -336,7 +501,7 @@ if __name__ == "__main__":
     name = sys.argv[1] if len(sys.argv) > 1 else "boot"
     if name not in PROBES:
         sys.exit("unknown probe %r; known: %s" % (name, ", ".join(sorted(PROBES))))
-    TITLE_ONLY = {"pooky", "levelsel"}
+    TITLE_ONLY = {"pooky", "levelsel", "triggers2"}
     sess = Session(auto=(name not in TITLE_ONLY))
     if name in TITLE_ONLY:
         sess.to_title()

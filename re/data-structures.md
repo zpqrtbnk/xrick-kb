@@ -64,7 +64,7 @@ Confirmed via `render_sprites`, `blit_backgrounds`, `clear_sprite_flags`,
 | 0x40 | `nTrigBoxXMax` | short | confirmed | |
 | 0x42 | `nTrigBoxYMax` | short | confirmed | |
 | 0x44 | `wTriggerSound` | ushort | confirmed | *(was `wTypeFlags`)* Sound/music track played when a scripted trap triggers, **with bit 7 stripped**; bit 7 set = also replay at end of animation; 0 = silent. Copied from `ObjectTypeDef.wTriggerSound`. Confirmed from the two call sites' disassembly (`move.w (0x44,A0),D0; bclr #7,D0; jsr play_music` at `0x4D25E` and `0x4D2BC`) |
-| 0x46 | `bTriggerFlags` | byte | confirmed | Per-instance bitmask, copied verbatim from `PlacementRecord+3` (`move.b (0x3,A0),(0x46,A1)` at `0x49824`). **0x80** player-touch, probe point = player + (0x0B, 0x0A) (`0x4D192`) · **0x40** stick jab (`0x4D1B8`) · **0x20** bullet (`0x4D1DC`) · **0x10** explosion (`0x4D22E`) · **0x08** lethal while **triggered** (`0x4D27C`) · **0x04** lethal while **idle** (`0x4D168`) · **0x02** dual-purpose, see below · **0x01** one-shot: despawn at path end instead of resetting to the spawn position (`0x4D360`). See "The two readers of bit 0x02" |
+| 0x46 | `bTriggerFlags` | byte | confirmed | **All four trigger bits together (`0xF0`) is the shipped encoding for a live enemy** — 78 of 523 placements carry it, 75 of them enemy types `4,5,7,8,10,11,13,14`. The PC build keys a sprite-base overload off exactly that pattern; **our build does not** (`../PLAN.md` T9, `xrick/re/xref.md`). Per-instance bitmask, copied verbatim from `PlacementRecord+3` (`move.b (0x3,A0),(0x46,A1)` at `0x49824`). **0x80** player-touch, probe point = player + (0x0B, 0x0A) (`0x4D192`) · **0x40** stick jab (`0x4D1B8`) · **0x20** bullet (`0x4D1DC`) · **0x10** explosion (`0x4D22E`) · **0x08** lethal while **triggered** (`0x4D27C`) · **0x04** lethal while **idle** (`0x4D168`) · **0x02** dual-purpose, see below · **0x01** one-shot: despawn at path end instead of resetting to the spawn position (`0x4D360`). See "The two readers of bit 0x02" |
 | 0x47 | `bAnimActive` | byte | confirmed | `0xFF` once the triggered/hit animation sequence is running |
 | 0x48 | `bChasing` | byte | confirmed | Enemy AI: homing-at-player mode (flying enemies) |
 | 0x49 | `bDying` | byte | confirmed | Enemy AI: death-tumble mode (set by `kill_enemy`) |
@@ -493,12 +493,19 @@ that way — and there is no room for an unaccounted waypoint. Per-room counts a
 39 rooms, 3 for 4, and 4 for 4.
 
 **Independently corroborated twice by the xrick port.** Its `map_connect` decomposes
-into 47 lists whose per-list counts match ours in **46 of 47 positions, in the same
+into 47 lists whose per-list counts match ours in **all 47 positions, in the same
 order** — which also confirms the two projects' room orderings agree. And its own
-`MAP_NBR_CONNECT` is `0x99` = **153** = our 106 + 47. The port's *initialiser*,
-however, contains 107 connectors + 47 terminators = **154 records — one too many for the
-array it declares**, the surplus being a third connector in list 17 where we (and the
-port's own constant) have two. See `xrick/re/xref.md` -> *Settled*.
+`MAP_NBR_CONNECT` is `0x99` = **153** = our 106 + 47, with exactly 153 initialiser
+records: **106 connectors + 47 terminators**, the same decomposition as ours.
+
+> ❌ **Correction 2026-09-04.** From 2026-08-30 this section claimed the port's
+> initialiser held "107 connectors + 47 terminators = 154 records — one too many for the
+> array it declares", with the surplus a third connector in list 17. **That was our
+> error, not the port's.** The count came from a regex that matched brace pairs inside
+> **comments**, and the table contains one commented-out record —
+> `/* was {0000, 0x38, 0x13, 0x68} ?? - now OK */` — which is the author having *already*
+> removed that very connector. Recounted with comments stripped: 153 records, list 17 has
+> two connectors, and **all 47 lists agree with ours**. See `../PLAN.md` T10.
 
 ### LevelStartInfo (20 bytes × 5 at **0x4B522**)
 

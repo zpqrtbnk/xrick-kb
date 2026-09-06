@@ -386,13 +386,15 @@ waypoint.
 **476 records + 47 terminators = 523**, walked room by room from
 `RoomHeader.pPlacements` rather than taken on trust from the earlier note.
 
-**A defect in the port, not in us** (`xref.md` -> *Settled*, connector count). The port's `map_connect` holds 107
-connectors + 47 terminators = **154 records in an array it declares as
-`MAP_NBR_CONNECT = 0x99` = 153**. Per-list counts match ours in **46 of 47 positions in
-the same order** — which incidentally confirms the two projects' room orderings agree —
-with the sole difference at list 17 (port 3, ours 2). Two independent arguments put us
-right: our region arithmetic closes exactly, and **the port's own constant equals our
-106 + 47**. So the surplus record overruns the port's own declaration.
+❌ **Retracted 2026-09-04 — this "port defect" was ours.** The claim was that the port's
+`map_connect` holds 107 connectors + 47 terminators = 154 records in an array declared
+`MAP_NBR_CONNECT = 0x99` = 153, with per-list counts matching ours in 46 of 47 positions.
+Every part of that is an artifact of counting initialiser records with a regex that also
+matched brace pairs inside **comments**. The table has one commented-out record —
+`/* was {0000, 0x38, 0x13, 0x68} ?? - now OK */`, the author's own note that he had
+already removed it. Recounted properly: **153 records, 106 + 47, and all 47 lists agree
+with ours.** The port's table and its declared bound are both correct. See `../PLAN.md`
+T10.
 
 **Method note.** This is what a converging audit looks like: 10 defects, then 1, then 0.
 The value of this pass was not defect-finding but *quantification* — three numbers that
@@ -778,6 +780,7 @@ problems in an afternoon, at zero emulator cost.
 | 10l | T2 (bullet probe points) and T3 (the third `0x19`) | ✅ **done — 0 defects; both closed** |
 | 10m | T5 — entity-dispatch reconciliation | ✅ **done — 0 defects; a base mismatch, not a shape mismatch** |
 | 10n | T12/T13/T14/T16 — the assumption T-items | ✅ **done — 1 defect; all four claims promoted from assumed to measured** |
+| 10o | T4 — `render_sprites`, the last large untranscribed surface | ✅ **done — 0 defects across 290 instructions; 5 fidelity notes** |
 
 **All audits are complete: 50 defects found and fixed** (15 from audits 1–9, 16 from
 audit 10, 10 from 10b, 1 from 10c, 0 from 10d, 2 from 10e, 4 from 10f, 1 from 10k, 1 from
@@ -812,6 +815,15 @@ Static auditing against *our own documents* has reached the point of diminishing
 — audits 7–9 found 4 defects between them, all in prose. Static auditing against an
 *outside* source has not: audit 10 found 16 in one pass. Prefer external diffs over
 further self-review.
+
+**Audit 10o closes the last large surface (2026-09-04).** `render_sprites` (`0x4B032`,
+290 instructions) had never been compared to its transcription line by line and was the
+standing bet for "where a real defect still hides". It was read in full: **zero defects**.
+The one genuine hazard — `ya * 160` computed with `.w` shifts on a longword, losing any
+carry out of bit 15 — was checked rather than waved through, and is unreachable because
+the preceding clip bounds `ya` to `8..0xC7`. Five fidelity notes (register recycling,
+`A1` destruction, the unrolled plane-3 store) were added to `algo-render.md`. With this,
+**every large transcription in `re/` has been audited at instruction level.**
 
 **Precedent for #8:** the music transpose was documented as
 `note_period_table[b + transpose + 12]`, but the engine does `add.b` / `addi.b` / `ext.w`
