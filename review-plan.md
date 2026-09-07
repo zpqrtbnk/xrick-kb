@@ -270,73 +270,103 @@ comparing them as values.
 
 ---
 
-## 11. Status — 2026-09-05
+## 11. Status and conclusions — 2026-09-07
 
-### Build state
+### Verified state (re-checked, not recalled)
 
-Both platforms build clean and the game runs. `make PLATFORM=ST` (default) and
-`make PLATFORM=PC` produce **different binaries**, verified byte-wise. **26 `PLATFORM_ST`
-switch sites across 12 files.** 182 compiler warnings, all classified (R2.4); the single
-remaining `-Wtype-limits` is expected and correct (R3.1 `maps_clip`).
+Both platforms build with **0 errors**; binaries differ (531,776 / 530,912). `make warn`:
+**179** warnings, 0 errors — *below* the 181 present before this review, in the same
+pre-existing classes. **45 `PLATFORM_ST` switch sites.** All sampled code-level claims in
+`review-log.md` re-verified present (20/20), and a regression scan for every superseded
+pattern (truncating `y` masks, direct `env_score +=`, the old `sh` pointer, the old scroll
+threshold) comes back **clean**.
 
-### ✅ Achieved
+### Function inventory — 198 functions in `src/`
 
-| | state |
-|---|---|
-| **Phase 0** baseline | **Complete.** `Makefile` added; six portability fixes; both platforms build and run |
-| **Phase 2** data structures | **Complete.** 33 `SpriteEntity` fields measured program-wide; 7 other structs adjudicated; 32 globals compared; all 99 conversion warnings classified |
-| **Phase 3a** entities | **Complete at the level attempted.** `ents.c` (5 logic fns, 4 rendering out of scope), `util.c`, `e_bullet.c`, `e_bomb.c`, `e_box.c`, `e_bonus.c`, `e_sbonus.c` compared; `e_them.c` compared at constant/condition level against the full 238-instruction ST oracle |
-| **Phase 3b** level/map | **Complete.** `env.c` is entirely rendering (out of scope); `maps.c` has 5 rendering fns (out of scope) and 4 logic fns, of which 3 are compared. Only `map_expand` remains |
-| **`xref.md` sweep** | **Complete.** All 25 rows checked; **14 had never been applied**, 12 now are |
+| state | fns | files |
+|---|---|---|
+| **Compared against both originals** | **65** | `e_them` 11, `game` 11, `ents` 9, `maps` 9, `e_rick` 7, `env` 4, `util` 4, `e_bomb` 3, `e_box` 2, `e_bullet` 2, `e_sbonus` 2, `e_bonus` 1 |
+| Partly compared | 4 | `scr_getname` (hall of fame verified; the entry UI is not) |
+| **Not compared** | **47** | render 24 (`fb` 7, `tiles` 6, `sprites` 5, `rects` 2, `img` 2, `scroller` 2), intro screens 12, `sounds` 4, data helpers 5, `sysjoy` 2 |
+| No counterpart in either original | 82 | `unzip` 27, `syssnd` 19, `data` 11, `sysvid` 9, `sysarg`/`system` 8, `xrick` 4, `sysevt` 3, `devtools` 1 |
 
-**Results: 38 differences catalogued · 26 switch sites · 6 port defects fixed · 3 plausible
-"fixes" correctly refused · 1 self-inflicted regression caught.**
+**19 port defects found and fixed.** The simulation core — every entity, the player, the
+map system and the game state machine — is compared.
 
-The six defects: the left-edge submap exit, the corpse clamp inverting direction, a bullet
-missing an entity's top scanline, the box explosion sprite overread, the bullet's right
-bound, and the trigger-sound index reading `WAV_ENTITY[-1]`.
+### Conclusions
 
-### 🔴 Remaining
+**1. The two platforms are NOT equally trustworthy, and this is the central finding.**
+The port *is* the PC game: it was reverse-engineered from it, so `PLATFORM_PC` is close to
+correct by construction and this review mostly *confirmed* it, fixing 19 genuine slips.
+`PLATFORM_ST` is a **reconstruction** — every ST behaviour in the tree exists because I
+read it out of `atari_ram.bin` and wrote it in. It has no independent provenance, far less
+corroboration, and has never been executed against a real ST.
 
-**Code not yet compared — 3 groups, ~70 functions:**
+**2. Everything is verified statically.** Every claim rests on reading disassembly and
+matching constants, conditions and table contents. **Nothing has been verified by running
+the port and the original side by side.** That is the single largest gap between "the code
+reads correctly" and "the code behaves identically".
 
-| group | files | fns | note |
-|---|---|---|---|
-| System / flow | `game.c`, `scr_*.c` ×6, `control.c`, `xrick.c`, `data.c`, `devtools.c` | ~28 | much is SDL scaffolding |
-| Render | `sprites.c`, `tiles.c`, `fb.c`, `draw.c`, `rects.c`, `img.c`, `scroller.c` | ~23 | semantic alignment only — no blitter matching |
-| Player | `e_rick.c` | 5 of 7 | `e_rick_boxtest` and the exits done |
-| Sound | `sounds.c` | 4 | track identity / trigger points |
+**3. The defect pattern was overwhelmingly edge-sense and width, not logic.** Of 19
+defects: seven `>` vs `>=` boundaries, four truncating masks, two out-of-bounds accesses,
+one dead branch, one hybrid that matched neither original. The port author's *understanding*
+was almost always right; the transcription slipped in the last bit.
 
-**Open findings needing a decision or the PC side:**
+**4. Three of my own claims were wrong and are retracted in place** — the inferred sprite
+`0x29` (R4.10), the digit-array requirement for the score wrap (R3.16), and "`map_bnums`
+needs an ST variant" (C1). Two more premises dissolved on checking (`map_frow` width; the
+SPAD blocked-test). A fourth, the phantom 154th `map_connect` row, was retracted earlier.
 
-1. **Score overflow representation** — needs the **user's** decision. ST wraps at
-   1,000,000; PC corrupts its top digit; port never wraps. Matching either means replacing
-   `env_score` with a digit array.
-2. **`e_them.c` ×4** (R3.15) — climb velocity, climb gate masks, the `y & 0xfe` compare
-   (likely a real defect), the PRNG turn.
-3. **`e_box.c` ×3** (R3.9) — test order, exploding box killing Rick, animation model.
-4. **Dynamite fuse** — structural rewrite, not an `#ifdef`.
-5. **Spawn banding** — the port scans 8 rows further down than the ST.
-6. **`map_maps[4]`**, **`map_frow` width**, **`e_box.c` sprite `0x29`** (inferred, not read).
+**5. Data provenance is now settled.** The port's tables came from a PC build whose data
+segment sat `0x0FBA` below `ibmpc_ds1.bin`'s. `map_blocks` is identical on both platforms;
+`map_bnums` differs by two padding bytes that the submap offsets cancel exactly. The
+pointers-vs-numbers model (T9) is solved: `sprite = (ST pointer - 0x2BE9E) / 0x150`.
 
-**Phase 1 tables still unchecked:** `map_bnums`, `ent_sprseq`, `ent_mvstep`,
-`dat_spritesST`, `dat_picsST`.
+### What remains for both builds to *truly* match their originals
 
-### Recommended order from here
+**R1 — Differential testing against the originals. The biggest gap, and nothing else
+substitutes for it.**
+The Hatari harness already boots the analysed ST build, drives it by poking the joystick
+byte, sets breakpoints and dumps RAM (`re/hatari_probe.py`; an in-game dump was produced
+this session). The work is to drive **the same scripted input** into the ST original and
+into `PLATFORM_ST`, and compare state frame by frame — Rick's x/y/velocity, the entity
+pool, score, map row. Any divergence localises to a frame and a variable. Without this,
+`PLATFORM_ST` remains unexecuted theory. DOSBox could do the same for `PLATFORM_PC`.
 
-1. **`e_them.c` finding #3** (`y & 0xfe`) — cheapest likely-real defect outstanding.
-2. **The score decision** — it blocks nothing else but has been open longest.
-3. **`e_rick.c`'s 5 remaining functions** — the last dense-logic file.
-4. **`map_expand`** — finishes 3b outright.
-5. Phase 1 leftovers, then render/system/sound last.
+**R2 — The 24 render functions, for *what* is drawn, not how.**
+Tile and sprite *selection*, positions, draw order, and the clipping bounds — the layer
+that decides which bytes reach the screen. `maps_clip` already produced defect #18, which
+suggests this layer is not clean. The SDL blitting underneath is explicitly out of scope.
+
+**R3 — The 12 intro-screen functions and the 4 in `sounds.c`.**
+`screen_imapsteps` does not match any dump under any encoding, so the level-intro
+animation must be compared behaviourally. `sounds.c` is where "the right sound at the right
+time" is decided.
+
+**R4 — Close the residual open items.** The HOF qualification boundary at exactly 1000;
+`scr_getname`'s entry UI; the `ent_sprseq`/`ent_mvstep` over-runs (inert, deliberately
+unchanged); the ST bomb explosion phase after its fuse sentinel.
+
+**R5 — ST artwork pixel verification (C2), lowest value.** A6 gave the frame *indices*,
+which is what the logic needed. Confirming the pixel data itself is a separate exercise and
+changes no behaviour.
+
+### Honest bottom line
+
+`PLATFORM_PC` is in good shape: derived from the PC, checked against it, 19 slips repaired.
+`PLATFORM_ST` is a careful reconstruction that is **internally consistent and
+instruction-backed but never executed against the original**. Until R1 is done, the correct
+claim is *"matches the disassembly as read"*, not *"matches the original"*.
 
 ### Standing checks (each earned by a near-miss)
 
-- Read bounds tests for **edge sense**, not just constants — the ST excludes equality on
-  lower edges where the PC includes it, in **five** routines now.
-- Read counter loops for **decrement order** — `e_bonus.c` was 11 frames, not 12.
-- Locate PC code by **content signature**, never citation arithmetic (R3.10).
-- **Re-read any site an earlier change made live** (R3.7).
-- **Check a field exists before referencing it** — the port has no `dir`; enemy direction
-  is the sign of `offsx` (R3.14).
-- **A row in `xref.md` is not a change in the code** — sweep periodically (R3.14).
+- Read bounds tests for **edge sense** — seven defects were `>` vs `>=`.
+- **A control proves a query runs, not that it has the right shape** (`cmpi.w` vs `cmp.w`;
+  a stride-4 scan stepping over an unaligned table).
+- Locate PC code by **content signature**, never citation arithmetic — three `ASM nnnn`
+  citations in `e_rick.c` alone are wrong.
+- **An inference labelled as an inference is still an inference** (R4.10).
+- **A row in a document is not a change in the code** — sweep periodically.
+- The port's data came from a **different PC build** (R4.22); pointer-bearing tables will
+  never match exactly.
+- **Whitespace and block length break string-matched edits** — prefer line-anchored edits.

@@ -107,8 +107,8 @@ ST build. **Measured so far — the answer is mixed, which is why the census is 
 | D4 | `map_submaps` | 47 × `{page,bnum,connect,mark}` | `RoomHeader[47]` @ `0x47620` | ✅ `AGREE` — **47/47 on every comparable field.** Requires translating ST *pointers* into port *indices*: `pTransitions` → connector index, `pPlacements` → mark index. All 47 translate exactly, which also independently re-confirms D1 and D2 |
 | D5 | `map_maps` | 5 × `{x,y,row,submap,tune}` | `LevelStartInfo[5]` @ `0x4B522` | ⚠️ **`PCST` + `OPEN` — only 2 of 5 agree.** See D5a/D5b |
 | D6 | `map_eflg` | `map_eflg_c[32]`, **run-length encoded** | two **256-byte** per-tile LUTs @ `0x49F1E` / `0x4A01E` | ⚠️ **mostly `AGREE`, two live differences** — see D6a–D6c. Not a different data model after all: `map_eflg_expand()` inflates the 32 RLE bytes into a 256-entry table, directly comparable to ours |
-| D6b | `map_bnums` (`0x1FD8`) | — | tile-map blocks | ⬜ `OPEN` |
-| D7 | `ent_sprseq` (`0x88`), `ent_mvstep` (`0x310`) | — | — | ⬜ `OPEN` |
+| D6b | `map_bnums` (`0x1FD8`) | — | tile-map blocks | ⚠️ **`PCST`** — exact match to `ibmpc_ds1.bin:0x523A`, absent from `atari_ram.bin` (R4.2). The ST holds no static copy: `map_expand` reads a per-submap **pointer** from `(0x495CC)`, null in our dump (R4.20). Needs an in-game ST dump |
+| D7 | `ent_sprseq` (`0x88`), `ent_mvstep` (`0x310`) | — | — | ✅ **checked (R4.23, R4.24)** — both match the PC where used; both over-run their true end into adjacent data; both inert (max `sni` 244 < 261 valid records). Not changed, deliberately |
 | D8 | `dat_tilesST` (+ sprites, pics) | `tiles_banks[3][256]`, `U32[8]` per tile | tile banks @ `0x1D01E` / `0x1F01E` | ⚠️ **`OPEN` — and this is the one that looks genuinely unresolved.** See D8a |
 
 ### D6a — the five gameplay-critical attribute bits agree **perfectly** ✅
@@ -562,8 +562,9 @@ read the BCD correctly — no confusion between `0x500` and 1280.
 
 ⚠️ **But the wrap is reachable.** At 100,000 per remaining life plus gameplay score, a
 completed run can pass 999,999, after which the ST rolls over and the port keeps counting.
-`OPEN` — a `PLATFORM_ST` candidate once the PC's own behaviour is read from
-`ibmpc_cs.bin`.
+✅ **RESOLVED — see R3.16.** The ST's clean wrap is now applied on both platforms via
+`env_addscore()`, and the PC's own behaviour was read (`0x0292`: the sixth digit gets only
+`ADC AL,0x0`, so it corrupts to `':'`).
 
 The port's display unpack (`env.c:71`, `for (i = 5, sv = env_score; i >= 0; i--)`) mirrors
 the ST's unpack into `0x4B330`-`0x4B335`, and `scr_getname.c`'s `U32` comparisons are
@@ -615,11 +616,12 @@ Recorded so the same ground is not covered twice. Four approaches tried, all neg
 | Locate a BCD score routine via x86 `DAA`/`DAS`/`AAA`/`AAS` | ✗ the four `0x27` candidates are bytes **inside `MOV AX,0x271D`**, not instructions. No BCD adjust found in context |
 | Infer the score variable from the port's `e_sbonus.c:47-49` annotations (`6DD5`, `6DDB`, `291A-291D`) | ✗ those are **data-segment** addresses, and we hold only the code segment (`review-plan.md` §10) |
 
-**Still `OPEN`.** The remaining method is the one that worked for `e_bomb_hit`: find the
-PC's enemy-kill path **structurally** — by the shape of the code around the two contact
-tests and the call that follows — rather than by constant search. Until then, whether the
-port's single `+= 50` is a PC-vs-ST divergence or an omission is undecided, and it must not
-be "fixed" either way.
+✅ **RESOLVED — `PCST`, and implemented.** The structural approach worked: the PC's score
+adder is `0x0292`, and it has **exactly four** call sites, all now accounted for — level
+bonus `0x0DEE`, super bonus `0x22BB`, enemy kill `0x24D6` (inside gozombie), pickup
+`0x2585`. **None** is a second add on the explosion path, so the PC awards 50 for a
+dynamite kill and the ST 100. The port was faithful to the PC; the extra 50 is now added
+under `PLATFORM_ST` in `e_them.c`.
 
 ### R2.3b ✅ **RESOLVED 2026-09-04 — genuine PC-vs-ST difference, and switched**
 
@@ -1070,10 +1072,8 @@ indexes identically —
 walking indices `5,4,4,3,3,2,2,1,1,0` — ten ticks, **six** distinct sprites. So the port's
 array is one short and the first explosion frame showed whatever byte followed it.
 
-⚠️ The sixth value (`0x29`) is **inferred** from the ascending run `0x24..0x28`, not read:
-the PC's sprite table at `0x8138` is in its **data** segment, which we do not hold. An
-inferred sprite is strictly better than a non-deterministic overread, but it is labelled as
-inferred at the site and should be confirmed if the data segment ever becomes available.
+⚠️ ~~The sixth value (`0x29`) is **inferred**~~ — **the inference was WRONG; see R4.10.**
+The data segment is now in hand and the real table is `24 24 25 25 26 26 27 27 28 28 ff`.
 
 **Three further differences, recorded but NOT changed** — each needs the PC's box path read
 in full before it can be classified, and none is a safe guess:
@@ -1089,9 +1089,10 @@ it; with the port's, it is **collected**. #2 is potentially significant — on t
 be killed by a box you just blew up. #3 is the familiar pointers-vs-numbers model
 difference (T9) and is not actionable.
 
-`OPEN` — the PC's box routine around `0x25A3`-`0x2619` is partly read (stick and bullet
-tests via `CALL 0x1317`) but its collect path and any lethal-vs-Rick test have not been
-located yet.
+✅ **RESOLVED — see R4.21.** The whole PC box routine is now read (`0x2592`-`0x2648`).
+#1: the PC's order is **collect first**, so the port was already correct and the ST is the
+outlier. #2: the PC has **no** lethal-vs-Rick test; the ST's is real and is now implemented
+under `PLATFORM_ST`.
 
 ### R3.10 — attempt to build a PC function map from the `ASM nnnn` citations ❌ **not viable**
 
@@ -1254,3 +1255,1033 @@ classified):
 | 4 | mode-2 turn on `prng & 3` (`0x4D79E`-`0x4D7AC`) | `e_them_rndnbr` sequence (`divergences.md` 4.1) |
 
 #3 is the most likely real defect of the four: `y & 0xfe` cannot be right for a 16-bit `y`.
+
+### R3.16 — score wrap implemented ✅ **and an earlier claim of mine corrected**
+
+**User decision 2026-09-06: apply the ST's clean wrap on both platforms.** Done via a new
+`env_addscore(U32)` in `env.c`, replacing all **six** direct `env_score +=` sites
+(`e_bonus.c` ×2, `e_sbonus.c` ×1, `e_them.c` ×3). No direct addition remains.
+
+❌ **Correcting R2.3a.** I wrote that matching either original "means replacing
+`env_score` with a digit array and reimplementing the adder, which is a structural change
+well beyond a `#ifdef`". **That was wrong**, and the user was right to challenge it.
+
+A digit array is only needed to reproduce the **PC's corruption** — its sixth digit gets
+`ADC AL,0x0` with no range adjustment, so at overflow it becomes `':'` (`0x3A`) and the
+HUD draws a non-digit. That artifact genuinely requires ASCII digits.
+
+For the **ST's** behaviour a `U32` is *exactly* equivalent:
+
+- `abcd` cannot produce an invalid nibble, so the ST score is always a well-formed
+  decimal in `0..999999`;
+- the third `abcd`'s carry-out is discarded, so the result is by definition
+  `(score + delta) mod 1000000`;
+- which is precisely `env_score = (env_score + delta) % 1000000`.
+
+Two facts checked while implementing, both supporting the change:
+
+1. **The port's HUD already renders exactly six digits** — `env_paintGame()` uses
+   `static U8 s[7]` with a `for (i = 5; i >= 0; i--)` digit loop. So a score past 999,999
+   was *already* displaying only its low six digits while `env_score` kept counting; the
+   wrap makes the stored value agree with what was always on screen.
+2. **The port has no end-of-game per-life bonus at all** — no `100000` anywhere in the
+   sources, against the ST's `add_score(0x100000)` per remaining life
+   (`algo-level.md:399`). That is a separate unrecorded difference, and it makes the
+   overflow *less* reachable in the port than in the ST. Logged below.
+
+Both platforms build; the game runs.
+
+### R3.17 — end-of-game per-life bonus: present in BOTH originals, tenfold different ✅
+
+The port had no end-of-game bonus at all. Both originals do, awarded at exactly the same
+point — once the map counter reaches 4, before the completion transition.
+
+| | ST | PC |
+|---|---|---|
+| site | `0x49AD2` | `0x0DD8` |
+| guard | `cmpi.w #4,level_index` / `blt` | `inc [0x7D90]` / `cmp al,4` / `jnz` |
+| lives | `moveq #0,d1` / `move.b [0x4B32E],d1` | `mov al,[0x7E46]` / `inc al` |
+| award | `L: move.l #$00100000,d0` / `bsr add_score` / `dbra d1,L` | `mov [0x4916],al` / `mov si,0x4916` / `call 0x0292` |
+| **value** | **(lives+1) × 100,000** | **(lives+1) × 10,000** |
+
+**Why the ST is 100,000.** `add_score` (`0x4B3E4`) stores `d0` to `0x4B51E` and runs three
+`abcd -(a1),-(a0)` from `0x4B522`/`0x4B329` down. So delta bytes `0x4B51F..0x4B521` pair
+with score bytes `0x4B326..0x4B328`, and `0x4B326` is the top pair (10^5,10^4). With
+`d0 = 0x00100000` the byte at `0x4B51F` is `0x10` — packed BCD, high nibble 1 on the
+**10^5** place. `dbra` runs the body `lives+1` times.
+
+**Why the PC is 10,000.** The adder (`0x0292`) does `add si,0x4` then walks *down* five
+digits from `di = 0x4913`, so `buffer[0]` pairs with `di = 0x490F`. The score is six ASCII
+digits at `0x490E..0x4913` — init `0x004C` writes `0x3030` to each of `0x490E`/`0x4910`/
+`0x4912`, and the HUD (`0x2016`) copies them left-to-right starting at `0x490E`, fixing
+`0x490E` as the MSD. So `0x490F` is the **10^4** place. The call site writes `lives+1`
+into `buffer[0]` only; `0x4917..0x491A` are referenced by **no** instruction in the
+segment (scanned all 16-bit operands in `0x4914..0x4920`), so they are static zero.
+
+So it is the *same mechanism* with a tenfold different multiplier — not a port omission,
+and not a missing feature on either side. Implemented switched in `game.c`, using
+`env_addscore()`; a single multiply rather than the ST's loop, which is exact because
+`env_addscore` wraps mod 1000000 and repeated addition mod m equals the summed product
+mod m. `env_lives` never exceeds 6 (never incremented anywhere in the port), so
+`lives+1 <= 7` and the PC's single digit cannot overflow. Both platforms build clean.
+
+Note this raises the practical reach of the overflow documented in R3.16: on the ST a
+6-life completion adds 700,000 in one go.
+
+## Phase 4 — the PC DATA segment is now in hand
+
+### R4.1 — `ibmpc_ds1.bin` / `ibmpc_ds2.bin` located and based ⭐
+
+The user supplied two 64 KB data-segment dumps. Their bases were **derived, not assumed**:
+
+| dump | base segment | evidence |
+|---|---|---|
+| `ibmpc_ds2.bin` | **`0x271D`**, shift 0 | the hall of fame sits at file `0x46A5`, exactly the `MOV SI,0x46A5` in the score-compare at `0x2038`; 9 entries × 28 bytes, scores descending `008000`→`000000`, names `DANGERSTU`/`SIMES`/`KEN@T@ZEN`/`BOBBLE`/`GREG@LAA`/`TELLY`/`CHIGLET`/`ANDYSPLEEN` (`@` = `0x40` = space) |
+| `ibmpc_ds1.bin` | **`0x179C`**, shift 0 | `(0x271D-0x179C)*16 = 0xF810`; `ds1[0xF810+k] == ds2[k]` for **1998 of 2031** bytes (98.4%), first 32 identical. `0x179C` is the segment the code loads most (42 times) |
+
+A first attempt put the base at shift `+0x36C` on the strength of "the implied table address appears
+as a code immediate". **Rejected**: the set of 2-byte windows in the code segment covers only
+4077/65536 values, so that filter is weak, and the implied delta buffers held `0x1E,0x1F,0x1A…`
+rather than raw digits. The structural check is what settled it. Same failure mode as ever — a
+query that cannot discriminate.
+
+**Unexplained, recorded not guessed:** both dumps carry `DUMP1   BBI`/`DUMP2   BIN` at offset
+`0x5D` and `DUMP1.BBIN`/`DUMP2.BIN` at `0x81` — exactly the DOS PSP FCB and command-tail offsets.
+This does not affect the bases (which rest on content matches) but is not accounted for.
+
+### R4.2 — the port's generated tables came from the PC binary ⭐⭐
+
+Long-standing open question, now answered. **`map_bnums` (all 8152 bytes) matches
+`ibmpc_ds1.bin` at `0x523A` byte for byte**, and `screen_imapsl` (22 bytes) at `0x9736`.
+The same `map_bnums` bytes do **not** occur anywhere in `atari_ram.bin`.
+
+So the port's tables are **PC** data, and `map_bnums` needs an ST-extracted variant like
+`map_eflg_c` and `map_maps` already have. This retires the Phase 1 doubt about provenance and
+turns it into concrete work.
+
+### R4.3 — R3.17's PC value independently confirmed ✅
+
+The static delta tables in `ds2` decode under the 10^4 pairing as:
+
+| buffer | digits | value | consumer |
+|---|---|---|---|
+| `0x4916` | `[0,0,0,0,0]` | `buf[0]` written at runtime = lives+1 | end-of-game bonus (`0x0DEE`) |
+| `0x491C` | `[0,0,0,0,0]` | built at runtime (`0x01CD`/`0x01D7`/`0x01E1`/`0x01EC`) | super bonus (`0x22BB`) |
+| `0x4922` | `[0,0,0,0,1]` | 1 | never referenced |
+| `0x4928` | `[0,0,0,5,0]` | **50** | enemy kill (`0x24D6`) |
+| `0x492E` | `[0,0,5,0,0]` | **500** | pickup (`0x2585`) |
+
+The port awards **50** per enemy kill (`e_them.c` ×3) and **500** per pickup (`e_bonus.c` ×2),
+and builds the super bonus at runtime (`e_sbonus.c`) — matching all three. Had `buf[0]` been the
+10^5 digit these would decode to 500 and 5000, contradicting the port. So the pairing behind
+R3.17's `(lives+1) × 10,000` is confirmed by three independent data points, not just my reading
+of the adder loop.
+
+Also confirmed here: `0x4917..0x491A` are statically zero, as R3.17 argued from the absence of
+any instruction referencing them.
+
+### R4.4 — `e_them.c` finding #3 was a **port defect**, fixed ✅
+
+R3.15 flagged `(y & 0xfe)` as "the most likely real defect". It is one, and **both
+originals agree against the port**:
+
+| | evidence |
+|---|---|
+| ST `0x4D5A8` | `move.w (0x4A754).l,D4` / `bclr #0,D4` / `move.w D7,D5` / `bclr #0,D5` / **`cmp.w D4,D5`** |
+| PC `0x2913` | `mov ax,[0x7e82]` / `and al,0xfe` / `mov bx,[si+0x4]` / `and bl,0xfe` / **`cmp ax,bx`** |
+
+Both load `y` as a **16-bit word**, clear **only bit 0**, and compare **16-bit**. The PC's
+`and al,0xfe` touches just the low byte of `AX`, leaving `AH` intact — so it is
+`y & 0xfffe`, not `y & 0x00fe`. The port's mask dropped bits 8-15, and `y` reaches `0x142`,
+so an enemy a full 256 px from Rick compared *equal* and switched to `xmove` as though it
+had arrived at his level.
+
+Fixed as `(y & ~1)`, **not** platform-switched — the originals agree, the port alone was
+wrong. That is defect #7.
+
+The PC routine was identified by content, not citation: the instructions immediately
+before (`mov al,[si+0x20]` / `add al,0x8` / `mov ah,[si+0x4]` / `xor ah,[si+0x2]` /
+`and ah,0x4` / `inc al`) are the port's sprite formula
+`sprbase + 8 + ((x ^ y) & 4 ? 1 : 0)` line for line.
+
+### R4.5 — finding #1 (climb-up velocity) confirmed and implemented ✅
+
+ST `0x4D5CE` `move.w #-0x200,(0x8,A0)` sits **only** on the up path (`subi.w #2,D7` at
+`0x4D5C4`), after the env test passes; the down path (`addi.w #2,D7` at `0x4D5D6`) has no
+such write. The PC's whole ymove (`0x2968`-`0x29B5`) never writes `[SI+0x2c]`. So this is a
+genuine ST/PC difference, now switched under `PLATFORM_ST`. Both platforms build.
+
+### R4.6 — finding #2 (climb gate) is STRUCTURAL, not an `#ifdef` ⭐
+
+The port matches the **PC exactly** on both gates — this was worth checking, because R3.15
+had only the ST side:
+
+| gate | PC | port |
+|---|---|---|
+| 1 (VERT, bit `0x80`) | `0x2A24` `and al,0x7` / `cmp al,0x4`, then `cmp dx,cx` / `jnc` → `enemy.y < rick.y` | line 485 `((x & 0x07) == 0x04) && (y < E_RICK_ENT.y)` |
+| 2 (CLIMB, bit `0x02`) | `0x2A7E` `and al,0xe` / `cmp al,0x4`, then `cmp dx,ax` / `jnc` → `enemy.y > rick.y` | line 499 `((x & 0x0e) == 0x04) && (y > E_RICK_ENT.y)` |
+
+So the port needs no fix here; what it lacks is the **ST** variant. But the ST's is not a
+different constant in the same shape — it is a different construction, and I stopped short
+of implementing it rather than force an `#ifdef` that would be wrong:
+
+1. **Different gate condition.** ST (`0x4D6B4`, `0x4D72C`, identical in both gates):
+   `btst #3,D6` / `beq accept` / `andi.b #7,D5` / `bne reject` — i.e.
+   `((x & 8) == 0 || (x & 7) == 0)`, against the PC's `(x & 7) == 4` / `(x & 0x0e) == 4`.
+2. **The ST snaps the entity onto the ladder; the PC does not.**
+   `x = (x & ~0x0F) | 4` (`0x4D6C2`, `0x4D73A`), gate 1 also `y = (y & ~7) | 5`
+   (`0x4D6CE`), and both `clr.w (0xa,A0)` — `nPosYFrac` = 0.
+3. **Different control flow.** The ST reaches its gate from `bcs 0x4D69C` at `0x4D678`,
+   the **blocked** branch of the env test; the port (and PC) test VERT on the
+   **not-blocked** branch.
+4. **Different animation model.** The ST drives the climb sprite from `nAnimFrameIdx`
+   (`0x2A`) — `clr.w` on entering the climb, `addi.w #1` per successful climb step
+   (`0x4D5E4`) — where the PC and port compute it as `sprbase + 8 + ((x ^ y) & 4)`.
+
+`OPEN — structural`, in the same class as the dynamite fuse. Item 4 also **narrows an
+R3.15 claim of mine**: R3.15 listed "anim-index handling" under *Agree*. That holds for the
+walking paths, not for climbing.
+
+### R4.7 — new: entity Y despawn bound differs by one ⭐
+
+Not previously catalogued. The PC deactivates at **`y >= 0x140`**, via a high/low byte
+pair rather than a single compare:
+
+- ymove `0x2976`: `cmp bh,0x0` / `jz ok` / `cmp bh,0x1` / `jnz kill` / `cmp bl,0x40` / `jnc kill`
+- fall path `0x2A06`: `cmp dh,0x0` / `jz ok` / `cmp dl,0x40` / `jc ok` / kill
+
+The port tests `y > ENT_YMAX` with `ENT_YMAX` = `0x140` (PC) / `0x142` (ST), so it keeps
+`y == 0x140` alive where the PC kills it. **Closed: the ST compare is `0x4D34A`** —
+`cmp.w #0,D1` / `bge` / `cmp.w #0x142,D1` / `ble ok`, i.e. dead when `y < 0 || y > 0x142`.
+That is the port's `y < 0 || y > ENT_YMAX` exactly, so the **ST side is right and the PC
+side was off by one**. Fixed via a new `ENT_YDEAD(y)` macro.
+
+Two search notes, both instances of the same standing trap:
+
+- The ST constant is `cmp.w #0x142,Dn` (opcode `B?7C`), **not** `cmpi.w` (`0C4?`). My
+  first scan covered only `cmpi.w` and returned zero — with a *working* control (three
+  `cmpi.w #0x800` gravity clamps), which is what made the empty result look trustworthy. A
+  raw-word scan over the segment found it. A control proves the query shape runs; it does
+  not prove the query shape is the *right* shape.
+- **The fix was deliberately confined to two of the eight `ENT_YMAX` sites.** `CMP r8,0x40`
+  occurs at exactly two addresses in the whole PC segment (`0x298B`, `0x2A0E`) — the two
+  verified here. The PC therefore encodes its other bound checks differently, and
+  `e_them.c` lines 123/315/695/722 and `e_rick.c:156` remain **unverified**; line 695 uses
+  the constant with the opposite sense (`y < ENT_YMAX`) and would have been silently
+  shifted by a blanket change. That is defect #8.
+
+### R4.8 — the "Black Magic" PRNG explained, and an out-of-bounds read fixed ⭐
+
+The port's comment says the randomizer *"is an exact copy of what the assembler code does
+but I can't explain."* It is now explained — it is the PC's `FUN_0000_024a`:
+
+```
+024c  mov bx,[0x7e48]      ; state          <-> e_them_rndnbr
+0250  add bx,[0x7e4a]      ; seed low       <-> *sl
+0254  add bx,0xd           ;                <-> + 0x0d
+0257  mov cx,[0x7e4c]      ; seed high      <-> cx = *sh
+025b  add bx,cx
+025d  sub al,al
+025f  xor al,bl / 0261 xor al,ch / 0263 xor al,cl / 0265 xor al,bh
+0267  mov bl,al            ; result back into BX's low byte
+0269  mov [0x7e48],bx      ; store state WITH bl replaced   <-> e_them_rndnbr = bx
+```
+
+The port reproduces this exactly, including the subtle part — `*bl` aliases `bx`'s low
+byte, so writing it before `e_them_rndnbr = bx` mirrors `mov bl,al` preceding the store.
+The XOR chain `bl^bh^cl^ch` matches. **The port author's transcription was right.**
+
+**Defect #9, fixed.** `sh` was `(U16 *)&e_them_rndseed + 2`. `e_them_rndseed` is a `U32`,
+so `+ 2` on a `U16 *` is **+4 bytes — one U16 past the end of the variable**. Every read
+of `*sh` was out of bounds, feeding garbage into both `bx` and `cx`. The PC's operands are
+2 bytes apart (`[0x7e4a]`, `[0x7e4c]`), so the correct index is `+ 1`. `0x7e4e` — what
+`+ 2` notionally addresses — is an unrelated variable with 10 references elsewhere.
+
+**A suspicion of mine that was wrong, checked before acting.** I expected the port's `U32`
+`e_them_rndseed++` to diverge from the PC, on the grounds that the PC increments only the
+word at `0x7e4a`. It does not: `0x0270` is `add word[0x7e4a],0x1` immediately followed by
+`0x0275` `adc word[0x7e4c],0x0` — a real 32-bit increment across the pair. The port's
+single `U32` increment is exactly right.
+
+Caveat recorded, not fixed: the whole construction assumes a **little-endian** host
+(`bl`/`bh` alias `bx`; `sl`/`sh` alias the `U32`'s halves). That is correct for matching
+the PC and fine on x86/ARM-LE, but it is host-dependent, not portable C.
+
+### R4.9 — finding #4 (the PRNG turn) is also STRUCTURAL
+
+The port again matches the **PC** exactly, and the ST differs in three independent ways:
+
+| | PC / port | ST |
+|---|---|---|
+| generator | `0x024A`: sum of two seed words + `0x0D`, XOR of the four bytes | `0x49596`: two 32-bit words — `exg d6,d7` / `rol.l #3,d7` / `subq.w #7,d7` / `eor.w d6,d7`, output byte at `0x495C7` |
+| decision | `0x2B13` `and al,0x1` → **set** direction, 50/50 | `0x4D7A8` `andi.b #3,d5` / `bne` → **flip**, 1-in-4 |
+| direction | signed `offsx` = `+2` / `-2` at `[SI+0x28]` | `nDirection` toggled `0` <-> `0xFF` at `(0x2,A0)`, plus `clr.w (0x2a,A0)` |
+
+Grouped with R4.6 as `OPEN — structural`. A faithful ST variant needs a second PRNG with
+its own state, a different decision rule, and the ST's flag-style direction — not an
+`#ifdef` around a constant.
+
+Verified as matching while here: the U-turn (`0x2B22` `mov al,[si+0x28]` / `neg al` /
+`jnz` / `mov al,0x2`) is the port's `offsx == 0 ? 2 : -offsx` — the PC negates then tests,
+the port tests then negates, same result; and the block mask `0x2AFA` `and al,0xf0` is the
+port's `VERT|SOLID|SPAD|WAYUP`.
+
+### R4.10 — the inferred explosion sprite was WRONG; corrected from the data segment ❌→✅
+
+With `ibmpc_ds1.bin` based (R4.1), the PC's table at segment `0x179C` offset `0x8138` reads:
+
+```
+24 24 25 25 26 26 27 27 28 28 ff
+```
+
+Every sprite is **doubled in the table**, and the index is **also halved**
+(`0x25AE SHR BL,1`). I had extrapolated the ascending run `0x24..0x28` to a sixth value
+`0x29`; the table does not ascend past its pairs at all in the range the box reaches. So
+the PC's explosion is **three** sprites over ten ticks —
+
+```
+26 26 26 25 25 25 25 24 24 24
+```
+
+— not the ascending `29 28 28 27 27 26 26 25 25 24` the inferred array produced. The port's
+PC branch now holds the table as read and reproduces that sequence exactly (checked
+programmatically against the dump).
+
+Two things that keep this honest rather than lucky:
+
+- **The doubling is corroborated.** Two independent consumers halve the index into the
+  same table — `0x25AE` (box) and `0x1A89` (bomb) — so it is the table's real shape, not a
+  misread of one site.
+- **The segment was verified, not assumed.** `ds2` at `0x8138` holds unrelated
+  `ff ff 00 00…`; only `ds1` carries a plausible table, and `ds1` is the segment the code
+  loads for game data.
+
+**The lesson, recorded because it cost a wrong value in shipped code:** an inference
+labelled as an inference is still an inference. "Strictly better than an overread" was true
+and still produced the wrong pixels for months. The pattern `0x24,0x25,0x26,0x27,0x28`
+looked like an obvious arithmetic run — and the real data was a doubled sequence that
+happens to start the same way.
+
+**ST is structural and stays unimplemented.** `destructible_pickup_update` animates from a
+**pointer** table at `0x46C3E` (`0x4D0AC` `move.w (0x2a,A0),D0` / `bclr #0,D0` /
+`add.w D0,D0` / `move.l (0,A1,D0.w),D1` / sentinel `-1` / `addi.w #1,(0x2a,A0)`), so entry
+*k* serves ticks 2k and 2k+1 — **ten distinct frames × 2 ticks = 20 ticks, counting up**,
+against the PC's three sprites over ten ticks counting down. The ten pointers alternate
+between two artwork regions (`0x37B9E`+ and `0x2EDDE`+, stride `0x150`). The port's
+sprite-number model cannot express that without changing `SEQ_INIT` and the frame source.
+The ST branch therefore keeps the port's five ST sprite numbers at two ticks each — the
+right *shape*, explicitly not the ST's sequence — with `(cnt-1)>>1` keeping the index in
+`0..4`, so the overread is gone on both platforms.
+
+## `e_rick.c` — 2 of the 5 remaining functions done
+
+### R4.11 — `e_rick_gozombie`: one port defect, one platform difference ✅
+
+Located by **content**, at `0x19DA` — the port's citation "ASM 1851" is wrong, as R3.10
+predicted for citation arithmetic generally.
+
+**Defect #10, fixed.** The corpse's horizontal drift was `x > 0x80 ? -3 : +3`. Both
+originals use **>=**, so at exactly `x == 0x80` the port threw the body the wrong way:
+
+| | |
+|---|---|
+| ST `0x4C832` | `cmpi.w #0x80,(0x0004a752).l` / **`bge`** → `neg.w (0x0004a750).l` |
+| PC `0x19EE` | `cmp al,0x80` / **`jnc`** → `mov byte[0x7d7a],0xfd` |
+
+(The ST carries the drift in `nDirection`, the PC and port in `offsx` — same magnitude 3.)
+
+**Genuine ST/PC difference, now switched.** The upward launch velocity:
+ST `0x4C822` `move.w #-0x300,(0x0004a756).l` vs PC `0x19E5` `mov word[0x7d70],0xfc00`
+(`-0x400`). The port had the PC's value on both platforms.
+
+Also confirmed matching: `ylow = 0` (ST `0x4C816` `clr.w (0x0004a758).l`).
+
+### R4.12 — `e_rick_z_action`: three parts confirmed, one difference fixed
+
+Reached from the player update's zombie dispatch (`0x1546` `mov al,[0x7d75]` / `or al,al` /
+`jz` / `jmp 0x195A`).
+
+**Confirmed identical to the PC, instruction for instruction:**
+
+- sprite `0x19`, `TEST byte[SI+0x2],0x4` → `0x1A` (`0x195A`-`0x1967`) — exactly the port's
+  `(x & 0x04) ? 0x1A : 0x19`. I had briefly suspected the PC drove Rick's animation from
+  the sequence pointer gozombie sets (`[0x7D9A]` ← `0x7DA9`); it does not, and that
+  suspicion was wrong.
+- `x += offsx` with **no bound** (`0x196B`-`0x1971`).
+- the 16.16 integration with sign extension, and `offsy += 0x80` uncapped
+  (`0x1999`) — which the **ST also does** (`0x4C8A8` `addi.w #0x80,(0x0004a756).l`, no
+  clamp). All three builds agree here.
+
+**Difference, fixed for the PC branch.** The tumble's end: PC `0x19A1` is
+`cmp bl,0x1 / jnz ret` on y's **high byte**, then `mov byte[0x7d92],0xff`. `[0x7d92]` is
+zeroed at `0x00C7`, polled by the main loop at `0x0129`, and this is its **only** setter —
+so it is `STDEAD`. The PC thus ends the tumble once `y` reaches `0x100`, about `0x40` px
+earlier than the port's `y > ENT_YMAX`, and never ends it when the corpse flies off the
+**top** (a negative y has high byte `0xff`, not `1`).
+
+**Two ST differences recorded, not implemented** (both T9/structural):
+
+1. The ST **bounces** the corpse off the right edge — `0x4C886` `cmp.w #0xE8,D2` / `blt` /
+   `neg.w (0x0004a750).l`, skipping the x store that frame. The PC and port move x
+   unconditionally.
+2. The ST's tumble animation is **counter-driven**, not x-driven: `0x4C8CA` increments
+   `(0x4A778)`, wraps at 4, then `bclr #0` / `add.w D4,D4` into a pointer table at
+   `0x46BE6` — 2 frames × 2 ticks — against the port's `(x & 4)` sprite pick. Its exit
+   path (`0x4CA54`) is not yet read, which is why the ST branch of the death test is
+   marked UNVERIFIED at the site rather than switched.
+
+### R4.13 — `e_rick_save` / `e_rick_restore`: the FIXME resolved, no defect ✅
+
+Located by content at `0x0D2F` (save) and `0x0D50` (restore). The port's citation
+"ASM part of 0x0BBB" is **wrong** — `0x0BBB` is an EGA bitplane copy loop
+(`ES:[DI+0x800/0x1000/0x1800]`). Third wrong citation in this file.
+
+The PC save/restore is a symmetric five-item pair:
+
+| PC live | PC saved | port |
+|---|---|---|
+| `[0x7D68]` crawl flag | `[0x7D88]` | `save_crawl` ✅ |
+| `[0x7E82]` y (**word**) | `[0x7D8A]` | `save_y` ✅ |
+| `[0x7E80]` x (**byte**) | `[0x7D89]` | `save_x` ✅ |
+| `[0x7E8A]` = Rick's entity field **+0x0C** | `[0x7D8C]` | *the FIXME's `save_C0`* |
+| `[0x7E38]` scroll row | `[0x7D8D]` | `save_map_row` in **`game_save()`** ✅ |
+
+So the FIXME's *"plus some 6DBC stuff?"* is **already handled** — the port just splits it,
+keeping the scroll row in `game_save()` rather than `e_rick_save()`. Not a gap.
+
+`[0x7D68]` is confirmed as the crawl flag independently: it gates the crawl sprite at
+`0x14B0` (`cmp byte[0x7d68],0` / `jz` → the jump/walk path).
+
+`save_C0` (entity `+0x0C`) is the one genuinely unhandled item, and it is **inert for
+Rick**: `[0x7E8A]` has exactly two references in the whole segment, the save and the
+restore. The field is used for *other* entities (`[SI+0x0C]` at `0x1E9C`, `0x213F`), but
+nothing reads Rick's copy, so saving and restoring it cannot be observed. Left out
+deliberately; the FIXME can be closed.
+
+Minor width note, recorded not changed: the PC saves x as a **byte** and y as a **word**;
+the port uses `U16` for both, so an out-of-range x would round-trip differently. Not
+reachable at the points save/restore run.
+
+### R4.14 — `e_rick_action`: confirmed faithful to the PC, no defect ✅
+
+Every branch compared against `0x1490`-`0x153B`, and all match instruction for
+instruction:
+
+| branch | PC | port |
+|---|---|---|
+| CLIMB | `0x149D` `mov [si+8],0xc` / `mov al,[si+2]` / `xor al,[si+4]` / `and al,0x4` / `jz` / `mov [si+8],0x18` | `((x ^ y) & 0x04) ? 0x18 : 0x0c` |
+| CRAWL sound | `0x14BA` `mov al,[0x7d78]` / `inc al` / `and al,0x3` / `jnz` / `call 0x2B68` | `seq = (seq + 1) & 0x03; if (seq == 0) play` |
+| CRAWL sprite | `0x14CC` `mov ah,0x7` / dir → `mov ah,0x13` / `test [si+2],0x4` / `inc ah` | `(game_dir ? 0x13 : 0x07)`, `+1` if `x & 4` |
+| JUMP | `0x14F3` `mov [si+8],0x6` / dir → `0x1501` `mov [si+8],0x15` | `(game_dir ? 0x15 : 0x06)` |
+| walk | `0x1506` `inc al` / `cmp al,0x14` / `jc` / sound / `mov al,0x4`; then `cmp al,0xc` / sound | `seq++; if (seq >= 0x14) {...seq = 4;} else if (seq == 0x0C) {...}` |
+| walk sprite | `0x1526` `shr al,1` ×2 / `add al,0x1` / dir → `add al,0xc` | `(seq >> 2) + 1 + (game_dir ? 0x0c : 0)` |
+
+The port's `else if` on `seq == 0x0C` is equivalent to the PC's unconditional second test:
+after the wrap `AL` is `4`, which is never `0xC`.
+
+STOP and SHOOT are now read too, and also match: `0x1466` `mov [si+8],0xb` / dir →
+`0x1474` `mov [si+8],0x17`; `0x1483` `mov [si+8],0xa` / dir → `0x148E` `mov [si+8],0x16`.
+**`e_rick_action` is fully verified with no defects.**
+
+### R4.15 — `e_rick_action2`: terminal-velocity clamp matched NEITHER original ⭐ (defect #11)
+
+The port's fall clamp was
+
+```c
+offsy += 0x0080;
+if (offsy > 0x0800) { offsy = 0x0800; ylow = 0; }
+```
+
+which is the **ST's edge combined with the PC's `ylow` reset** — a mix that matches
+neither build:
+
+| | edge | clamp branch |
+|---|---|---|
+| ST `0x4C150` | `cmpi.w #0x800` / `ble` → clamp when `offsy` **> 0x800** | `0x4C15C` sets `offsy` **alone**; `ylow` was stored at `0x4C142` and is left as computed |
+| PC `0x160A` | `cmp dh,0x8` / `jc` → clamp when `offsy` **>= 0x800** | `0x1612` `mov byte[0x7d72],0` **zeroes ylow**, then `0x1617` sets `offsy` |
+
+The edge is not academic. `offsy` steps `0x100, 0x180, …`, so it lands **exactly** on
+`0x800` (`0x100 + 0x80×14`) on every long fall. On that frame the PC zeroes `ylow` and the
+ST does not — and the port, clamping only above `0x800`, zeroed `ylow` a frame late on the
+PC side while zeroing it at all on the ST side, which the ST never does.
+
+Now switched. Both platforms build.
+
+**The same edge exists in `e_them.c` and is inert there** — checked rather than assumed.
+PC `0x2A4C` `cmp ah,0x8 / jc` (>=) vs ST `0x4D68A` `cmpi.w #0x800` / `ble` (>) and the
+port's `>`; but neither enemy clamp branch touches `ylow`, and clamping a value that
+already equals `0x800` to `0x800` is a no-op. No change needed.
+
+**Confirmed matching in `action2` while here**, instruction for instruction: the crawl
+env-test split (PC calls `0x113A` when crawling, `0x11BC` when not, then clears the crawl
+flag if `env0 == 0` — the port's `u_envtest(..., STTST(STCRAWL), ...)` plus
+`if (STCRAWL && !env0)`); the vertical block mask (`BH = 0xF0`, or `0xE0` when
+`offsy < 0`, i.e. dropping `WAYUP` — `0x15AE`-`0x15BA`); `STSET(STJUMP)` (`0x15CB`);
+`LETHAL` → gozombie (`0x15D0` `test cl,0x4`); the y/ylow store; the climb entry
+(`test cl,0x2` + control `& 0x0C` → `offsy = 0x100`, `STCLIMB`); and `seq = 2` when
+neither LEFT nor RIGHT is held (`0x1621` `and al,0x3`).
+
+All eight `MAP_EFLG_*` values are now corroborated by the masks decoded across both
+binaries: `VERT 0x80`, `SOLID 0x40`, `SPAD 0x20`, `WAYUP 0x10`, `LETHAL 0x04`,
+`CLIMB 0x02`.
+
+### R4.16 — the `y & 0xf8` tile snap truncated the high byte: FOUR sites ⭐⭐
+
+Same defect class as R4.4, and the port **contradicted itself**, which is what exposed it:
+
+| site | had | correct? |
+|---|---|---|
+| `e_rick.c:338` ceiling bonk | `y &= 0xF8` | ❌ truncating |
+| `e_rick.c:352` ground align | `y &= 0xF8` | ❌ truncating |
+| `e_them.c:544` ground align | `(y & 0xf8) \| 0x03` | ❌ truncating |
+| `e_them.c:156` ground align | `y &= 0xfff8` | ✅ (the same author, doing it right) |
+
+**Both originals mask the LOW BYTE ONLY**, keeping the high byte:
+
+- PC `0x16A2` / `0x16B8` / `0x2A5B` — `and al,0xf8` (`or al,0x3`), 8-bit ops on `AL`
+- ST `0x4D6F0` — `move.b (0x7,A0),D7` / `andi.b #-8,D7` / `ori.b #3,D7` / `move.b D7,(0x7,A0)`
+
+`y` is `S16` and reaches `0x142`, so a 16-bit `& 0xf8` also cleared bits 8-15: an entity at
+`y = 0x108` was snapped to `0x08` — teleported from the bottom of the world to the top.
+All four now use `& ~0x07`, which reproduces the byte-wide mask exactly for every value,
+**including negative y**, where even the "correct" `0xfff8` was wrong (`-8 & 0xfff8` yields
+`65528`, not `-8`).
+
+`ents.c:236` and `ents.c:288` also use `& 0xf8` but on `map_marks[].row`, a row index, not a
+position — correctly left alone.
+
+That is defects #12-#14 (three truncating sites; `e_them.c:156` was a latent-only fix).
+
+### R4.17 — the rest of `e_rick_action2` confirmed against the PC
+
+Compared `0x168F`-`0x1706` and `0x161E`-`0x162E` against the port's `vert_not`, super-pad
+and horizontal blocks. All match:
+
+- ceiling bonk: `and ax,ax` / `jns` → `mov word[0x7d6e],0xff` (STJUMP), low-byte snap,
+  `mov byte[0x7d72],0` (ylow), `mov word[0x7d70],0` (the PC's zero vs the ST's `0x80`,
+  already switched), `jmp 0x161E` → horiz
+- standing: `(y & 0xf8) | 3`, ylow = 0
+- super pad: `test cl,0x20` (SPAD), `js` + `cmp al,0x2` / `jc` → the port's
+  `offsy >= 0x0200`; then `test byte[0x7d6c],0x8` (UP) → `mov cx,0xf800`, else
+  `mov cx,0xfe` / `sub cx,bx` — the port's odd `0x00fe - offsy` is **exactly right**
+- reset `offsy = 0x100` (`0x16FC`); `seq = 2` when neither LEFT nor RIGHT (`0x1621`)
+
+All eight `CONTROL_*` bits are now corroborated too: `UP|DOWN = 0x0C` (`0x15EA`) and
+`LEFT|RIGHT = 0x03` (`0x1621`) match `control.h`'s `0x08|0x04` and `0x02|0x01`.
+
+### R4.18 — `e_rick_action2` firing / firing_not / climbing: confirmed, 3 notes
+
+Compared `0x1702`-`0x18BA` against port lines 368-497. Everything matches, including
+several things that looked odd in the port and turn out to be faithful:
+
+- **stop/stick**: `0x1722` `mov ax,[si+4]` / `add ax,0xe` → `stop_y = y + 0x0E`;
+  `mov byte[0x7d79],0x1` then, if RIGHT, `mov byte[0x7d79],0x0` / `add al,0x17` →
+  `stop_x = x + 0x17`. Confirms `LEFT=1` / `RIGHT=0` in `game.h` against `[0x7D79]`.
+- **bullet**: `STSHOOT`; `[0x7D86]` trigger one-shot; `[0x7EAE]` bullet-in-air;
+  `[0x7E45]` bullets, `dec` — all in the port's order. `[0x7E45]` = bullets also
+  **corroborates R3.17's** reading of the `0x7E45`/`0x7E46`/`0x7E47` triple.
+- **jump**: `0x181E` `mov word[0x7d70],0xfa80` = `-0x580` ✓, `ylow = 0` ✓.
+- **crawl vs climb-down**: `0x1848` `and al,0x3` / `jnz` (moving horizontally → crawl);
+  `0x1852` `and al,0x1f` / `cmp al,0xa` / `jnc` → the port's `(x & 0x1f) < 0x0a`;
+  `(x & 0xF0) | 4` align; `STCLIMB`, else `STCRAWL` and fall through to horiz.
+- **super-pad** `0x00fe - offsy` and the climbing `seq = 0` on no direction
+  (`0x1876` `and al,0xf`) both exact.
+
+**The port's `/* FIXME what? */` at line 485 is explained.** `0x18AC` `jz` on
+`and al,0x70` then `0x18B1` `test ch,0x80` — `CH` is the high byte of the move delta
+(`0xFFFE` up, `0x0002` down), so "blocked **and moving down**" clears `STCLIMB`. It is the
+climb-down-into-ground case; the port's `!(control_status & CONTROL_UP)` is equivalent,
+since the delta is `-2` exactly when UP is held.
+
+**Two differences recorded, not changed:**
+
+1. **The climbing env test.** PC `0x18A2` calls `0x11BC`, the **plain** probe, while the
+   port passes `E_RICK_STTST(E_RICK_STCRAWL)` (line 482), which selects the crawl probe
+   (`0x113A`) when crawling. This matters only if `STCRAWL` and `STCLIMB` can be set at
+   once — the climb entries at `0x1818`/`0x1865` do not clear `STCRAWL` — so it is
+   probably reachable, but I have not proven it. `OPEN`.
+2. **The bullet/bomb control test.** PC: `and al,0xc` / `cmp al,0x8` — UP set, DOWN clear,
+   **other bits ignored** (`LEFT|RIGHT` were already consumed by the stop path). Port:
+   `control_status == (CONTROL_FIRE|CONTROL_UP)`, an exact byte equality that additionally
+   requires `PAUSE`/`END`/`EXIT` (`0x80`/`0x40`/`0x20`) to be clear. Equivalent in normal
+   play; not identical.
+
+**Checked and left alone:** `E_RICK_ENT.x &= 0xf0` (line 457) has the R4.16 shape but is
+provably equivalent — the PC is byte-wide (`0x185E and al,0xf0`) and the port's `x` never
+reaches `0x100`, the submap exit firing at `x >= 0xe8`.
+
+## Phase 3b closed
+
+### R4.19 — `map_expand`: identical in all three builds, no defect ✅
+
+| | PC `0x0EE6` | ST `0x49E40` | port |
+|---|---|---|---|
+| base | `sub ah,ah` / `add ax,ax` / **`and ax,0xfff8`** / `add ax,[0x7e3a]` | `andi.w #-4,D0` / `add.l D0,D0` / `adda.l D0,A2` | `(2 * map_frow) & 0xfff8` + `map_submaps[].bnum` |
+| rows | `mov dh,0xb` (11) | `move.w #0xa,D1` + `dbf` (11) | `i < 0x0b` |
+| blocks | `mov cx,0x8` | `move.w #0x7,D2` + `dbf` (8) | `j < 0x08` |
+| block index | `add ax,ax` ×4 (×16), `add ax,0x423a` | `lsl.l #4,D0`, `lea (0x22fee).l,A3` | `map_blocks[map_bnums[pbnum]]` |
+| row stride | `add di,0x1c` after 4 tiles → `0x20` | `(0x20,A1)` / `(0x40,A1)` / `(0x60,A1)` | `map_map[0x2c][0x20]` |
+| next block | `add di,-0x60` | `lea (0x4,A1),A1` | `row -= 4; col += 4` |
+| next row | `add di,0x60` | `lea (0x80,A0),A0` | `row += 4; col = 0` |
+
+The port's `(2 * map_frow) & 0xfff8` is the **PC's instruction verbatim**; the ST reaches
+the same value as `2 × (frow & ~3)`. `map_map[0x2c][0x20]` is confirmed by both: 32 columns
+matches the row stride, 44 rows = 11 block-rows × 4.
+
+`[0x7E38]` is the PC's `map_frow`, which **independently corroborates R4.13**, where I
+identified it as the saved scroll row purely from its save/restore pairing.
+
+**Phase 3b is now complete.**
+
+### R4.20 — `map_blocks` is identical PC/ST; `map_bnums` is not extractable from this dump
+
+- **`map_blocks` (4096 bytes) matches BOTH** — `ibmpc_ds1.bin` at `0x423A` and
+  `atari_ram.bin` at `0x22FEE`, byte for byte. **No ST variant needed.** One Phase 1 table
+  closed.
+- **`map_bnums` (R4.2) still needs an ST source.** The ST does not hold it at a fixed
+  address: `0x49E42` `movea.l (0x000495CC).l,A2` reads a **pointer**, written at `0x499F6`
+  by `move.l (0x2,A0),(0x000495CC).l` — i.e. from field `+2` of the submap record, the ST's
+  analogue of `map_submaps[].bnum`. In `atari_ram.bin` that pointer is **`0x00000000`**, so
+  the dump was taken with no submap loaded and the table cannot be read from it.
+  Extracting the ST block numbers needs a dump taken **in game**, or the submap records
+  walked to recover the pointers. `OPEN`.
+
+This also explains why my earlier adjacency guess failed: `map_blocks` and `map_bnums` are
+contiguous on the PC (`0x423A` + `0x1000` = `0x523A`) but not on the ST — I tested
+`0x22FEE + 0x1000` and got 1.9% agreement. Guessing a layout from the other platform is
+not evidence.
+
+### R4.21 — `e_box.c` R3.9 #1 and #2 resolved ✅
+
+Both open findings closed by reading the PC's box routine (`0x2592`-`0x2648`), decoded by
+hand after Ghidra mis-aligned on the `NOP` padding.
+
+**#1 test order — the port is RIGHT, my R3.9 note framed it wrongly.** The PC is:
+
+```
+25CC  call 0x12AE          ; e_rick_boxtest
+25D1  jz   0x2629          ; overlap -> COLLECT
+25D6  mov al,[0x7d6a]      ; STSTOP -> stick test  (u_fboxtest via 0x1317)
+25F8  mov al,[0x7eae]      ; bullet in air -> bullet test
+2619  mov al,[0x7d85]      ; e_bomb_lethal -> bomb test (0x134B)
+25F0  mov byte[si+0x26],0xa / or byte[si],0x80   ; explode: cnt = 10, ENT_LETHAL
+2629  ...collect: n==0x10 -> [0x7e47]=6 (bombs), else [0x7e45]=6 (bullets), n=0
+```
+
+That is **collect first, then stick, bullet, bomb** — the port's order exactly. The ST's
+order (stick → bullet → explosion → collect) is the outlier, so this is an ST/PC
+difference and the port needs no fix. R3.9 recorded it as "port vs ST" without the PC
+side; with the PC read, the port is vindicated.
+
+The collect also re-confirms the `0x7E45`/`0x7E46`/`0x7E47` triple a third time:
+`cmp al,0x10` / `jnz` selects `[0x7E47]` for bombs and `[0x7E45]` for bullets, leaving
+`[0x7E46]` = lives — the reading R3.17's per-life bonus depends on.
+
+`0x2592` is `mov bx,[si+0x12] / inc bx / or byte[bx],0x80` = the port's
+`map_marks[mark].ent |= MAP_MARK_NACT`.
+
+**#2 exploding box kills Rick — confirmed ST-only, now implemented.**
+
+```
+4D0CC  bsr 0x4D9AA / bcc 0x4D0DA / move.w #0xff,(0x0004bf2e).l
+```
+
+`(0x4BF2E)` is verified as the kill flag rather than assumed: cleared once, set at five
+sites, and **tested at `0x4C06A`** — `tst.w` / `beq`, and when set it runs `bsr 0x4C7E4`
+then `bra 0x4C8CA`, the kill routine followed by the death tumble decoded in R4.12.
+
+The PC's box routine never probes Rick while exploding, so the port (PC-derived) was
+correct for its platform and merely missing the ST behaviour. Added under `PLATFORM_ST`
+using `e_rick_boxtest()`, which is the right analogue: `0x4D9AA` has **6 callers**
+including the box's own collect path at `0x4D088`, i.e. it is the general
+entity-overlaps-player probe. No early return, matching the ST — both its paths `rts` and
+the animation index was already advanced at `0x4D0C2`.
+
+**`e_box.c` is now fully compared.** Its only remaining item is the ST's 10-frame pointer
+animation (R4.10), which stays structural.
+
+## Phase 1 tables — `ent_sprseq` and `ent_mvstep`
+
+### R4.22 — the port's data came from a DIFFERENT PC build than `ibmpc_ds1.bin` ⭐⭐
+
+Established, not guessed. The tail of the port's `ent_mvstep` and the corresponding region
+of `ds1` hold the same structure — 8-byte records of three 16-bit values plus a `0000` —
+with the port's values **a constant lower**:
+
+```
+port  80 42 | 8a 76 | 35 79 | 00 00      ds1  3a 52 | 44 86 | ef 88 | 00 00
+```
+
+Across 195 records the dominant non-zero delta is **`0x0FBA`, 178 times** (with 307 exact
+zeros, the terminators). A single constant offset across a whole table means these are
+**pointers**, and the port's source binary had its data segment `0x0FBA` lower than the one
+captured in `ibmpc_ds1.bin`.
+
+This is consistent with `map_bnums` and `map_blocks` matching `ds1` **exactly** (R4.2,
+R4.20) — those hold no pointers, so relocation cannot show up in them.
+
+### R4.23 — `ent_sprseq`: correct, but its declared length overruns into the next table
+
+The first **128 bytes match `ds1:0x8143` exactly**. But the last 7 of those
+(`10 00 00 0c 00 04 fa`) are the **opening bytes of `ent_mvstep`**, which begins at
+`ds1:0x81BC`: the real sprite-sequence data ends with the `0xff` at `0x81BB`, i.e. **121
+bytes**, not 128. The port then appends 8 more it marks `/* xtra */`, reaching the declared
+`ENT_NBR_SPRSEQ 0x88` = 136.
+
+So the table is right where it is used and wrong past its true end. Sequences are walked to
+an `0xff` terminator, so the trailing bytes are unreachable unless something indexes them
+directly. **Not changed** — recorded, because shortening a declared array without tracing
+every index is how one turns an inert oddity into a crash.
+
+### R4.24 — `ent_mvstep`: 261 records match; the rest is a different table
+
+- Records `0`-`260` (**785 bytes**) match `ds1:0x81BC` — with **one byte of divergence**:
+  `ds1` carries an extra `0x90` at port offset `0xF`, after which the two streams realign
+  and run together for the remaining 770 bytes.
+- From byte 785 the port's array is the **pointer table** of R4.22, not movement steps at
+  all. `mvstep_t` is `{U8 count; S8 dx, dy}`, so those 1,567 bytes parse as nonsense
+  movement records.
+
+**It is inert.** `step_no` is seeded from `ent_entdata[].sni`, whose maximum across all 79
+rows is **244**, below the last valid record (261), and sequences terminate on
+`count == 0xff`.
+
+**The `0x90` is left alone, deliberately.** Two readings fit and I cannot separate them
+from this dump: either the port dropped a byte when transcribing, or the two PC builds
+genuinely differ here — and R4.22 proves they *are* different builds. The port's parse is
+the self-consistent one (`{0x46, 8, 0}` = 70 frames, dx 8, dy 0), while the `ds1` alignment
+would give `{0x90, 0x46, 0x08}` — 144 frames at dx 70, which is not plausible movement
+data. Changing a table that currently produces correct behaviour, on a one-byte difference
+between two builds, is not a fix.
+
+Still unchecked in Phase 1: `dat_spritesST`, `dat_picsST` (ST artwork, a separate job).
+
+## Group B — the seven bounded questions, all closed
+
+### B1 `map_maps[4]` ✅ AGREE (slot is dead on all three)
+The PC **does** hold a distinct 5th record at `ds1:0x80EF+32`: `x=0x74, y=0xC8, row=8` —
+exactly the port's `map_maps[4]`. But `0x0DF9` `cmp al,4 / jb` means the start-position
+lookup **never runs for map 4**; the PC sets the game-complete flag and returns, and the
+port likewise ends at `env_map >= 0x04`. The ST's slot 4 duplicates map 0. Dead everywhere;
+the port's PC-matching values are correct and inert. **No change.**
+
+### B2 `map_frow` width ✅ concern retired — it was unfounded
+The original worry ("an intermediate that went negative would wrap at 8 bits") is **wrong**:
+in `map_frow - rowout + rowin` (`map_chain`, `maps.c:208`) C promotes to `int`, so no
+intermediate wraps; only the final store truncates. The one expression that *can* go
+negative — `map_frow = map_connect[i].rowin - 0x10` with `rowin == 0` (55 of 154 rows) — is
+in the `else` of `if (sysarg_args_submap == 0)`, i.e. the **port-only `-submap` debug
+option**, which has no counterpart in either original. The PC scrolls `[0x7E38]` as a word
+(`inc ax` `0x0FD5` / `dec ax` `0x1043`) and the port as `U8` (`scroller.c:76/144`), which
+agree over the legitimate range. **No change.**
+
+### B3 `ent_entdata` rows 3/22/23 ✅ AGREE — the ST blanks are real
+Read from `object_type_defs` at `0x47D34` (16 bytes/entry, `+2` = W, `+4` = H): entries
+**3, 22, 23 are all `w=0, h=0`**, as are unused slots 0 and 2, against `0x18/0x15` for
+normal entries. The port's ST branch already carries exactly this. **Verified, no change.**
+
+### B4 the climbing env probe ⭐ **defect #15, fixed (2 sites)**
+The PC has exactly **two** crawl-dependent probe pairs — non-climbing vertical
+(`0x1596` crawl / `0x15AB` plain) and horizontal (`0x166D` / `0x1673`) — matching port
+lines 234 and 320. Both **climbing** probes, `0x18A2` and `0x191E`, call the **plain**
+entry unconditionally. The ST has no crawl parameter to this probe at all: `(0x4DC28)` is a
+result **mask** (`and.b (0x4DC28).l,D0` @ `0x4DBFC`) written only from `enemy_ai_update`.
+Both originals agree; the port alone passed `STCRAWL`, shortening the probe by a row
+whenever `STCRAWL` and `STCLIMB` were both set. Now `FALSE` at both sites.
+
+### B5 bullet/bomb control test ⭐ **defect #16, fixed**
+PC `0x174B`: `and al,0xc / cmp al,0x8` (UP set, DOWN clear, **all other bits ignored**);
+PC `0x17CD`: `test dh,0x4` for the bomb. FIRE is required upstream at `0x1713` and
+LEFT|RIGHT consumed at `0x171B` — precisely the port's own flow. The port's
+`control_status == (FIRE|UP)` byte-equality additionally demanded `PAUSE`/`END`/`EXIT` be
+clear, and refused to act on UP+DOWN where the PC drops a bomb. Now masked.
+
+### B6 spawn banding ⭐⭐ **defect #17, fixed**
+The PC's `map_init` (`0x0E82`-`0x0EA0`, three `CALL 0x2089` with DH = first row,
+DL = count) scans `frow+8`/`0x18`, `frow`/`8`, `frow+0x20`/`8` — i.e.
+**`frow+0x00 .. frow+0x27`**, the same total the ST covers with its five 8-row bands. The
+port's `MAPS_VISHEIGHT_TL 0x20` made it scan `frow+0x00 .. frow+0x2F`, **activating
+entities eight rows below anything either original reaches**. Corrected to `0x18`, which
+the port's own constants already implied: `MAP_ROW_SCRTOP 0x08 .. SCRBOT 0x1F` is `0x18`
+rows, `MAP_ROW_HBTOP 0x20`, and `MAP_ROW_HBBOT` is **`0x27`** — exactly the last row both
+originals scan.
+
+### B7 `maps_clip` left edge ⭐ **defect #18, fixed**
+`maps_clip(U16 *x, ...)` tested `if (*x < 0)` — dead by construction. It is **reachable**:
+`ent_addrect()` declares `U16 x` but is called with `ent_ents[i].x`, an `S16` that goes
+negative as an entity leaves the left edge (`ents.c:407-432`). A negative x arrived as
+`0xFFxx`, fell into the `else`, tripped `*x > MAPS_WIDTH_PX` and the **whole rectangle was
+dropped** — so the entity's erase rectangle was skipped and it smeared off the left edge.
+Fixed by reading the value back as `S16` inside `maps_clip`, rather than converting five
+call sites and their callers; `<= 0` rather than `< 0`, since a zero-width rectangle is not
+worth queuing.
+
+## Group A — the six structural items, all implemented
+
+### A6 ⭐⭐⭐ the pointers-vs-numbers model (T9) — **SOLVED**
+
+The root cause under A1, A2, A4 and A5, open since T9. The ST holds animation frames as
+**pointers**; the port holds **sprite numbers**. They are related by a single affine map:
+
+```
+sprite index = (ST pointer - 0x2BE9E) / 0x150
+```
+
+`0x150` is `sizeof(sprite_t)` — `typedef U32 sprite_t[0x54]` under `GFXST`, i.e. exactly the
+stride between consecutive ST frame pointers. The base was derived from **one** anchor: the
+death-tumble table at `0x46BE6` holds `0x2DF6E`/`0x2E0BE`, and the port draws the tumble
+with sprites `0x19`/`0x1A`.
+
+It then **predicts, without further fitting**, the sprite numbers the port already uses in
+five other places — which is what makes it evidence rather than a curve fit:
+
+| ST table | decoded | port already used |
+|---|---|---|
+| `0x46BC2` | `02 03 04 05 06` | walk, `(seq >> 2) + 1` |
+| `0x46BDA` | `07 08` | crawl, `0x07` `+1` on `x & 4` |
+| `0x46B9E` | `0C 18` | climb, `0x0C` / `0x18` |
+| `0x46BE6` | `19 1A` | tumble (the anchor) |
+| `0x46C3E` | `90 24 91 25 92 26 93 27 94 28` | box explosion `0x24..0x28` |
+
+Every pointer in the region divides exactly — remainder 0 in all cases, none out of range
+(`< SPRITES_NBR_SPRITES 0xD5`). The port's own sprite sheet and the ST's are the same
+ordering.
+
+*Method note:* the first table scan found nothing because it stepped by 4 from an aligned
+origin and `0x46BE6` is not 4-aligned relative to it. Re-scanned at every byte offset.
+
+### A1 — dynamite fuse ✅ implemented
+ST fuse = the 17 pointers at `0x46BF2` -> `0x22 0x23 0x81..0x8F`, each held **two** ticks
+(`0x4CAC8` `bclr #0,D0 / add.w D0,D0`), so 34 fuse ticks; `E_BOMB_TICKER` is `0x2B` on ST
+(34 + 9) against the PC's `0x2D` (45). The port had the right *shape* — two frames then
+fifteen — but the wrong second range, `0x99..0xA7` instead of `0x81..0x8F`.
+**The port's `x -= 4` / `y -= 5` at detonation is confirmed exactly right**: `0x4CB06` sets
+the lethal flag then does `subi.w #4` on x and `subi.w #5` on y. Its author's comment was
+faithful, as R3.13 suspected.
+
+### A2 — `e_them` climb gate ✅ implemented
+Both gates: condition `((x & 8) == 0 || (x & 7) == 0)`, `y <= rick.y` (gate 1, inclusive) /
+`y > rick.y` (gate 2), then `x = (x & ~0x0F) | 4`, gate 1 also `y = (y & ~7) | 5`, both
+`ylow = 0`. **The control-flow worry from R4.6 dissolved on inspection**: the ST's carry is
+`(env & 0xD0) != 0` (`0x4DC0E` `andi.b #-0x30,D0 / bne`) = VERT|SOLID|WAYUP, so a VERT tile
+sets it and the explicit VERT test re-selects the very case the port reaches through
+`!(env1 & 0x70)` then `env1 & VERT`. No restructuring needed.
+
+### A3 — `e_them` PRNG turn ✅ implemented
+Second generator added: two 32-bit words, `exg / rol.l #3 / subq.w #7 / eor.w` (`0x49596`),
+seeded from the values in `atari_ram.bin`. Decision `(byte & 3) == 0` -> **flip** `offsx`,
+against the PC's `and al,0x1` -> **set** it. The ST's gate is its frame counter
+(`cmpi.w #8,(0x2a,A0)` @ `0x4D790`) where the port's is the position (`(x & 0x1e) == 8`);
+both fire every 8 steps, so the gate is left as the port has it and only the generator and
+rule are switched. The PC's "Black Magic" locals are now `#ifndef PLATFORM_ST`.
+
+### A4 — `e_box` ST explosion ✅ implemented
+Ten frames `0x90 0x24 0x91 0x25 0x92 0x26 0x93 0x27 0x94 0x28`, two ticks each,
+`SEQ_INIT` `0x14` on ST (20 ticks, counting **up**) against the PC's `0x0A` (10, counting
+down). Indices verified to span exactly 0..9.
+
+### A5 — `e_rick` corpse ✅ implemented
+(a) The tumble sprite is **tick-driven** on the ST: a counter wrapping at 4, `bclr #0`,
+giving `0x19 0x19 0x1A 0x1A` — not the port's `(x & 4)`.
+(b) The corpse **bounces off both edges** (`0x4C86E`-`0x4C892`): moving left with
+`nx <= 0`, or right with `nx >= 0xE8`, negates the drift and **skips** the x store that
+frame. The port drifted straight through.
+
+## The SPAD blocked-test item — inert, closed
+
+Flagged while resolving A2: the ST's env-test carry is `(env & 0xD0) != 0` (`0x4DC0E`
+`andi.b #-0x30,D0 / bne`) = VERT|SOLID|WAYUP, which **excludes SPAD (0x20)**, where the PC
+masks with `0xF0`/`0xE0` and the port with `0x70`. On its face a falling enemy would drop
+through a super pad on the ST but land on it on the PC.
+
+**It cannot happen.** Every SPAD tile also carries SOLID, which *is* in the ST's mask:
+
+| source | SPAD tiles | SPAD **without** SOLID |
+|---|---|---|
+| ST per-tile LUT `0x49F1E` (page 0) | 3 | **0** |
+| ST per-tile LUT `0x4A01E` (page 1) | 1 | **0** |
+| port `map_eflg_c` ST, pages 0/1 | 3 / 1 | **0 / 0** |
+| port `map_eflg_c` PC, pages 0/1 | 3 / 1 | **0 / 0** |
+
+The four tiles are `0xBE`, `0xBF`, `0xC0` (page 0) and `0xD8` (page 1), and all four have
+SOLID set. The ST's carry is therefore set for every SPAD tile regardless, and the mask
+difference can never change an outcome. `AGREE` in effect. No change.
+
+*(Method note: my first expansion of `map_eflg_c` produced 512 tiles per page. The real
+`map_eflg_expand` advances `i` twice per iteration — `j = map_eflg_c[offs + i++]` inside a
+`for (... i++)` — so it reads **8** pairs per page, not 16.)*
+
+## C1 — ST `map_bnums` ✅ RESOLVED by an in-game dump; **no code change needed**
+
+**The dump was produced here**, with the existing harness: `re/hatari_probe.py boot` boots
+`disks/chaos43/RICK.PRG` under Hatari, drives to gameplay by poking the joystick byte, and
+`Session.to_game()` already calls `dump_ram()` -> `savebin 0 0x100000`. The run reported
+`delta = -0x2054`, the track-table self-check **PASS**, and the `player_controller`
+breakpoint **fired** — so the snapshot is genuinely in gameplay. Output:
+`re/hatari/ram.bin` (1,048,576 bytes).
+
+`(0x495CC)`, null in `atari_ram.bin`, now holds **`0x0001EFCA`**, and the table there is
+`46 46 46 46 …` — the port's `map_bnums` head. The table's extent is confirmed by what
+follows it: `map_blocks` begins immediately at `+0x1FD8`, matching `MAP_NBR_BNUMS`.
+
+**The ST table is the port's with exactly two `0x00` bytes missing at `+0x1A88`** —
+`port[0x1A8A:] == ST[0x1A88:]`, **1358/1358 bytes, 100%**. The first 6,792 bytes are
+identical, and the two tails have identical value histograms.
+
+**And the offsets compensate exactly.** The ST's room header is
+`{U16 page; U32 blocks_ptr; U32 connect_ptr; U32 mark_ptr}` (14 bytes; `[0]`'s pointer is
+the table base itself). Deriving each submap's offset as `blocks_ptr - 0x1EFCA`:
+
+- submaps **0-37**: identical to the port's `bnum`
+- submaps **38-46**: exactly **`-2`**, matching the two missing bytes
+
+Those nine are precisely level 4 (`map_maps[3].submap == 0x26 == 38`). Verified directly:
+for **all 47 submaps**, `ST_table[ST_offset .. +0x78] == port_table[port_bnum .. +0x78]`.
+
+**So the rendered maps are identical.** The 2-byte difference is a layout artifact between
+the two builds — the PC carries two padding bytes the ST does not, and each build's offsets
+account for its own table. ❌ **R4.2's "`map_bnums` now needs an ST variant" is retracted**:
+the port's PC table with PC offsets is exactly equivalent. `AGREE`.
+
+## Group G — game state machine (`game.c`) and intro screens
+
+### G1 ⭐ scroll threshold — **defect #19**, and a spurious switch removed
+
+The port had the low scroll trigger platform-switched, `0x5F` on ST and `0x60` on PC, from
+an `xref.md` row that read the two constants as a genuine difference. **They are the same
+test written two ways:**
+
+```
+PC  0x018B  cmp al,0x60  / jnc skip   ->  scrolls when y <  0x60
+ST  0x4DD0E cmpi.w #0x5f / bgt skip   ->  scrolls when y <= 0x5F
+```
+
+The port's PC branch used `y <= 0x60`, scrolling one row early at exactly `y == 0x60`,
+where **neither** original scrolls. Fixed to `<= 0x5f` and the `#ifdef` deleted. The high
+threshold needs no switch either — PC `0x017E cmp al,0xcc / jc` and ST `0x4DD1E
+cmpi.w #0xcc / blt` both scroll up at `y >= 0xCC`, which the port already had.
+
+### G2 — `init()` ✅ AGREE
+PC `0x0032`-`0x0083`: `[0x7E46]=6` lives, `[0x7E45]=6` bullets, `[0x7E47]=6` bombs, score
+set to `"000000"` (three `MOV word,0x3030`), Rick's x/y from the map table at `0x80EF`,
+then `[0x7E8C]=0x18` and `[0x7E8E]=0x15`. Every one matches the port. Those last two also
+**confirm the `ent_t` layout independently**: Rick's base is `0x7E7E`, so `+0x0E` is `w` and
+`+0x10` is `h` — exactly the port's `b0E`/`b10` field comments.
+
+### G3 — `restart()` ✅ AGREE, and a port FIXME answered
+PC `0x00C7` does, in the port's order: clear `[0x7D92]` (STDEAD) and `[0x7D75]` (STZOMBIE),
+`[0x7E7E]=1`, bullets 6, bombs 6, then `CALL 0x0D50`. So the port's
+`ent_ents[1].n = 1; // FIXMEwhy??` is simply what the PC does. `CALL 0x0D50` is
+`e_rick_restore`, **corroborating R4.13's identification**, and it restores `map_frow`
+inside itself where the port restores it separately in `game.c` — same net effect.
+
+### G4 — death path ✅ AGREE
+PC `0x0134`: `mov al,[0x7e46] / dec al / mov [0x7e46],al / jnz restart`, else game over.
+That is the port's `if (env_trainer || --env_lives)` exactly (`env_trainer` being a port
+cheat). Ammo reset on map change also matches (`[0x7E45]`/`[0x7E47]` = 6, PC `0x0DC8`).
+
+### G5 — hall of fame ✅ **both tables verified against their own binaries**
+
+| | source | result |
+|---|---|---|
+| port `GFXPC` table | `ibmpc_ds2.bin:0x46A5` | **exact** — all 8 names and scores, in order |
+| port `GFXST` table | `atari_ram.bin:0x48E38`, stride `0x1E` | **exact** — SIMES, JAYNE, DANGERSTU, KEN, ROB^N^BOB, TELLY, NOBBY, JEZEBEL, leading BCD `008000` |
+
+The PC table has a **ninth** row (`000000`, blank) which is *not* a hall-of-fame entry: the
+qualification loop at `0x203D` is `mov si,0x46a5 / mov cx,0x8` — **8** entries. So the
+port's 8-entry array and its `game_hscores[7]` threshold are right.
+
+`OPEN`, minor: the port qualifies on `env_score >= game_hscores[7].score` where the PC's
+digit compare (`jc` = strictly less) appears to need *greater than*. A difference only at
+exactly 1000; the PC's equal-digit continuation was not traced.
+
+### G6 — `scr_imap.c` tables
+`screen_imapsl` (22 bytes) matches `ibmpc_ds1.bin:0x9736` **exactly**.
+`screen_imapsteps` (23 records of 4 `U16`) matches **nothing** in any dump under byte,
+LE16 or BE16 encodings — the port has reformatted it, so this screen must be compared
+behaviourally rather than by content. `OPEN`.
+
+## R2 — the render layer (24 functions), swept for *what* is drawn
+
+Scope per the user: which bytes reach the screen and when, not how SDL puts them there.
+
+### R2.1 ⭐ `scroller.c` — **defect #20**, entity despawn during scroll
+The PC translates entities with **one shared routine** (`0x10B2`) used by both scroll
+directions, applying **both** bounds on every entity, every step:
+
+```
+10CA  add word[si+0x1e],bx     ; ysave += delta      (+0x1E = ysave)
+10CD  add word[si+0x18],bx     ; trig_y += delta     (+0x18 = trig_y)
+10D0  mov ax,[si+0x4] / add ax,bx
+10D5  test ah,0x80 / jz        ; y <  0      -> mov byte[si],0
+10E3  cmp ax,0x140 / jc        ; y >= 0x140  -> mov byte[si],0
+```
+
+The port **split** them — `scroll_up` kept only `y < 0`, `scroll_down` only
+`y > 0x0140` — and used `>` where the PC uses `>=`, so an entity sitting exactly on
+`0x140` survived a scroll the PC would have removed. Both now use `ENT_YDEAD()`, which
+also supplies the right per-platform bound: the ST's is `0x142`, not `0x140`
+(`0x4B0C8 cmp.w #0x142,D2 / ble`, and `0x4D352`). `0x140` does not appear as a comparison
+anywhere in the ST.
+
+Everything else in `scroller.c` **agrees**: 8 steps (`mov cx,0x8` @ `0x0F87`), entity
+delta `±8` (`mov bx,0xfff8`; ST `move.w #-8,(0x4A700)` @ `0x49C8C`), `map_frow++/--`
+(`0x0FD5`/`0x1043`), and the end-of-scroll bands — PC `add dh,0x20 / mov dl,8`
+(`frow+0x20..0x27`) and `mov dl,8` at `frow+0` — exactly the port's
+`MAP_ROW_HBTOP/HBBOT` and `HTTOP/HTBOT`. The field offsets `+0x1E`/`+0x18`/`+0x4`
+independently re-confirm `ent_t`'s `w1E`/`w18` layout.
+
+### R2.2 ❌ **defect #18 was WRONG and is reverted** — my error, caught here
+B7 made `maps_clip`'s dead left-clip branch live by reading `*x` back as `S16`. That was
+unsafe, and I did not check the shared consumers before changing it.
+
+`maps_clip` is called by `ent_addrect` **and** by `sprites_paint2`/`maps_paintRect`.
+`sprites_paint2` takes `U16 x` and guards its column loop with `x + c < x0`; a negative x
+arrives there as `0xFFxx`, so that guard cannot fire and the left-hand columns would be
+drawn at wrapped coordinates instead of skipped. `ent_draw` passes `ent_ents[i].x`
+unguarded, so the path is live.
+
+`maps_clip` is restored to its original form, with the branch documented as deliberately
+dead and *why* it must stay so. **The underlying bug is real and is now fixed at the
+caller that needed it**: `ent_addrect` clamps a negative x to 0 with reduced width before
+clipping, so the erase rectangle covers the visible part instead of being dropped — which
+was the actual smearing symptom. Partial left-clipping of *sprites* still requires the
+sprite path to carry a signed x; that refactor is not done.
+
+### R2.3 — `tiles.c` ✅ AGREE
+Bank and flag-LUT selection match the ST instruction for instruction:
+
+```
+499CA  move.l #0x1d01e,(0x495d0)   ; default tile bank
+499D4  move.l #0x49f1e,(0x495d4)   ; default per-tile flag LUT
+499DE  tst.w (A0) / beq            ; the submap record's +0 field = page
+499E2  move.l #0x1f01e,(0x495d0)   ; page != 0 -> the other bank
+```
+
+i.e. the port's `map_tilesBank = page == 1 ? 2 : 1` and
+`map_eflg_expand(page == 1 ? 0x10 : 0x00)`. `tst.w (A0)` also re-confirms that `page` is
+field `+0` of the ST submap record, as derived in C1. `TILES_NULL 0xFE` /
+`TILES_CRLF 0xFF` list walking is a port construct with no counterpart.
+
+### R2.4 — `sprites.c`: two latent bugs in code that never compiles
+`config.h` is `#define GFXST` / `#undef GFXPC`, and the Makefile excludes the `dat_*PC.c`
+tables, so the **GFXPC** variants cannot be built at all. Recorded, not changed, because a
+fix here cannot be compiled or tested:
+
+- `sprites_paint2` (GFXPC, line 96): `x_fb = y_map - MAPS_FB_Y;` assigns `x_fb` a second
+  time; `y_fb` is never set and is then used in `fb_at(x_fb, y_fb)`.
+- the same function references `xmap`/`ymap`, which are not declared (`x_map`/`y_map` are).
+
+The compiled **GFXST** variant is sound: it clips through `maps_clip`, honours
+`MAP_EFLG_FGND` for depth, and its `+8` vertical fudge matches the identical one in
+`maps_paintRect` — an ST-artwork alignment constant, consistent between the two.
+
+### R2.5 — `fb.c`, `img.c`, `rects.c`: port mechanisms, no counterpart
+`fb_fadeIn`/`fadeOut` are 8-step **gamma ramps** via `sysvid_setGamma`. Neither original
+fades that way — the ST rewrites the hardware palette, the PC the EGA registers — so the
+step count and curve are the port's own. What is comparable is *where* fades occur, and
+those are the state-machine transitions already checked in G1-G4 (the ST does
+`palette_fade_out()` before the game-complete path, matching `FADEOUT__GAMEOVER`).
+`rects_new`/`rects_free` are the dirty-rectangle allocator, and `img_paintPic`/`paintImg`
+paint the port's own `img_t` structs. All are `how`, not `what`. Out of scope by the
+user's rule, and recorded as such rather than left ambiguous.
