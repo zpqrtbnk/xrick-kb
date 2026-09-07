@@ -2285,3 +2285,127 @@ those are the state-machine transitions already checked in G1-G4 (the ST does
 `rects_new`/`rects_free` are the dirty-rectangle allocator, and `img_paintPic`/`paintImg`
 paint the port's own `img_t` structs. All are `how`, not `what`. Out of scope by the
 user's rule, and recorded as such rather than left ambiguous.
+
+## R3 — sound triggers and intro screens
+
+### R3.1 ⭐ sound: **25 ST trigger points, 25 port trigger points** — and one missing sound
+
+`sounds.c`'s four functions are loading and plumbing. What matters is *where* sound is
+triggered, so I enumerated both sides.
+
+The **PC is not the reference here**. Its audio is inline PC-speaker code — only two
+regions exist (`0x0355`-`0x035D`, `0x2B4D`-`0x2B78`), reached from a handful of sites
+(`0x2B68` is `in al,0x61 / and al,0xfc / out 0x61,al` with delay loops). The port's WAV set
+(bullet, bomb, explode, pad, bonus, die, entity…) follows the **ST's sampled audio**, so
+the ST's `play_music` (`0x44CCE`) is the thing to compare against. It has **25** call
+sites; the port has **25** `syssnd_play`/`sounds_setMusic` sites.
+
+Confirmed mappings, against the track map in `re/assets-manifest.md`:
+
+| ST track | trigger | port |
+|---|---|---|
+| 8 | fire path after decrementing bullets | `e_bullet.c:47` `WAV_BULLET` |
+| 9 | dynamite fuse | `e_bomb.c:135` `WAV_BOMBSHHT` |
+| 10 | dynamite + destructible pickup | `e_bomb.c:174` and `e_box.c:192` `WAV_EXPLODE` |
+| 12, 13 | `player_select_anim_frame` | `e_rick.c` walk ×3 / crawl |
+| 14, 15 | `player_controller` jump/land | `e_rick.c:497`, `:562` `WAV_JUMP` |
+| 16 | crate collected | `e_box.c:157` `WAV_BOX` |
+| 17 | treasure pickup | `e_bonus.c:58`, `:77` `WAV_BONUS` |
+| 19 | `kill_player` **and** `kill_enemy` | `e_rick.c:125` and `e_them.c:90` `WAV_DIE` |
+| `0x13`-`0x1C` | entity trigger sounds | `e_them.c:886` `WAV_ENTITY[...]` |
+
+Track 19 is worth noting: the manifest records that `play_music`'s type-2 branch ignores
+`D1`, so Rick's death and an enemy's death play the *same* sample — which is exactly what
+the port does.
+
+**Defect #21 — the ST clicks when you fire an empty gun; the port was silent.**
+
+```
+4C524  tst.b (0x0004b32a).l     ; bBullets
+4C52A  bne -> fire normally
+4C530  move.w #0x9,D0 / moveq #1,D1 / jsr play_music / return
+```
+
+Track 9 is shared with the dynamite fuse, so the sound is `WAV_BOMBSHHT`. Added under
+`PLATFORM_ST` only: the **PC is silent on this path too** (`0x1776`
+`mov al,[0x7e45] / and al,al / jnz / ret`, no speaker call), so it is a platform
+difference, not an omission on both sides.
+
+Three port sites are not yet pinned to a track — `WAV_PAD`, `WAV_STICK`, `WAV_SBONUS2`.
+All three are in `player_controller`/`effect_*` territory, which is where the manifest's
+unattributed track 11 and the 14/15 pair live. Plausible, not proven; left `OPEN`.
+
+### R3.2 ❌ correction to `re/assets-manifest.md`'s track map
+Its note *"Remaining subtunes (1–8, 21–29) have no literal call site"* is **wrong for
+subtunes 6, 7, 8**. Re-scanning the 25 sites across both encodings:
+
+- **19** load the track with `move.w #N,D0` — tracks 8-19, the documented table;
+- **4** with **`moveq #N,D0`** — track 7 @ `0x4BEC2`, track 5 @ `0x4DC62`/`0x4DC94`,
+  track 6 @ `0x4DDC6`;
+- **2** load `D0` indirectly — the entity trigger path.
+
+The original scan matched only the `move.w` form. Same encoding-blindness as the `cmpi.w`
+scan that missed the ST's `cmp.w` (R4.7). Corrected in place in the manifest.
+
+### R3.3 — intro screens
+`scr_imap.c` is table-driven from `screen_imapsteps`, which matches **no** dump under byte,
+LE16 or BE16 encodings (R2/G6) — the port reformatted it, so the level-intro animation
+cannot be verified by content and needs behavioural comparison (R1). Its *flow* is sound
+and checkable: paint title/body, start the per-map tune, fade in, animate until FIRE, wait
+for release. The per-map tune (`map_maps[].tune`) corresponds to the ST's type-0 song
+tracks, consistent with the four literal music sites found in R3.2.
+
+`scr_gameover`, `scr_imain`, `scr_pause`, `scr_xrick` are each a single screen-state
+function whose only game-visible effects are the music they start and the state they
+return; those transitions were already checked in G1-G4. `OPEN` for behavioural
+comparison, nothing further verifiable statically.
+
+## R4 — residual items
+
+### R4a ✅ hall-of-fame boundary — **my concern was unfounded**
+I flagged that the port qualifies on `env_score >= game_hscores[7].score` where the PC's
+digit compare (`jc` = strictly less) looked like it needed *greater than*. Tracing the
+whole loop settles it: at `0x206B`, after all six digits compare **equal**, the PC jumps to
+`0x207A` — the **qualified** path. So the PC qualifies on `>=` too and the port matches
+exactly. No change.
+
+### R4b ⭐ ST bomb explosion phase — implemented
+The phase after the fuse sentinel is now read in full. `0x4CAAC` `tst.w (0x0004bf1a).l /
+bne` routes an already-detonated bomb to `0x4CB5A`, and there:
+
+```
+4CB60  addi.w #0xc,D0 -> (0x4bf2a)    ; blast centre x = x + 0x0C
+4CB70  addi.w #0xa,D0 -> (0x4bf2c)    ; blast centre y = y + 0x0A
+4CB82  lea (0x46c3e).l,A0             ; the BOX's ten-frame table, reused
+4CB8E  cmp.w #7,D0 / blt              ; index >= 7 CLEARS the lethal flag
+4CB9A  bclr #0,D0 / add.w D0,D0       ; two ticks per frame
+```
+
+- **The blast centre `+0x0C` / `+0x0A` is exactly what the port already had** ✓
+- The ST explosion is **20 ticks, ten frames** from the *same table as the box*
+  (`0x90 0x24 0x91 0x25 0x92 0x26 0x93 0x27 0x94 0x28`), not the port's five own frames
+  `0xa8..0xac`;
+- and it stops being **lethal after 7 ticks**, where the port stayed lethal throughout.
+
+Implemented under `PLATFORM_ST` via a shared helper. Timing re-derived rather than
+assumed: `E_BOMB_TICKER 0x37` with `elapsed = TICKER - 1 - ticker` yields exactly **34
+fuse ticks (17 frames x2)** and **20 explosion ticks (10 frames x2)** — checked
+programmatically; the first attempt (`0x36`) gave 33 fuse ticks and left one frame with a
+single tick.
+
+### R4c — three unpinned sounds, now pinned by their surrounding code
+| ST track | pinned by | port |
+|---|---|---|
+| **11** | `0x4C4AE` sets `(0x4BF1C)` = 0xFF, guarded at `0x4C44A`/`0x4C4A2` by `tst.w` / `bne` — a **one-shot latch**, exactly the port's `stopped` static | `WAV_STICK` |
+| **14** | `0x4C3D4` `move.w #-0x580,(0x0004a756).l` immediately before — the jump velocity verified in R4.18 | `WAV_JUMP` |
+| **15** | `0x4C212` sits between `move.w #0x00FE,D4` (`0x4C1DE`) and `move.w #0xF800` (`0x4C22C`) — the super-pad launch | `WAV_PAD` |
+
+This refines the manifest's "14, 15 — jump / land cues": **14 is the jump, 15 is the super
+pad**. `WAV_SBONUS2` remains unpinned. Noted while here: the ST has **two** stop paths, one
+of which sets the latch *without* sound (`0x4C456`), where the port has a single latched
+site.
+
+### R4d — `ent_sprseq` / `ent_mvstep` over-runs: unchanged, by decision
+Both over-run their true ends into adjacent data (R4.23/R4.24) and both are provably inert
+(max `sni` 244 < 261 valid records; sequences terminate on `0xff`). Shortening a declared
+array without tracing every index is how an inert oddity becomes a crash. Left as is.

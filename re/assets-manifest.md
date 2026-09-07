@@ -275,8 +275,22 @@ track + 1 (SNDH subtunes are 1-based).
 | 19 | 18 | 1 | `effect_start_escape_timer` | escape-timer music |
 | **20** | **19** | **PCM** `0x50DA8` | **`kill_player`** and `kill_enemy` | **the death "waaaaa"** — *entirely uncaptured* |
 
-Remaining subtunes (1–8, 21–29) have no literal call site in the code — they are
-selected indirectly or are level/menu music.
+❌ **Corrected 2026-09-07.** The line that stood here — *"Remaining subtunes (1–8, 21–29)
+have no literal call site"* — is **wrong for subtunes 6, 7 and 8**. The original scan
+matched only `move.w #N,D0` (`30 3c 00 NN`) and so missed the sites that load a small
+track number with **`moveq`** (`70 NN`). Re-scanned across both encodings, the 25
+`jsr play_music` sites are:
+
+- **19** via `move.w #N,D0` → tracks 8–19, the table above;
+- **4** via `moveq #N,D0` → **track 7** @ `0x4BEC2` (D1=0), **track 5** @ `0x4DC62` and
+  `0x4DC94` (D1=1), **track 6** @ `0x4DDC6` (D1=0);
+- **2** with `D0` loaded indirectly — `0x4D26C` and `0x4D2CC`, the entity trigger-sound
+  path over the `0x13`–`0x1C` range.
+
+Track 5's two sites are the ones already described further down (before `NEW_GAME` and
+before the per-frame main loop). Subtunes 1–5 and 21–29 do remain without a literal call
+site. This is the same encoding-blindness that hid the ST's `cmp.w` from a `cmpi.w`
+scan — see `review-plan.md` standing checks.
 
 Two details worth noting. `kill_player` passes `D1 = 1` and `kill_enemy` passes
 `D1 = 0`, but `play_music`'s type-2 branch ignores `D1` entirely, so **Rick's death and
