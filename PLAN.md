@@ -80,13 +80,30 @@ structural.
 **Plan and live status: [`review-plan.md`](review-plan.md); evidence log:
 [`review-log.md`](review-log.md).**
 
-As of 2026-09-05: phases 0 and 2 complete, 3a and 3b complete at the level attempted, and
-the `xref.md` sweep done. **38 differences catalogued, 26 `PLATFORM_ST` switch sites, 6
-port defects fixed.** Both platforms build and run.
+**As of 2026-09-07 — read `review-plan.md` §11 first; it is written to be picked up cold.**
 
-Remaining: ~70 functions in system/render/player/sound, five unchecked data tables, and
-six open findings — one of which (the score-overflow representation) needs a user
-decision. See `review-plan.md` §11.
+Done: phases 0, 2, 3a, 3b; the `xref.md` sweep; the whole **simulation core** — all entity
+logic, the player, the map system and the game state machine (**68 of 199 functions**,
+the ones with counterparts in the originals). **48 `PLATFORM_ST` switch sites. 23 defects
+numbered, #18 retracted, so 22 stand fixed.** Both platforms build with 0 errors and
+produce different binaries. T9 (pointers-vs-sprite-numbers) is **solved**:
+`sprite = (ST pointer - 0x2BE9E) / 0x150`.
+
+Remaining, in priority order (detail in `review-plan.md` §11.5):
+
+1. **R1 differential testing** — the largest gap. `PLATFORM_ST` has never been *executed*
+   against the original; it is a reconstruction from the disassembly. The Hatari harness
+   already boots the ST build and dumps RAM in-game.
+2. **A user decision**: is `GFXPC` ever to be revived? It does not compile, so
+   `PLATFORM_PC` is today PC *behaviour* with ST artwork and ST audio.
+3. **47 functions** — intro screens, `sounds.c`, and the render layer (what is drawn and
+   when sound plays, not how SDL does it).
+4. Three known port bugs in no-counterpart code; ST artwork pixel verification; and a
+   short list of documented, deliberately unchanged carry-overs.
+
+84 further functions (`unzip`, `syssnd`, `data`, `sysvid`, …) have **no counterpart** in
+either original and are out of scope by the user's rule: what matters is the right sound
+at the right time and the right bytes on screen, not how SDL delivers them.
 
 ### T2 — ~~Bullet probe points: one or two?~~ ✅ **RESOLVED 2026-08-31**
 

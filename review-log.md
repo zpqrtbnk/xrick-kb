@@ -2409,3 +2409,81 @@ site.
 Both over-run their true ends into adjacent data (R4.23/R4.24) and both are provably inert
 (max `sni` 244 < 261 valid records; sequences terminate on `0xff`). Shortening a declared
 array without tracing every index is how an inert oddity becomes a crash. Left as is.
+
+## Items 2, 3, 4 from the audit
+
+### I2 ✅ the ST death-tumble end — **VERIFIED**, marker removed
+The `/* UNVERIFIED for ST */` at `e_rick.c` is gone. The ST genuinely does **not** end the
+tumble inside the player update: `0x4C846`-`0x4C8A8` integrates y and applies gravity with
+no bound test, and `0x4CA54` — the exit I had never read — is only
+`movem.l (SP)+ / rts`. The corpse leaves through `render_sprites`:
+
+```
+4B0B4  moveq #0,D2 / move.w (0x6,A0),D2
+4B0BA  cmp.w #0,D2   / bge -> else bsr 0x4AC3E   (despawn)
+4B0C8  cmp.w #0x142,D2 / ble -> else bsr 0x4AC3E (despawn)
+```
+
+That is exactly `y < 0 || y > 0x142`, which is what the port's ST branch already expressed
+with `ENT_YMAX = 0x142`. **Same condition, different home** — the port was right.
+
+### I3 ⭐ the remaining `ENT_YMAX` sites — **defects #22 and #23**
+The reason six sites were unverified is that I had only found two PC encodings. There are
+**three**, and the PC's entity bound checks number **exactly six**, all now located:
+
+| PC | encoding | port site |
+|---|---|---|
+| `0x10E3` | `cmp ax,0x140` | scroll translate (defect #20) |
+| `0x2976` | `cmp bh,0/1` + `cmp bl,0x40` | t2 ymove (R4.7) |
+| `0x2A06` | `cmp dh,0` + `cmp dl,0x40` | t2 fall (R4.7) |
+| `0x23AD` | **`cmp dx,0x140`** | t1 fall — **defect #22** |
+| `0x2742` | `cmp ax,0x140` | restore from xsave/ysave — **defect #22** |
+| `0x278B` | `and ah,ah` / `cmp ah,1` / `cmp al,0x40` | scripted move — **defect #23** |
+
+- **#22** (two sites): both despawn at `y >= 0x140`; the port had `> ENT_YMAX`, one row too
+  high. `0x2742` also re-confirms `xsave`/`ysave` at `+0x1C`/`+0x1E` for a third time.
+- **#23**: the scripted-move path stores iff y is in range — the exact complement of the
+  despawn predicate — and it **accepts `y == 0`**, which the port's `y > 0` rejected. Now
+  `!ENT_YDEAD(y)`.
+- The seventh port site, the **dying-enemy** test, has **no PC counterpart at all**; a
+  dying enemy leaves via the general mechanisms. It also tests the *pre-integration* y, so
+  it fires a frame late. Left in place (deleting a despawn on no evidence is riskier) but
+  aligned to `ENT_YDEAD` and documented as a port addition.
+
+### I4 — `e_them.c`: all 11 functions now have instruction-level anchors
+The contact sequences were the missing piece. Mapping the PC's callers of
+`e_rick_boxtest` (`0x12AE`), `u_fboxtest` (`0x1317`) and `e_bomb_hit` (`0x134B`) gives
+**distinct clusters per entity type**, and each matches the port's order:
+
+| PC cluster | order | port |
+|---|---|---|
+| `0x2342`-`0x2382` | fbox, bomb, fbox, **rickbox last** | `e_them_t1_action` |
+| `0x2864`-`0x28D1` | **rickbox first**, fbox, bomb, fbox | `e_them_t2_action` |
+| `0x268F`-`0x269F` | `test [si],0x80` then rickbox alone | `e_them_t3_action` |
+
+`t3_action` matches instruction for instruction, `ENT_LETHAL = 0x80` included; the port's
+extra `!STZOMBIE` is redundant, since the PC's `e_rick_boxtest` guards internally at
+`0x12AE`. `t3_action2` opens on `[SI+0x26]` in the PC and `sproffs` (= `c1`, offset
+`0x26`) in the port. The bullet test at `0x2323` matches including the `+0x18` applied on
+one direction only. `t1a`/`t1b` are trivial wrappers.
+
+**Honest limit:** this is structural and constant-level verification with instruction
+anchors at every decision point — not a literal transcription of all ~600 PC instructions
+in these routines. `u_themtest` has no separate PC call (the equivalent test is inline,
+ending in the `JMP 0x24C4` at `0x2320`).
+
+### Process failure worth recording
+While editing `e_them.c` I wrote a comment containing a non-latin-1 character. Python's
+`open(f,'w',encoding='latin-1')` **truncates before encoding**, so the write raised after
+emptying the file — `e_them.c` went to 0 bytes and the link failed. Recovered from
+`HEAD` (which held the session's earlier work) and the four post-commit edits re-applied.
+**Fix adopted: build the whole string, `.encode('latin-1')` it, and only then open `'wb'`
+and write** — an encoding error now raises with the file untouched.
+
+**Warning census note.** `make warn` went 180 -> 182, both new ones `-Wtype-limits` at the
+two `ENT_YDEAD` sites where the local `y` is `U16` (`e_them.c:118` and `:777`), so the
+`(y) < 0` half is dead there. **The behaviour is still correct**: an unsigned `y >= 0x140`
+catches a wrapped-negative y, which is precisely how the PC does it — `0x23AD cmp dx,0x140
+/ jc` and `0x278B`'s byte-pair test are both unsigned. The clause is redundant at those two
+sites, not wrong. The third `-Wtype-limits` is the long-standing, deliberately dead
+`maps_clip` branch.

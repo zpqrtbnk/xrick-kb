@@ -270,103 +270,138 @@ comparing them as values.
 
 ---
 
-## 11. Status and conclusions — 2026-09-07
+## 11. STATUS AND HANDOFF — 2026-09-07
 
-### Verified state (re-checked, not recalled)
+*Written to be picked up cold. Everything here was re-verified when written, not recalled.*
 
-Both platforms build with **0 errors**; binaries differ (531,776 / 530,912). `make warn`:
-**179** warnings, 0 errors — *below* the 181 present before this review, in the same
-pre-existing classes. **45 `PLATFORM_ST` switch sites.** All sampled code-level claims in
-`review-log.md` re-verified present (20/20), and a regression scan for every superseded
-pattern (truncating `y` masks, direct `env_score +=`, the old `sh` pointer, the old scroll
-threshold) comes back **clean**.
+### 11.1 What this task is
 
-### Function inventory — 198 functions in `src/`
+`xrick/` is a C/SDL2 port of Rick Dangerous, reverse-engineered from the **IBM PC** build.
+T1 makes it a faithful, *switchable* reimplementation of **both** originals: `PLATFORM_ST`
+and `PLATFORM_PC` select game behaviour and data, independently of `GFXST`/`GFXPC` which
+select artwork. Where the two originals differ, both behaviours live in the tree behind
+`#ifdef PLATFORM_ST`, with the disassembly evidence in a comment at the site.
+
+**Three sources, and the rule for using them.** ST = `re/atari_ram.bin` (320 KB; offsets
+are addresses directly) and `re/hatari/ram.bin` (1 MB **in-game** dump, rebase delta
+`-0x2054`). PC = `re/ibmpc_cs.bin` (code segment) plus `re/ibmpc_ds1.bin` (data segment
+`0x179C`) and `re/ibmpc_ds2.bin` (segment `0x271D`) — **both data dumps are shift 0**, so a
+DS offset is a file offset. **The port's own comments are not evidence**; verify against
+the disassembly. Never decompile to C (project rule).
+
+### 11.2 Verified build state
+
+Both platforms build with **0 errors**; the binaries differ. `make warn` gives **182**
+warnings, 0 errors, all in pre-existing classes. (Two are above the historical 180: they
+are `-Wtype-limits` on the `y < 0` half of `ENT_YDEAD` at the two sites where the local `y`
+is `U16`. Behaviour is still correct — the unsigned upper bound catches a wrapped-negative
+exactly as the PC's unsigned compare does. See the warning-census note in `review-log.md`.)
+**48 `PLATFORM_ST` switch sites.**
+
+Build from **WSL**, not the Windows shell:
+`wsl -e bash -lc 'cd /mnt/d/d/reverse/xrick/xrick/xrick && make PLATFORM=ST'`
+
+### 11.3 Function inventory — 199 functions in `xrick/xrick/src/`
 
 | state | fns | files |
 |---|---|---|
-| **Compared against both originals** | **65** | `e_them` 11, `game` 11, `ents` 9, `maps` 9, `e_rick` 7, `env` 4, `util` 4, `e_bomb` 3, `e_box` 2, `e_bullet` 2, `e_sbonus` 2, `e_bonus` 1 |
-| Partly compared | 4 | `scr_getname` (hall of fame verified; the entry UI is not) |
-| **Not compared** | **47** | render 24 (`fb` 7, `tiles` 6, `sprites` 5, `rects` 2, `img` 2, `scroller` 2), intro screens 12, `sounds` 4, data helpers 5, `sysjoy` 2 |
-| No counterpart in either original | 82 | `unzip` 27, `syssnd` 19, `data` 11, `sysvid` 9, `sysarg`/`system` 8, `xrick` 4, `sysevt` 3, `devtools` 1 |
+| **Compared against both originals** | **68** | `e_them` 11, `game` 11, `ents` 9, `maps` 9, `e_rick` 7, `e_bomb` 4, `env` 4, `util` 4, `e_box` 2, `e_bullet` 2, `e_sbonus` 2, `scroller` 2, `e_bonus` 1 |
+| **Remaining** | **47** | `scr_imap` 8, `fb` 7, `tiles` 6, `sprites` 5, `scr_getname` 4 (HOF half done), `sounds` 4, `dat_picsST` 3, `img` 2, `rects` 2, `dat_maps`/`dat_spritesST` 1 each, `scr_gameover`/`scr_imain`/`scr_pause`/`scr_xrick` 1 each |
+| **No counterpart in either original** | **84** | `unzip` 27, `syssnd` 19, `data` 11, `sysvid` 9, `sysarg` 4, `system` 4, `xrick` 4, `sysevt` 3, `sysjoy` 2, `devtools` 1 |
 
-**19 port defects found and fixed.** The simulation core — every entity, the player, the
-map system and the game state machine — is compared.
+**23 defects were numbered; #18 was retracted after proving unsafe, so 22 stand fixed.**
 
-### Conclusions
+### 11.4 Key facts a new session needs
 
-**1. The two platforms are NOT equally trustworthy, and this is the central finding.**
-The port *is* the PC game: it was reverse-engineered from it, so `PLATFORM_PC` is close to
-correct by construction and this review mostly *confirmed* it, fixing 19 genuine slips.
-`PLATFORM_ST` is a **reconstruction** — every ST behaviour in the tree exists because I
-read it out of `atari_ram.bin` and wrote it in. It has no independent provenance, far less
-corroboration, and has never been executed against a real ST.
+- **T9 / A6 is SOLVED.** ST animation frames are *pointers*; the port uses *sprite
+  numbers*. The map is `sprite index = (ST pointer - 0x2BE9E) / 0x150`, where `0x150` is
+  `sizeof(sprite_t)` under `GFXST`. Derived from one anchor, it then correctly predicted
+  five other tables the port already used. This unlocked the dynamite fuse, the box
+  explosion and the corpse tumble.
+- **The port's data came from a different PC build** than `ibmpc_ds1.bin` — its data
+  segment sat `0x0FBA` lower. Pointer-bearing tables will therefore never match exactly;
+  value tables do.
+- `ENT_YDEAD(y)` in `ents.h` is the verified despawn predicate: ST `y < 0 || y > 0x142`,
+  PC `y < 0 || y >= 0x140`. All six PC entity bound checks are located and mapped:
+  `0x10E3`, `0x2976`, `0x2A06`, `0x23AD`, `0x2742`, `0x278B`.
+- **Sound is ST-derived on both platforms.** The ST's `play_music` is `0x44CCE` and has 25
+  call sites; the port has 25 trigger points. The PC used PC-speaker beeps and is **not**
+  the reference for audio.
+- The Hatari harness works: `python3 re/hatari_probe.py boot` (from WSL) boots the
+  analysed ST build, reaches gameplay and dumps 1 MB to `re/hatari/ram.bin`.
 
-**2. Everything is verified statically.** Every claim rests on reading disassembly and
-matching constants, conditions and table contents. **Nothing has been verified by running
-the port and the original side by side.** That is the single largest gap between "the code
-reads correctly" and "the code behaves identically".
+### 11.5 What remains — in priority order
 
-**3. The defect pattern was overwhelmingly edge-sense and width, not logic.** Of 19
-defects: seven `>` vs `>=` boundaries, four truncating masks, two out-of-bounds accesses,
-one dead branch, one hybrid that matched neither original. The port author's *understanding*
-was almost always right; the transcription slipped in the last bit.
+**R1 — Differential testing. The single largest gap; nothing substitutes for it.**
+`PLATFORM_ST` is a *reconstruction*: every ST behaviour is in the tree because it was read
+out of the disassembly and written in. **It has never been executed against the original.**
+The harness already boots the ST build, drives it by poking the joystick byte at
+`0x4922B`, sets breakpoints and dumps RAM. The work: feed identical scripted input to the
+ST original and to `PLATFORM_ST`, and compare state per frame (x/y/velocity, entity pool,
+score, map row); any divergence localises to a frame and a variable. DOSBox could do the
+same for the PC. Until this is done, the honest claim is *"matches the disassembly as
+read"*, not *"matches the original"*.
 
-**4. Three of my own claims were wrong and are retracted in place** — the inferred sprite
-`0x29` (R4.10), the digit-array requirement for the score wrap (R3.16), and "`map_bnums`
-needs an ST variant" (C1). Two more premises dissolved on checking (`map_frow` width; the
-SPAD blocked-test). A fourth, the phantom 154th `map_connect` row, was retracted earlier.
+**R2 — A decision only the user can make: is `GFXPC` ever to be revived?**
+`config.h` is `#define GFXST` / `#undef GFXPC`; the GFXPC sprite path **does not compile**
+(`sprites_paint2` assigns `x_fb` twice, leaving `y_fb` unset, and references undeclared
+`xmap`/`ymap`), and the Makefile excludes the PC data tables. So **`PLATFORM_PC` is PC
+*behaviour* rendered with ST artwork and ST audio.** If GFXPC is not to be revived, say so
+explicitly and describe the target as "PC behaviour" — do not leave it ambiguous.
 
-**5. Data provenance is now settled.** The port's tables came from a PC build whose data
-segment sat `0x0FBA` below `ibmpc_ds1.bin`'s. `map_blocks` is identical on both platforms;
-`map_bnums` differs by two padding bytes that the submap offsets cancel exactly. The
-pointers-vs-numbers model (T9) is solved: `sprite = (ST pointer - 0x2BE9E) / 0x150`.
+**R3 — The 47 remaining functions**, for *what* is drawn and *when* sound plays, not *how*
+SDL does it:
+- `scr_imap` 8 — the level intro. Its table `screen_imapsteps` matches **no** dump under
+  byte, LE16 or BE16 encodings, so it must be compared behaviourally, not by content.
+- `sounds` 4 plus the four `sounds_setMusic` sites. `WAV_SBONUS2` is the one port sound
+  not yet pinned to an ST track.
+- `tiles` / `sprites` / `fb` / `img` / `rects` — selection, positions and clipping bounds.
+  `fb`'s fades are an 8-step gamma ramp with no counterpart in either original.
+- `scr_getname` — the hall-of-fame half is verified on both platforms; the entry UI is not.
 
-### What remains for both builds to *truly* match their originals
+**R4 — Three known port bugs, unfixed, in no-counterpart code** (`xrick/re/divergences.md`
+4.4-4.6): `ENABLE_DEVTOOLS` does not compile (`game.c:299` assigns the nonexistent
+`INIT_GAME`); `data_file_size` returns an uninitialised value on the ZIP path;
+`syssnd_play` can dereference `channel[-1]`.
 
-**R1 — Differential testing against the originals. The biggest gap, and nothing else
-substitutes for it.**
-The Hatari harness already boots the analysed ST build, drives it by poking the joystick
-byte, sets breakpoints and dumps RAM (`re/hatari_probe.py`; an in-game dump was produced
-this session). The work is to drive **the same scripted input** into the ST original and
-into `PLATFORM_ST`, and compare state frame by frame — Rick's x/y/velocity, the entity
-pool, score, map row. Any divergence localises to a frame and a variable. Without this,
-`PLATFORM_ST` remains unexecuted theory. DOSBox could do the same for `PLATFORM_PC`.
+**R5 — ST artwork pixels** (`dat_spritesST`, `dat_picsST`, `dat_tilesST`) have never been
+verified byte-for-byte. Lowest value of the remaining work: A6 verified the frame
+*indices*, which is what the game logic actually needed.
 
-**R2 — The 24 render functions, for *what* is drawn, not how.**
-Tile and sprite *selection*, positions, draw order, and the clipping bounds — the layer
-that decides which bytes reach the screen. `maps_clip` already produced defect #18, which
-suggests this layer is not clean. The SDL blitting underneath is explicitly out of scope.
+**R6 — Documented carry-overs, deliberately unchanged.** `map_maps[4]`: the port treats map
+4 as a real map with its own start and tune, where **both** originals treat index 4 as
+"game complete" (the slot is dead on all three, so it is inert). `ent_sprseq` and
+`ent_mvstep` over-run their true ends into adjacent data (inert; the maximum `sni` is 244,
+below the 261 valid records). `e_them.c`'s dying-enemy bound test has no PC counterpart and
+fires a frame late; it is aligned to `ENT_YDEAD` and documented rather than deleted.
 
-**R3 — The 12 intro-screen functions and the 4 in `sounds.c`.**
-`screen_imapsteps` does not match any dump under any encoding, so the level-intro
-animation must be compared behaviourally. `sounds.c` is where "the right sound at the right
-time" is decided.
+### 11.6 Method — the standing checks, each earned by a near-miss
 
-**R4 — Close the residual open items.** The HOF qualification boundary at exactly 1000;
-`scr_getname`'s entry UI; the `ent_sprseq`/`ent_mvstep` over-runs (inert, deliberately
-unchanged); the ST bomb explosion phase after its fuse sentinel.
+- Read bounds tests for **edge sense**. Eight of the defects were `>` versus `>=`.
+- **A control proves a query runs; it does not prove the query has the right shape.** A
+  `cmpi.w` scan missed the ST's `cmp.w`; a `move.w #N,D0` scan missed four `moveq` sites; a
+  stride-4 scan stepped over an unaligned table; three encodings existed for the same bound
+  check where only one had been found.
+- Locate PC code by **content signature**, never citation arithmetic. Three `ASM nnnn`
+  comments in `e_rick.c` alone are wrong.
+- **An inference labelled as an inference is still an inference** — an "obvious" ascending
+  sprite run turned out to be a doubled table.
+- **Check every consumer before changing shared code.** Defect #18 was reverted for exactly
+  this: making `maps_clip`'s dead branch live broke `sprites_paint2`, which cannot take a
+  signed x.
+- **A row in a document is not a change in the code**, and neither is a claim in
+  `review-log.md`. Sweep both periodically — 14 `xref.md` rows had never reached the code.
+- **Editing files:** build the whole string, call `.encode('latin-1')`, and only then open
+  `'wb'` and write. `open(f, 'w', encoding='latin-1')` truncates *before* encoding, so a
+  stray non-latin-1 character emptied `e_them.c` and it had to be recovered from git.
+  Prefer line-anchored edits; tabs-versus-spaces and off-by-one block lengths have broken
+  string-matched edits.
 
-**R5 — ST artwork pixel verification (C2), lowest value.** A6 gave the frame *indices*,
-which is what the logic needed. Confirming the pixel data itself is a separate exercise and
-changes no behaviour.
+### 11.7 Where the evidence is
 
-### Honest bottom line
-
-`PLATFORM_PC` is in good shape: derived from the PC, checked against it, 19 slips repaired.
-`PLATFORM_ST` is a careful reconstruction that is **internally consistent and
-instruction-backed but never executed against the original**. Until R1 is done, the correct
-claim is *"matches the disassembly as read"*, not *"matches the original"*.
-
-### Standing checks (each earned by a near-miss)
-
-- Read bounds tests for **edge sense** — seven defects were `>` vs `>=`.
-- **A control proves a query runs, not that it has the right shape** (`cmpi.w` vs `cmp.w`;
-  a stride-4 scan stepping over an unaligned table).
-- Locate PC code by **content signature**, never citation arithmetic — three `ASM nnnn`
-  citations in `e_rick.c` alone are wrong.
-- **An inference labelled as an inference is still an inference** (R4.10).
-- **A row in a document is not a change in the code** — sweep periodically.
-- The port's data came from a **different PC build** (R4.22); pointer-bearing tables will
-  never match exactly.
-- **Whitespace and block length break string-matched edits** — prefer line-anchored edits.
+`review-log.md` — one section per finding, in order, each with disassembly citations.
+Sections R0.x-R4.x are phases 0-4; then group B (the seven bounded questions), group A (the
+six structural items), group G (`game.c` and the screens), R2/R3/R4 (render, sound,
+residuals) and I2/I3/I4 (the final audit items). `xrick/re/xref.md` is the PC-vs-ST
+difference worksheet; `xrick/re/divergences.md` lists port bugs; `re/*.md` is the ST
+knowledge base; `re/hatari.md` documents the emulator harness.

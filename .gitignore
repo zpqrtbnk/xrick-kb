@@ -20,3 +20,5 @@ re/assets/audio/imgui.ini
 
 # Hatari run artifacts (regenerable): RAM dumps, logs, screenshots.
 grab*.png
+
+__pycache__/
