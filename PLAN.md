@@ -75,6 +75,30 @@ not what to do. The history of what each pass found is in `re/byte-identity.md`.
 None of these blocks a reimplementation. `re/` is not known to be missing anything
 structural.
 
+### T18 — Demo (attract) mode in the port ✅ **ENGINE DONE 2026-09-08 — scripts to record**
+
+**Design, decisions and verification: [`demo.md`](demo.md).**
+
+`xrick -demo` replays a scripted sequence of control events, timed per submap, into the
+game engine; `xrick -record <file>` writes one back out as a ready-to-build
+`src/dat_demo.c`. The clock counts `CTRL_ACTION` passes (entity logic steps), not
+milliseconds and not frames, because the port's game logic is deterministic and advances
+only there — so a script replays identically at any `-speed` and any frame rate.
+
+Engine complete and verified (zero new compiler warnings; the tree's warning total is
+unchanged at 283); playback timing checked tick-exact against Rick's traced position.
+The scripts themselves are the remaining work: `src/dat_demo.c` has a row for every one
+of the 0x2F submaps, all empty, and the demo hands control back to the keyboard as soon
+as it reaches an unrecorded one — so it is usable while only partly recorded.
+
+Two things the implementation found that the plan had wrong, both fixed:
+- `screen_introMain` never reaches `SCREEN_DONE` without a keypress — its timeout path
+  loops the splash and hall of fame forever. A demo has to start the game itself.
+- `sys_printf` formatted into a 1024-byte stack buffer with `vsprintf`, while
+  `sysarg_fail`'s usage text is 1108 characters before expansion. `xrick -h` was already
+  overrunning the frame and getting away with it; the two added help lines made it crash
+  silently. Now `vsnprintf` into 4096, and `fputs` rather than `printf(s)`.
+
 ### T1 — Align the xrick port with the ST reverse engineering ⭐ **in progress**
 
 **Plan and live status: [`review-plan.md`](review-plan.md); evidence log:

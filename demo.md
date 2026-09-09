@@ -3,8 +3,10 @@
 Plan for a `-demo` command line switch that replays a scripted sequence of control
 events, timed per submap, into the game engine.
 
-Status: **plan only, nothing implemented**. All code references below were read from
-the tree at the time of writing and are cited `file:line`.
+Status: **implemented** (engine, phases 1-4). The scripts themselves are still to be
+recorded: `src/dat_demo.c` currently has all 0x2F rows empty. All code references below
+were read from the tree and are cited `file:line`; the sections marked *(corrected)*
+record where the plan was wrong and the implementation had to differ.
 
 ---
 
@@ -73,11 +75,15 @@ typedef struct {
   demoevt_t *evts;     /* sorted by ascending tick; NULL when nbr == 0 */
 } demoscript_t;
 
-extern U8 demo_active;                          /* set by -demo */
 extern demoscript_t demo_scripts[MAP_NBR_SUBMAPS];  /* indexed by env_submap */
 
-extern void demo_enterSubmap(U16 submap); /* reset clock, select script */
-extern void demo_step(void);              /* one CTRL_ACTION worth of input */
+extern U8 demo_active;  /* TRUE while the demo is driving the controls */
+
+extern void demo_init(void);          /* read -demo / -record; after sysarg_init */
+extern void demo_enterSubmap(U16);    /* reset clock, select script */
+extern void demo_cycle(void);         /* one CTRL_ACTION worth of input */
+extern void demo_end(void);           /* hand the controls back; idempotent */
+extern void demo_save(void);          /* write dat_demo.c when recording */
 ```
 
 The script array is **indexed by `env_submap`**, one entry per submap, so the struct
@@ -109,9 +115,10 @@ demoscript_t demo_scripts[MAP_NBR_SUBMAPS] = {
 
 All 0x2F entries are listed in order rather than using C99 designated initializers —
 the tree is built by MSVC as well as gcc (`xrick/xrick.vcxproj`, `xrick/Makefile`) and
-the rest of the `dat_*.c` tables are plain ordered initializers. A
-`sizeof demo_scripts / sizeof demo_scripts[0] == MAP_NBR_SUBMAPS` static assertion (or
-a runtime check in `demo.c`) catches a miscounted table.
+the rest of the `dat_*.c` tables are plain ordered initializers. No row-count assertion
+is needed *(corrected)*: the array has a declared size, so too many rows is already a
+compile error and too few are zero-filled — which is exactly the `{ 0, NULL }` "no demo"
+value. Listing all 0x2F anyway keeps it obvious which submaps are still to do.
 
 ### 3.3 Injection
 
@@ -120,8 +127,8 @@ a runtime check in `demo.c`) catches a miscounted table.
 - `demo_enterSubmap(submap)` — sets `demo_tick = 0`, `demo_mask = 0`, `demo_cursor = 0`,
   and points the current script at `&demo_scripts[submap]`. An entry with `nbr == 0`
   means "no demo here" and **ends the demo** — see §3.5.
-- `demo_step()` — applies every event with `tick <= demo_tick` (advancing the cursor),
-  updating `demo_mask`; then writes:
+- `demo_cycle()` — when playing back, applies every event with `tick <= demo_tick`
+  (advancing the cursor), updating `demo_mask`; then writes:
 
   ```c
   control_status = demo_mask | (control_status & (CONTROL_EXIT|CONTROL_END|CONTROL_PAUSE));
@@ -136,7 +143,7 @@ running demo. `CONTROL_EXIT` is checked via `control_last` at `src/game.c:511` a
 `control_status` at `src/game.c:481`, so both must survive; hence the guard on
 `control_last`.
 
-If the event list of the *current* submap is exhausted, `demo_step()` leaves `demo_mask`
+If the event list of the *current* submap is exhausted, `demo_cycle()` leaves `demo_mask`
 unchanged (a key held at the end stays held) rather than clearing it. Running out of
 events is normal — a script usually stops changing keys a few ticks before Rick reaches
 the exit — so it is **not** the end of the demo; only entering an unauthored submap is
@@ -148,15 +155,18 @@ touch `control_status`.
 
 ### 3.4 Hook points in `game.c`
 
-Four edits, all guarded by `if (demo_active)`:
+Six one-line calls, all inside `#ifdef ENABLE_DEMO`. `demo.c` decides what to do, so
+`game.c` carries no demo state of its own. Line numbers are as implemented:
 
-1. `case CTRL_ACTION:` (`src/game.c:504`) — call `demo_step()` as the first statement of
-   the case, before the `CONTROL_END` test, so the injected mask is what `ent_action()`
-   (`:517`) sees this step.
-2. `case INIT_MAP:` (`src/game.c:433`, next to `map_init()`) — `demo_enterSubmap(env_submap)`.
-3. `case INIT_SUBMAP:` (`src/game.c:676`, next to `map_init()`) — same.
-4. `restart()` (`src/game.c:867`, next to `map_init()`) — same, so a death replays the
+1. `game_run()` (`src/game.c:194`) — `demo_init()`, after `sysarg_init` has run.
+2. `case CTRL_ACTION:` (`src/game.c:518`) — `demo_cycle()` as the first statement of the
+   case, before the `CONTROL_END` test, so the injected mask is what `ent_action()`
+   (`:531`) sees this step.
+3. `case INIT_MAP:` (`src/game.c:443`, next to `map_init()`) — `demo_enterSubmap(env_submap)`.
+4. `case INIT_SUBMAP:` (`src/game.c:692`, next to `map_init()`) — same.
+5. `restart()` (`src/game.c:890`, next to `map_init()`) — same, so a death replays the
    submap script from tick 0.
+6. `case FADEOUT__GAMEOVER:` (`src/game.c:747`) — `demo_end()` (§3.6).
 
 ### 3.5 End of demo — hand control back to the keyboard
 
@@ -185,18 +195,29 @@ Two consequences worth noting:
 ### 3.6 Getting past the screens
 
 - `screen_xrick` self-advances on a frame counter (`src/scr_xrick.c:48-67`) — nothing to do.
-- `screen_introMain` self-advances on `SCREEN_TIMEOUT` (`src/scr_imain.c:97,166`) — nothing to do.
+- `screen_introMain` **never finishes on its own** *(corrected)*. It does time out
+  (`src/scr_imain.c:101,174`), but the timeout at seq 12 goes to seq 18, which fades out
+  back to seq 1 — the splash and hall of fame alternate forever. `SCREEN_DONE` is only
+  reached through seq 28, and seq 28 is only reached from a FIRE press at seq 4 or 13.
+  The plan claimed "nothing to do" here; a `-demo` run proved otherwise by never
+  starting a game. Fixed by jumping to seq 28 in demo mode on the seq 12 timeout, so the
+  demo shows splash and hall of fame once each and then starts.
 - `screen_introMap` **blocks on FIRE forever** (`src/scr_imap.c:113`, `seq` 10/12/13 animation
   loop). Add, in `case 10`, a demo-only frame counter that jumps to `seq = 20` after
   `DEMO_INTRO_FRAMES`. `seq 20` waits for FIRE *release* (`:141`), already satisfied.
   This keeps the animated map intro visible, which an attract mode wants.
-- `screen_gameover` self-times out (`src/scr_gameover.c:74`), then `game.c:741` goes to
+- `screen_gameover` self-times out (`src/scr_gameover.c:74`), then `game.c` goes to
   `GETNAME`, which blocks on input (`src/scr_getname.c:107-211`). Given decision D1
-  (§6), the consistent handling is to call `demo_end()` on entry to
-  `FADEOUT__GAMEOVER` (`src/game.c:508` and `:564`): the demo is over, so the hall-of-fame
-  name entry is driven by the real keyboard like any other game. No change to the
-  `GAMEOVER -> GETNAME` transition itself. *Derived from D1, not explicitly decided —
-  say so if you want gameover to loop back to the attract screen instead.*
+  (§6), `demo_end()` is called at the top of `case FADEOUT__GAMEOVER` — one site rather
+  than the three that set that state, since `demo_end()` is idempotent. The demo is
+  over, so the hall-of-fame name entry is driven by the real keyboard like any other
+  game, and the `GAMEOVER -> GETNAME` transition is untouched. *Derived from D1, not
+  explicitly decided — say so if you want gameover to loop back to the attract screen
+  instead.*
+
+- `screen_introMap` auto-advance is counted in **animation loops, not frames**
+  *(corrected)*: seq 10 is only reached every third frame (10 -> 12 -> 13 -> 10), so the
+  constant is `DEMO_INTRO_LOOPS` (0x18, about five seconds at the default period).
 
 ### 3.7 Command line
 
@@ -241,11 +262,18 @@ static demoevt_t demo_evts_00[] = {   /* emitted by demo_enterSubmap */
 
 Because the table is index-addressed (§3.2), the recorder must also emit the
 `demo_scripts[]` line for each submap it captured, and the submaps it never entered
-still need their `{ 0, NULL }` row. Simplest: have `-record` write the *whole*
-`dat_demo.c` at exit — all 0x2F rows, with the captured event arrays filled in and the
-rest empty — rather than a fragment to splice. That also keeps the row count correct by
-construction. Either way no parser enters the runtime. (Optional later extension:
+still need their `{ 0, NULL }` row. So `-record` writes the *whole* `dat_demo.c` — all
+0x2F rows, with the captured event arrays filled in and the rest empty — rather than a
+fragment to splice. No parser enters the runtime. (Optional later extension:
 `-demo <file>` reading a text form back at runtime.)
+
+Events are held in a flat pool with one block per submap; re-entering a submap (after a
+death, or on a revisit) opens a new block, so **the last take wins** and re-recording a
+submap is just a matter of dying or walking back into it.
+
+The write is registered with `atexit` in `demo_init`, not called from `game_exit`
+*(corrected)*: `xrick.c:88-89` routes SIGINT and SIGTERM to `exit()`, which never reaches
+`game_exit`, and a take is worth keeping whichever way the game was left.
 
 Recording is only meaningful at the port's normal deterministic pace; note in the file
 header which `-speed`/PLATFORM the take was made at — the tick clock itself is
@@ -261,38 +289,91 @@ Add:
 - `xrick/src/dat_demo.c` — the scripts
 
 Modify:
-- `xrick/src/game.c` — 4 hooks (§3.4) + `demo_end()` at `FADEOUT__GAMEOVER` (§3.6) + `demo_active` init
-- `xrick/src/scr_imap.c` — demo auto-advance (§3.6)
+- `xrick/src/game.c` — 4 hooks (§3.4) + `demo_init()` in `game_run` + `demo_end()` at
+  `FADEOUT__GAMEOVER` (§3.6)
+- `xrick/src/scr_imap.c` — map intro auto-advance (§3.6)
+- `xrick/src/scr_imain.c` — main intro auto-start (§3.6, *added: not in the original plan*)
 - `xrick/src/sysarg.c`, `xrick/include/sysarg.h` — `-demo`, `-record`, usage text
+- `xrick/include/config.h` — `ENABLE_DEMO`
+- `xrick/src/system.c` — `sys_printf` buffer overflow (§5, *not part of the plan; the
+  added help text made a latent defect fatal*)
 - `xrick/xrick.vcxproj` (+ `.filters`) — add the three new files; the Makefile needs no
   change (`SRC := $(wildcard src/*.c)`)
 
-Optional guard: wrap everything in `ENABLE_DEMO` in `include/config.h`, following the
-`ENABLE_DEVTOOLS` pattern (`include/config.h:66-67`). Recommended, so the shipped
-binary can exclude the recorder.
+Everything is wrapped in `ENABLE_DEMO` (`include/config.h`), following the
+`ENABLE_DEVTOOLS` pattern, so a shipped binary can exclude the recorder.
 
 ---
 
-## 5. Phases
+## 5. Status and verification
 
-1. **Skeleton** — `demo.h`/`demo.c`/`dat_demo.c` with all 0x2F script rows `{ 0, NULL }`,
-   `-demo` argument, build wiring. Verify: `make PLATFORM=ST` clean under the existing
-   `-Wall -Wextra -Wconversion -Wsign-conversion` set, and `./xrick -demo` plays exactly
-   like `./xrick` (empty first submap ⇒ immediate handover, §3.5).
-2. **Clock + injection + handover** — the four `game.c` hooks and `demo_end()`. Verify
-   with a hand-written two-event script (`RIGHT` down at tick 0, up at tick 20) on
-   submap 0: Rick walks, then the keyboard works again on the next submap.
-3. **Screens** — map-intro auto-advance, `demo_end()` at `FADEOUT__GAMEOVER`. Verify:
-   `-demo` reaches gameplay with no keypress.
-4. **Recorder** — `-record`. Verify: record a take, regenerate `dat_demo.c`, replay,
-   compare the on-screen result.
-5. **Author the data** — incremental, by the user (D4): one submap at a time, recorded
-   then hand-tuned. The table already has a row for every submap from phase 1, so each
-   new script is a self-contained edit and the demo simply runs further before handing
-   over.
-6. **Polish** — README note, `-demo`/`-record` usage text.
+Phases 1-4 (the engine) are **done**; phase 5 (the scripts) is the user's, phase 6 is
+open.
 
-Phases 1–4 are the engine and are independent of how much demo content exists.
+| Phase | State |
+|---|---|
+| 1. Skeleton — `demo.h`, `demo.c`, `dat_demo.c` (0x2F empty rows), `-demo`, build wiring | done |
+| 2. Clock, injection, handover | done |
+| 3. Screens — main intro auto-start, map intro auto-advance, `demo_end()` at game over | done |
+| 4. Recorder — `-record` | done |
+| 5. Author the scripts — incremental, by the user (D4), one submap at a time | to do |
+| 6. Polish — README note | to do |
+
+### What was actually run
+
+Built with the tree's own warning set (`make PLATFORM=ST`,
+`-Wall -Wextra -Wconversion -Wsign-conversion -Wtype-limits`) under gcc 14.2:
+
+- `demo.c` and `dat_demo.c` compile with **zero** warnings.
+- The edits to `game.c`, `scr_imap.c`, `scr_imain.c` and `sysarg.c` add **no** new
+  warning: every warning site in those files is on a pre-existing line.
+
+Behaviour, run headless (`SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy`), reading Rick's
+position out of the existing `xrick/ents` debug trace:
+
+- **Handover** — with the table all empty, `-demo` starts the game by itself and prints
+  `xrick/demo: end of demo at submap 0000, keyboard control restored`, then plays on
+  under keyboard control. This is also what proved the `scr_imain.c` correction: before
+  that fix the run never left the intro.
+- **Playback timing is exact** — with a scratch script on submap 0 (`RIGHT` down at tick
+  0, up at 40, `UP` down at 45, up at 48), Rick walks from x 0x0008 to 0x0058 in exactly
+  40 logic steps (2 px each), stands still for exactly ticks 40-44, and the jump starts
+  on tick 45.
+- **Recorder** — `-record /tmp/rec.c`, killed with SIGTERM, wrote a complete,
+  well-formed `dat_demo.c`: correct header, all 0x2F rows, `#ifdef ENABLE_DEMO` guard.
+  `-demo -record` together print the override notice and record only.
+- **Warning total unchanged** — a clean rebuild of this tree and of a clean `git archive
+  HEAD` build both report exactly **283** warnings.
+
+### One defect found on the way, and fixed
+
+`xrick -h` printed nothing at all once the two `-demo` / `-record` help lines were added.
+
+`sys_printf` (`src/system.c`) formatted into `char s[1024]` with **`vsprintf`**, and
+`sysarg_fail`'s sound-branch usage text is **1108 characters** of literal before its
+`%d`/`%s` are expanded. So `-h` was already writing past the end of the stack frame in
+the stock tree — a build from `git archive HEAD` prints the usage fine, purely by luck of
+the frame layout. The added lines pushed it far enough to die silently.
+
+Fixed at the source rather than by shortening the help: `vsnprintf` bounded by
+`sizeof s`, buffer raised to 4096 so the usage text is not truncated, and `printf(s)`
+replaced by `fputs(s, stdout)` — `s` is data and may contain a `%`, which `-record
+<file>` makes reachable with a filename. Verified: `-h` now prints in full, including the
+new options.
+
+Not yet verified: how it looks on screen (no display was used), and a round trip of a
+real recorded take through `dat_demo.c` — both need a human at the keyboard.
+
+### Using it
+
+```sh
+xrick -demo                  # play the built-in scripts, then hand over
+xrick -demo -submap 12       # replay one submap's script
+xrick -record src/dat_demo.c # play by hand; the file is written on exit
+```
+
+`-record` overrides `-demo`. The file is written on any normal exit (ESC, closing the
+window, SIGINT, SIGTERM) — see §3.8.
 
 ---
 
