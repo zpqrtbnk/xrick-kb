@@ -5,8 +5,8 @@ level/room transition machinery, the room scroll animation, and the tile decode
 pipeline. **Includes the previously-unknown tilemap encoding** (§ "Level graphics
 data model").
 
-All addresses are Atari ST physical addresses = offsets into `re/atari_ram.bin`.
-Struct/field names follow `re/data-structures.md`. Ghidra plate comments hold the raw
+All addresses are Atari ST physical addresses = offsets into `kb/atari_ram.bin`.
+Struct/field names follow `kb/data-structures.md`. Ghidra plate comments hold the raw
 evidence; this file is the re-codable form. Everything below is transcribed from
 **disassembly**, not decompiler output.
 
@@ -204,7 +204,7 @@ next_record:
 Notes / corrections:
 - **Pool B is slots 9..11, NOT 9..12.** The bound is `0x4AA92`, which *is* slot 12,
   and the loop is `A1 < bound` — so slot 12 is excluded, reserved for the decorative
-  sprite (type 70). `re/data-structures.md` currently says `[9..12]`.
+  sprite (type 70). `kb/data-structures.md` currently says `[9..12]`.
 - Type test is a **signed byte** compare (`cmpi.b #0x10 / bge`); safe because the DEAD
   bit is already excluded, so values are 0..0x7F.
 - The dedup scan always walks pool B, which is correct since it is only reachable for
@@ -663,7 +663,7 @@ never leave a correction in "to apply" state.)
 |---|---|---|
 | 1 | **`CheckpointState` axes were swapped** — `0x4A752` is the player's **X**, `0x4A754` the **Y**, proven by `process_level_transition_point` shifting `0x4A754` right by 3 into `world_row_base` (a row) while testing `0x4A752` for the exit side. | ✅ applied — `data-structures.md` `CheckpointState` rows |
 | 2 | **Spawn pool B is slots `[9..11]`, not `[9..12]`** — the loop bound `0x4AA92` is slot 12 and the test is strict. | ✅ applied — `data-structures.md` spawn-pool note |
-| 3 | **`scroll_room_left`/`scroll_room_right` are misnomers** — they scroll the view **up**/**down** (`world_row_base` −8/+8). | ✅ applied — renamed **`scroll_view_up` (`0x49BD6`) / `scroll_view_down` (`0x49C78`)** in Ghidra *and*, as of 2026-08-29, throughout `re/` |
+| 3 | **`scroll_room_left`/`scroll_room_right` are misnomers** — they scroll the view **up**/**down** (`world_row_base` −8/+8). | ✅ applied — renamed **`scroll_view_up` (`0x49BD6`) / `scroll_view_down` (`0x49C78`)** in Ghidra *and*, as of 2026-08-29, throughout `kb/` |
 | 4 | **`room_tile_map` is row-major**, 32 cols × 44 rows, `0x20` bytes per **row** — not "0x20 bytes per 8px column, column-major". | ✅ applied — `data-structures.md`; the stale wording also survived in the Ghidra plate at `0x4DA40` and was corrected there 2026-08-29 |
 | 5 | **The level-select menu is cheat-gated** by `0x498C4` (the `POOKY9999` flag), so it is unreachable in normal play. | ✅ applied — `functions.md` `run_selection_menu`, `data-structures.md` POOKY flag |
 

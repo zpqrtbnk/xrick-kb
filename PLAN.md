@@ -2,9 +2,9 @@
 
 **Snapshot: 2026-08-29.** Where the project stands, what is still open, and what happens
 next. Project rules, settled decisions and method lessons are in `MEMORY.md`; the game
-knowledge itself is in `re/` and in Ghidra plate comments.
+knowledge itself is in `kb/` and in Ghidra plate comments.
 
-**Bar:** `re/` complete enough to *mechanically re-code the game with identical
+**Bar:** `kb/` complete enough to *mechanically re-code the game with identical
 behaviour*. Everything below is measured against that.
 
 ---
@@ -17,7 +17,7 @@ behaviour*. Everything below is measured against that.
 | Structs applied | **10**, plus typed arrays over every hard-bounded data region |
 | Entity dispatch types | **74 / 74** characterised |
 | Placement table | 523 slots = 476 real records + 47 per-room terminators (reconciled) |
-| Knowledge base | **16 documents + 4 scripts** in `re/`, plus **12 documents** in `xrick/re/` about the prior C/SDL port |
+| Knowledge base | **16 documents + 4 scripts** in `kb/`, plus **12 documents** in `kb/xrick/` about the prior C/SDL port |
 | Extracted assets | 12 graphic PNG sheets (**212** sprite frames among them, cell index = sprite number), 47 room maps + 47 entity overlays, 1 playable SNDH |
 | Byte-identity audits | **22 of 22 complete** — 49 defects found and fixed (10 = port cross-check; 10b–10m = assumption sweeps) |
 | Dynamic-verification probes | **7 of 8 resolved**; the 8th reduced to a nice-to-have |
@@ -32,8 +32,8 @@ measurement is exactly what O1 below is for.
 ## 2. Complete
 
 **The code is fully reversed.** Every function is named and every non-trivial one is
-transcribed to exact pseudocode in `re/algo-*.md` — constants as literals, branch order
-preserved, register conventions documented. Re-codable from `re/` alone:
+transcribed to exact pseudocode in `kb/algo-*.md` — constants as literals, branch order
+preserved, register conventions documented. Re-codable from `kb/` alone:
 
 - Frame loop, timing, double buffering, VBlank/Timer-A interrupts, supervisor entry
 - Player controller — movement, jump/gravity, climb, crouch, attacks, death
@@ -49,7 +49,7 @@ render as recognisable artwork; all 47 room maps render as coherent level geomet
 (visually confirmed); the 64 strings decode; the SNDH plays — music, effects and all
 three digidrums, confirmed by ear.
 
-**Fidelity is audited, not assumed.** `re/byte-identity.md` is the standing record: nine
+**Fidelity is audited, not assumed.** `kb/byte-identity.md` is the standing record: nine
 mechanical audits derived facts from the binary and diffed them against the documents.
 Fifteen defects were found and fixed, notably both tile probes transcribed literally
 (the previous "equivalent" formulation would have broken ladder detection on 8-pixel
@@ -58,7 +58,7 @@ proven **signed**, and four off-by-one loop counts. Two audits came back clean: 
 entity struct's field widths, and the decompiler-hidden-dispatch class.
 
 **Seven of the eight dynamic-verification probes are resolved.** These behavioural
-details were inferred statically and flagged as wanting a live run; `re/hatari.md` §6
+details were inferred statically and flagged as wanting a live run; `kb/hatari.md` §6
 holds the evidence for each — tile-attribute bits and the `0x6F` row-filter mask, the
 `POOKY9999` easter egg, the four name-entry glyphs, `player_touched_hazard`'s single
 reader, the per-level enemy banks, the landing rebound as a bounce-surface special case,
@@ -69,15 +69,15 @@ and the song-0 transpose. The eighth (trigger-bit semantics) is O2 below.
 ## 3. Tasks
 
 **One numbering scheme.** Everything actionable is a `T`-item, listed here and nowhere
-else. `xrick/re/xref.md` and the `re/` documents are **state**: they say what is true,
-not what to do. The history of what each pass found is in `re/byte-identity.md`.
+else. `kb/xrick/xref.md` and the `kb/` documents are **state**: they say what is true,
+not what to do. The history of what each pass found is in `kb/byte-identity.md`.
 
-None of these blocks a reimplementation. `re/` is not known to be missing anything
+None of these blocks a reimplementation. `kb/` is not known to be missing anything
 structural.
 
 ### T20 — Upgrade the port from SDL2 to SDL3 ✅ **DONE 2026-09-10 (WSL); Windows/vcpkg side edited but unverified**
 
-Full detail: `build.md` (build/run instructions and the one bug found) and
+Full detail: `kb/build.md` (build/run instructions and the one bug found) and
 `MEMORY.md` §9 (summary). Verified SDL3 exists and that 3.4.16 is the current latest
 release (GitHub releases page and vcpkg's `sdl3` port agree independently); the
 WSL/Makefile build uses Debian's packaged 3.2.10 instead, a real constraint (source
@@ -112,7 +112,7 @@ permission to build on Windows for that task) — see T21.
 
 User request: drop the Win32/x86 configs (x64 only needed), build into
 `bin\Debug`/`bin\Release` instead of `<Platform>\<Config>\`, and default to Release.
-Full detail in `build.md` §2.
+Full detail in `kb/build.md` §2.
 
 `xrick.vcxproj`: removed the `Debug|Win32`/`Release|Win32` `ProjectConfiguration`/
 `PropertyGroup`/`ItemDefinitionGroup`/`PropertySheets` blocks; `VcpkgTriplet` no
@@ -137,7 +137,7 @@ delimiter itself legitimately contains `--`). (2) **A bare `MSBuild xrick.sln` (
 MSBuild's solution-to-project wrapper hardcodes `Configuration=Debug` before the
 per-project `PropertyGroup` conditions ever get a chance to apply, and this is not
 fixable from any project or solution file edit. Confirmed by building both ways;
-**`build.md` now documents `MSBuild xrick.vcxproj` directly** (not `xrick.sln`) as
+**`kb/build.md` now documents `MSBuild xrick.vcxproj` directly** (not `xrick.sln`) as
 the command that actually honors the defaults.
 
 vcpkg: ran `vcpkg install --triplet x64-windows` (this session, with the user's
@@ -149,18 +149,18 @@ confirmed working on native Windows.
 
 **Found by playing the native build (not by review), still open:** scrolling
 glitches and sprite misalignment that don't reproduce on WSL. A texture-pitch bug
-was found and fixed in `sysvid_update` (`build.md` §1) but confirmed **not** the
+was found and fixed in `sysvid_update` (`kb/build.md` §1) but confirmed **not** the
 cause — the defect persisted identically afterward. Ruled out by direct code
 inspection: `rect_t` struct layout, the scroller's map-row-copy loop, and
 `PLATFORM_ST` resolving identically on both builds (checked both actual compiler
-invocations). Not root-caused; see `build.md` §2's note.
+invocations). Not root-caused; see `kb/build.md` §2's note.
 
 ### T23 — Bomb fuse showed random sprites: a self-inflicted port defect ✅ **DONE 2026-09-10**
 
 User report: dropping dynamite shows the wrong sprites during the ticking/fuse phase
 ("random other sprites", not a bomb). Traced to `review-log.md` A1/A6: that review
 pass derived ST-native sprite-*slot* numbers from the real 68000 pointer tables
-(re-verified bit-exact against `re/atari_ram.bin` — the formula itself is right) and
+(re-verified bit-exact against `kb/atari_ram.bin` — the formula itself is right) and
 then used them **directly as `dat_spritesST.c` array indices**, on the unchecked
 assumption that the two numberings are the same. They are, but **only through slot
 `0x37`** — dumped and cross-referenced all 213 of `dat_spritesST.c`'s own per-entry
@@ -204,7 +204,7 @@ Removed outright: `src/data.c`, `include/data.h`, `src/unzip.c`, `include/unzip.
 the `-data` CLI argument (`sysarg.c`/`sysarg.h`), `game_run`'s/`main`'s path
 parameter, `config.h`'s `WITH_ZLIB`/`NOZLIB` toggle, and every zlib reference
 (`-lz` in the Makefile, `zlib` from `vcpkg.json`, `z.lib`/`z.dll` from
-`xrick.vcxproj`, `zlib1g-dev`/`zlib-devel`/`libz` from `build.md`'s dependency
+`xrick.vcxproj`, `zlib1g-dev`/`zlib-devel`/`libz` from `kb/build.md`'s dependency
 lists) — zlib had no other consumer. Verified: `make clean && make` (both
 `PLATFORM=ST`/`PLATFORM=PC`) drops from 266 to **216 warnings** (exactly the
 `data.c`/`unzip.c`-local ones going away, none elsewhere); `./xrick` (no `-data`
@@ -214,11 +214,11 @@ builds and runs with just `SDL3.dll` next to the exe, no `z.dll`.
 
 ### T19 — Replace the port's WAV audio with the real SNDH engine ⭐ **P1-P8 DONE 2026-09-10 — P9 (knowledge-base writeup) remaining**
 
-**Architecture, phased plan and full progress log: [`audio-sndh.md`](audio-sndh.md).**
+**Architecture, phased plan and full progress log: [`kb/audio-sndh.md`](kb/audio-sndh.md).**
 
 The port had no sound engine — all 29 sounds were WAVs made by ear (`MEMORY.md` §9,
 now superseded for `sounds.c`/`syssnd.c`). Implemented: the game's real lifted ST
-sound engine (`re/assets/audio/rick_dangerous.sndh`'s source bytes, re-extracted
+sound engine (`kb/assets/audio/rick_dangerous.sndh`'s source bytes, re-extracted
 without the SNDH container by `xrick/xrick/tools/extract_sound_engine.py`) now runs
 under Arnaud Carré's AtariAudio library (MIT, vendored verbatim into
 `xrick/xrick/src/audio_engine/`), embedded in the binary and driven as one persistent
@@ -227,7 +227,7 @@ one-subtune-at-a-time model would reset state on every trigger, wrong for a game
 layers music, SFX and two digidrums through one live engine.
 
 Every `WAV_*`/tune symbol's ST track number is now backed by cited evidence (P3's
-census, audio-sndh.md §7) — none guessed from the sound's English name. `syssnd.c`/
+census, kb/audio-sndh.md §7) — none guessed from the sound's English name. `syssnd.c`/
 `sounds.c` rewritten; `dat_maps.c`'s level-tune field is now the track number directly;
 dead legacy files (`dat_snd.c`, ten `wav_*.e`) removed; Makefile builds the vendored
 C++ library alongside the tree's C. Both `PLATFORM=ST` and `PLATFORM=PC` build clean
@@ -248,7 +248,7 @@ one-line warm-up call fixes it for the instance's remaining lifetime).
 
 `xrick` is running interactively (real video + real audio via WSLg PulseAudio) for
 the user's own by-ear pass — audible correctness is the one thing engineering
-verification can't confirm. P9 (folding this into `xrick/re/`'s knowledge base) is
+verification can't confirm. P9 (folding this into `kb/xrick/`'s knowledge base) is
 the only phase left.
 
 **Regression found by playing it, 2026-09-10: sound mixing is gone.** The pre-T19
@@ -260,11 +260,11 @@ code. Measured with a throwaway harness: a level's one-shot theme blocks every
 gameplay sound effect for **16.30 seconds** at the start of each level. Not a bug
 in this port (bit-exact original behavior, already verified faithful by P8) — but
 a real usability regression worth a deliberate decision. Three options, none
-implemented yet, written up with their trade-offs in `audio-sndh.md` §13.
+implemented yet, written up with their trade-offs in `kb/audio-sndh.md` §13.
 
 ### T18 — Demo (attract) mode in the port ✅ **ENGINE DONE 2026-09-08 — scripts to record**
 
-**Design, decisions and verification: [`demo.md`](demo.md).**
+**Design, decisions and verification: [`kb/demo.md`](kb/demo.md).**
 
 `xrick -demo` replays a scripted sequence of control events, timed per submap, into the
 game engine; `xrick -record <file>` writes one back out as a ready-to-build
@@ -321,7 +321,7 @@ a logic-alignment review the way the rest of item 3 does — they were rewritten
 and run the actual ST sound-engine bytes under 68000 emulation, so "the right sound at
 the right time" is now enforced by construction rather than by re-derived C logic.
 `intro screens` and the render layer's *when sound plays* still need item 3's review;
-see `audio-sndh.md` for what changed and `re/algo-system.md`'s Sound section for the
+see `kb/audio-sndh.md` for what changed and `kb/algo-system.md`'s Sound section for the
 current design.
 
 ### T2 — ~~Bullet probe points: one or two?~~ ✅ **RESOLVED 2026-08-31**
@@ -340,7 +340,7 @@ So the ST tests **trigger boxes at the bullet's leading edge**, not at a centre 
 The port's second point (`e_bullet_xc = x + 0x0C`, used for triggers, boxes and bonuses)
 has no counterpart here. For *enemy* hits the two sides agree — both use the leading
 edge. The difference is confined to trigger tests, and is now recorded as state in
-`xrick/re/xref.md`. Whether the PC build really had two points is part of T8.
+`kb/xrick/xref.md`. Whether the PC build really had two points is part of T8.
 
 ### T3 — ~~Verify the third `0x19` site independently~~ ✅ **RESOLVED 2026-08-31**
 
@@ -369,7 +369,7 @@ validated against `4be18` (7 hits) before the negative was trusted.*
 `algo-render.md`. The function is **290 instructions**; the two unrolled blit paths are
 **122** (shifted) and **48** (aligned). **The transcription is faithful — no defects.**
 
-This was the largest untested surface in `re/` and the likeliest remaining home for a real
+This was the largest untested surface in `kb/` and the likeliest remaining home for a real
 defect. It is now checked, so that expectation is retired.
 
 Verified in particular: `bchg.l #0xF,D0` supplies *both* the page flip and the branch
@@ -395,7 +395,7 @@ post-increment; the two paths count rows differently (`D7` directly vs shuttling
 decimal — `0x10` = 16, `0x12` = 18, `0x16` = 22, `0x18` = 24 — so the port's "24
 `ent_actf` entries plus a `>= 0x18` catch-all" *is* our types 0–23 dispatched
 individually with 24–73 sharing `scripted_trap_update`. Same partition, different base.
-Full mapping now in `xrick/re/xref.md` → *Entity type dispatch*.
+Full mapping now in `kb/xrick/xref.md` → *Entity type dispatch*.
 
 **One genuine structural divergence, and it is an implementation choice rather than a
 disagreement about the game:** how a dying enemy is marked.
@@ -416,7 +416,7 @@ the port has no equivalent for because it builds its map intro from `screen_imap
 
 ### T6 — Observe the trigger bits firing ✅ **RESOLVED 2026-09-04 — watched live**
 
-Two Hatari runs (`re/hatari_probe.py triggers`, `triggers2`; delta `-0x2054` re-measured
+Two Hatari runs (`kb/hatari_probe.py triggers`, `triggers2`; delta `-0x2054` re-measured
 and self-checked both times, cheats left off).
 
 **Method that made it meaningful:** each bit's `btst` site executes for every trap entity
@@ -450,12 +450,12 @@ carrying that bit; blind scripted play does not manage it (run 1 ended `GAME OVE
 opening room). Their semantics continue to rest on the transcription — which for several
 is independently corroborated by the PC binary under T8. Forcing them by poking
 bullet-active flags and coordinates would demonstrate reachability, which the census in
-`re/entities.md` already establishes, not semantics; it was deliberately not done.
+`kb/entities.md` already establishes, not semantics; it was deliberately not done.
 
 **One honest gap:** run 2 showed the Missile Base intro but ended in level 1 after a
 `GAME OVER`, and the `level_index` dump covered the word's high byte only (`00`,
 uninformative). So `0x04` is confirmed to fire in shipped gameplay, but the room is not
-pinned down. Full detail in `re/hatari.md` -> *Probe 4 in detail*.
+pinned down. Full detail in `kb/hatari.md` -> *Probe 4 in detail*.
 
 ### T7 — The `dbf D3w` name-entry loop ✅ **RESOLVED 2026-09-02 — statically, no live run needed**
 
@@ -481,7 +481,7 @@ Also noted: `move.w #0x0009,D2` at `0x491D0` is **dead** — `D2` is never read 
 almost certainly a leftover from an intended `dbf D2`.
 
 **The live confirmation planned for this item is unnecessary** — the behaviour is fully
-determined by static data. Full write-up in `re/algo-system.md`.
+determined by static data. Full write-up in `kb/algo-system.md`.
 
 ### T8 — Adjudicate the port differences ✅ **RESOLVED 2026-09-02 — 17 of 17**
 
@@ -492,7 +492,7 @@ The last two fell once the **`0x17E` address delta** was noticed: the port's `AS
 comments are systematically `0x17E` low over the code region, so adding it lands on the
 function entry. That turns the comments from vague landmarks into a lookup table. (It is
 *not* global — `map_resetMarks` at `ASM 0025` sits at `0x0025` with no offset — so it is a
-hypothesis to test per routine. Recorded in `xrick/re/provenance.md`.)
+hypothesis to test per routine. Recorded in `kb/xrick/provenance.md`.)
 
 - **Bomb blast box** — `e_bomb_hit` at **`0x134B`** (`ASM 11CD` + `0x17E`):
   `MOV AL,[0x7EE0]` / `MOV AH,AL` / `SUB AL,4` (clamp 0 on borrow) / `ADD AH,0x20` (clamp
@@ -562,7 +562,7 @@ nothing to overload.
 (`MOV [SI+0x20],CL` @ `0x2198`), the port assigns the whole `U16`. They differ only if a
 `spr` exceeds `0xFF`; the maximum across all 74 `ent_entdata` entries is `0x0080`.
 
-Full write-up in `xrick/re/xref.md`.
+Full write-up in `kb/xrick/xref.md`.
 
 ### T10 — ~~Report the port's `map_connect` overrun~~ ❌ **RETRACTED 2026-09-04 — the defect does not exist**
 
@@ -593,10 +593,10 @@ with "now OK" recording the fix. My "154 records vs a declared 153" was that dea
 So `map_connect` is **correct**, its declared bound is **correct**, and it agrees with our
 ST transition tables in every list. The earlier "46 of 47 match" was the same artifact.
 
-**Consequences, all corrected:** `xrick/re/xref.md`'s *Settled* table listed this as the
+**Consequences, all corrected:** `kb/xrick/xref.md`'s *Settled* table listed this as the
 one "Port defect" — it is now an agreement, which means **not a single difference found
 against the port in this entire project turned out to be a port error.**
-`re/data-structures.md` and `re/byte-identity.md` are corrected too.
+`kb/data-structures.md` and `kb/byte-identity.md` are corrected too.
 
 **Method lesson (now in `MEMORY.md`):** I had *already* recorded this exact trap on
 2026-09-04 after it nearly produced a phantom `ent_entdata` bug — and had not gone back to
@@ -728,7 +728,7 @@ target), so that is the right form to search. `hide_entity` is unreachable.
 ### T15 — Provenance of `atari_ram.bin` ✅ **RESOLVED 2026-08-31 — no check required**
 
 Previously raised as the project's load-bearing assumption: because layer-2 decompression
-was abandoned as impractical, every fact in `re/` is read out of a Hatari RAM snapshot
+was abandoned as impractical, every fact in `kb/` is read out of a Hatari RAM snapshot
 that had never been cross-checked against what `RICK.PRG` produces.
 
 **Closed by the user, who produced the artifact:** `atari_ram.bin` is their own dump of
@@ -770,7 +770,7 @@ the entity trigger-sound range (`0x13`–`0x1C`), not as a literal. Corrected.
 
 Both prior readings were inferences about the author's intent. The PC binary settles them.
 
-The randomiser is a subroutine at `0x024A` in `re/ibmpc_cs.bin`, followed immediately by
+The randomiser is a subroutine at `0x024A` in `kb/ibmpc_cs.bin`, followed immediately by
 the seed increment at `0x0270` — **the exact address the port annotates as `(0270)`**,
 which confirms the correspondence independently:
 
@@ -810,7 +810,7 @@ two-longword PRNG (`seed_prng_state` `0x49574`, `update_prng` `0x49596`, fixed s
 scheme and the ST's PRNG are independent implementations — consistent with the S6 finding
 already recorded in `byte-identity.md`.
 
-**Note.** Two further "needs verification" markers in `re/` are **already covered** and are
+**Note.** Two further "needs verification" markers in `kb/` are **already covered** and are
 not new items: the `dbf D3w` name-entry loop (`algo-system.md`) is **T7**, and the
 trigger-bit dynamic spot-check (`entities.md`, `hatari.md` probe 4) is **T6**.
 
@@ -844,12 +844,12 @@ Known, understood, and not being pursued:
 | Type-table pass | 08-28 | `ObjectTypeDef[75]`; `wTypeFlags` → `wTriggerSound` |
 | Reachability analysis | 08-28 | The missing 12,880 bytes proven to be stack + PCM, not code |
 | **Transcription pass (6 forks)** | 08-28 | ~4,400 lines of exact pseudocode; **tilemap encoding** and **music opcodes** decoded; `Super()`, joystick input, row-major tilemap, AI modes, carry-flag returns all corrected |
-| String extraction | 08-28 | `re/strings.md`: 64 strings, font-validated encoding; ending text found |
+| String extraction | 08-28 | `kb/strings.md`: 64 strings, font-validated encoding; ending text found |
 | Slot-0 investigation | 08-28 | **No block-pushing mechanic exists** — slot 0 is the scripted crusher/boulder hazard |
 | SNDH packaging | 08-28 | Sound engine lifted into a 29-subtune SNDH with a hand-assembled relocating stub |
 | Room rendering + data typing | 08-28 | All 47 rooms rendered (validates the tilemap decode end-to-end); hard-bounded data regions typed and labelled |
 | Asset extraction | 08-28 | PNGs rendered and visually validated; sprite format found to be plane-major; font extent settled at 95 glyphs |
-| Index demotion | 08-28 | `functions.md`/`entities.md` demoted to indexes; authority order documented in `re/README.md` |
+| Index demotion | 08-28 | `functions.md`/`entities.md` demoted to indexes; authority order documented in `kb/README.md` |
 | Audio complete | 08-28 | SNDH rebuilt from the 1 MB capture: all three PCM samples intact incl. the death sample; **confirmed by listening**; superimposed-'ding' defect fixed |
 | Room render fix | 08-28 | Rooms were cut short at the bottom; added the 6-block-row margin the player actually sees |
 | Asset + loose-end closure | 08-28 | Sprite extraction switched to a grid sweep (124 → **185** frames — *later corrected to 212, see audit 10*); the 5 KB post-font gap identified as 161 unreferenced scenery tiles; `level_start_info` proven to have **5** entries (entry 4 = the game-complete pseudo-level) |
@@ -857,29 +857,29 @@ Known, understood, and not being pursued:
 | Hatari harness | 08-28/29 | Commissioned, then switched to the analysed build (`chaos43/RICK.PRG`); `-0x2054` delta reproduced; gameplay driven under script by poking `joystick1_state` |
 | Dynamic-probe pass | 08-29 | 7 of 8 items resolved — several by Ghidra xref census rather than by watching |
 | **Byte-identity audits 1–9** | 08-29 | 15 defects found and fixed; both tile probes transcribed literally; signedness of the music engine established; struct widths and hidden dispatches proven clean |
-| **"The port" registered and analysed** | 08-29 | xrick (bigorno, C/SDL) cloned into `xrick/`; knowledge base written to `xrick/re/` (12 docs); PC-derived-logic caveat established; ~20 facts cross-validated on first reading; 17 numeric + 7 semantic questions queued in `xrick/re/xref.md`; one internal inconsistency found on **our** side (placement flag `0x02`) |
+| **"The port" registered and analysed** | 08-29 | xrick (bigorno, C/SDL) cloned into `xrick/`; knowledge base written to `kb/xrick/` (12 docs); PC-derived-logic caveat established; ~20 facts cross-validated on first reading; 17 numeric + 7 semantic questions queued in `kb/xrick/xref.md`; one internal inconsistency found on **our** side (placement flag `0x02`) |
 | **Port comparison, numeric pass (Q1–Q17)** | 08-29 | Every question answered on our side; 7 closed as agreement, 9 open as real differences, 1 closed as **our defect**: the sprite sheet was short by 21 frames and a density filter had been dropping sparse ones. `extract_assets.py` fixed, `sprites.png` re-rendered at **212** frames with cell index = sprite number. Gravity and corpse-drift questions narrowed to the dying path / enemy corpse only. New Q18 raised (bullet probe point: one on our side, two on the port's) |
 | **Audit 10 — consistency sweep vs the port** | 08-29 | First *external* cross-check. ~20 facts corroborated; **16 defects** found that nine self-referential audits had missed: sprite sheet 21 frames short + a density filter dropping real frames; `bTriggerFlags` bit `0x02` and bits `0x04`/`0x08` misdescribed; the dispatch-table row mislabelled type 70 (is 74) and `hide_entity` at the wrong address; `data-structures.md` still claiming 70 entries / unhandled types; a Ghidra plate still saying "column-major"; four naming splits between Ghidra and the docs; and **26 unapplied corrections** across four `algo-*.md` files, all now closed |
 | **Assumption sweep of the ST reverse-engineering** | 08-30 | Every claim re-derived rather than re-read. Fixed: the `nVelY` gravity note (had `+0xC4` on *living* enemies with a terminal clamp — actually living player/enemy `+0x80` clamp `0x800`, dead player `+0x80` no clamp, dying enemy `+0xC4` no clamp, all four verified at instruction level); the title bitmap (**32,768** bytes, not 32,000, and its stated range matched neither); the sprite region (**71,232** bytes, not "~32 KB"); `level_start_info` 4→**5** entries; the high-score name offset (+8 → **+0x12**); two "untraced" effect-callback claims long since traced; a rename-mangled sentence of my own making. Promoted 3 fields from *likely*/*unconfirmed* to **confirmed** by instruction census. **The 171 KB data region is now gapless and fully mapped**, every size measured, ending exactly at the first code byte. **O3 item 2 resolved**: the only unplaced types are the 4 code-spawned ones |
-| **Second assumption sweep (audit 10c)** | 08-30 | Re-derived the areas 10b had not covered. **One defect**: the 2 bytes at `0x4AADE` before `sprite_type_dispatch` are not padding but the `0xFFFF` **`sprite_list` terminator** — all three walkers (`render_sprites`, `clear_sprite_flags`, `blit_backgrounds`) stop on it and **none is bounded by a count of 13**; it has no xrefs, so it must be seeded in the initial state. Documented, and closes `xrick/re/xref.md` S3. Verified-exact with no change: all 47 `RoomHeader` pointer sets, the 29 music descriptors (incl. the three PCM pointers), `note_period_table`, the font and `level_start_info` boundaries, the 16-word palette, all five intro-text lengths, `strings.md`'s 66→64 extraction, and **all 16 tile-attribute bit counts** |
-| **Third assumption sweep (audit 10d)** | 08-30 | **Clean — zero defects in `re/`.** Measured four things never measured before: the dynamite fuse table (**17** entries) and explosion table (**10**), all 27 frame pointers on the sprite grid at indices 33–147, and a full `TransitionWaypoint` census (**106** across 47 lists). The transition region now **closes exactly** — 106×10 + 47×2 = 1154 = `0x478B2`–`0x47D33`, ending at `object_type_defs` — which also proves the sentinel is 2 bytes, not a 10-byte record. Re-walked the per-room placement lists: 476 + 47 = 523 confirmed room by room. Closed xref Q11 with real numbers and found **a defect in the port** (Q20): its `map_connect` has 154 records in a 153-declared array, differing from us in 1 of 47 lists |
+| **Second assumption sweep (audit 10c)** | 08-30 | Re-derived the areas 10b had not covered. **One defect**: the 2 bytes at `0x4AADE` before `sprite_type_dispatch` are not padding but the `0xFFFF` **`sprite_list` terminator** — all three walkers (`render_sprites`, `clear_sprite_flags`, `blit_backgrounds`) stop on it and **none is bounded by a count of 13**; it has no xrefs, so it must be seeded in the initial state. Documented, and closes `kb/xrick/xref.md` S3. Verified-exact with no change: all 47 `RoomHeader` pointer sets, the 29 music descriptors (incl. the three PCM pointers), `note_period_table`, the font and `level_start_info` boundaries, the 16-word palette, all five intro-text lengths, `strings.md`'s 66→64 extraction, and **all 16 tile-attribute bit counts** |
+| **Third assumption sweep (audit 10d)** | 08-30 | **Clean — zero defects in `kb/`.** Measured four things never measured before: the dynamite fuse table (**17** entries) and explosion table (**10**), all 27 frame pointers on the sprite grid at indices 33–147, and a full `TransitionWaypoint` census (**106** across 47 lists). The transition region now **closes exactly** — 106×10 + 47×2 = 1154 = `0x478B2`–`0x47D33`, ending at `object_type_defs` — which also proves the sentinel is 2 bytes, not a 10-byte record. Re-walked the per-room placement lists: 476 + 47 = 523 confirmed room by room. Closed xref Q11 with real numbers and found **a defect in the port** (Q20): its `map_connect` has 154 records in a 153-declared array, differing from us in 1 of 47 lists |
 | **Fourth assumption sweep (audit 10e)** | 08-30 | Censused `ObjectTypeDef[75]` field by field — the largest table never checked. **2 defects**: the scripted-trap `anim_frame_table` range was wrong at *both* ends (really `0x46C3A`–`0x4708A`, overlapping the band the doc reserved for paths), and the `wTriggerSound` census listed only 6 of the **10** consecutive values `0x13`–`0x1C`. **New finding**: types **67/68 share the dynamite explosion table** via a null intro frame at `0x46C3A` — invisible until triggered, then they play the explosion; that is *why* the anim range starts low. **New open item O6**: 26 structured-but-unreferenced bytes between the two HUD structs. Fed xref Q21 — the port's guess of 10 entity sounds was right, but its `- 0x14` index base is one too high |
 | **Fifth assumption sweep (audit 10f)** | 08-30 | Audited the **music engine tables**, the last untouched surface. Started from a cheap mechanical signal — *two documents describing the same address differently* — and found **4 defects, all in `data-structures.md`**: `MusicTrackDescriptor` types **0 and 2 swapped** (0 = song, 1 = SFX, 2 = digi sample, per `play_music`'s dispatch), the `nParam_index` semantics, `0x46932` mislabelled a "per-channel instrument table" (it is the **song table**, 9×6), and `0x46B66` mislabelled "arpeggio/vibrato" (it is the **pitch-envelope segment table**). Sharpened `0x463CC` to a 10-byte-stride instrument table. **Two new hard boundaries**: 9 songs ↔ the 9×6 song table, and the SFX table's 20 entries × 13 bytes ending exactly at the pattern-data base `0x4652A`. `algo-music.md` was right throughout |
-| **Sixth assumption sweep (audit 10g)** | 08-30 | **Clean — zero defects.** Two mechanical scans came back empty: every `name`/`0xADDR` pair in `re/*.md` checked against Ghidra's symbol table (5 hits, all range-notation false positives — the scan that *would* have caught the `hide_entity` error), and access widths for the globals (6 spot-checked across every access in the program, all matching). **Resolved** `CheckpointState`'s four `DAT_…` placeholders — no `DAT_` names remain in `re/` — plus its hard boundary at `0x4BFC2` and the restore ordering (`reset_player_state` → restore → `spawn_player_entity`). **Made precise**: the `−0x2054` delta is a *relocation* — static data byte-identical, stored pointers shifted (74/74 dispatch, 141/141 RoomHeader), non-pointer fields identical (47/47). Relocate pointers, not data |
+| **Sixth assumption sweep (audit 10g)** | 08-30 | **Clean — zero defects.** Two mechanical scans came back empty: every `name`/`0xADDR` pair in `kb/*.md` checked against Ghidra's symbol table (5 hits, all range-notation false positives — the scan that *would* have caught the `hide_entity` error), and access widths for the globals (6 spot-checked across every access in the program, all matching). **Resolved** `CheckpointState`'s four `DAT_…` placeholders — no `DAT_` names remain in `kb/` — plus its hard boundary at `0x4BFC2` and the restore ordering (`reset_player_state` → restore → `spawn_player_entity`). **Made precise**: the `−0x2054` delta is a *relocation* — static data byte-identical, stored pointers shifted (74/74 dispatch, 141/141 RoomHeader), non-pointer fields identical (47/47). Relocate pointers, not data |
 | **Seventh sweep (audit 10h) — transcriptions, not tables** | 08-30 | First sweep to compare `algo-*.md` **transcriptions** against the disassembly instruction by instruction. Eight `algo-system.md` functions checked in full: `seed_prng_state` (constants recomputed), `update_prng`, `draw_string_xy`, `draw_string`, `draw_glyph_string`, `draw_glyph`, `set_palette`, `palette_fade_in`. **Zero defects** — the `bclr`/`bchg` old-bit semantics and `palette_fade_in`'s double-duty `D4` (blue threshold *and* outer `dbf` counter) were all already captured. One fidelity nuance recorded: `draw_glyph` is **unrolled** (7 advances for 8 rows, 32nd byte without post-increment) where the transcription is rolled — unobservable, since A4 is restored and both callers reload A1 |
 | **Eighth sweep (audit 10i)** | 08-30 | `algo-music.md`'s sequence opcodes, the second "hardest remaining" transcription. `process_sequence_command` verified instruction by instruction, PC-relative targets resolved. **Zero defects**, two fidelity notes: (1) both range tests are **signed**, so the unsigned C form is valid **only because every call site guards on bit 7** (`tst.b (A0); bpl` at `0x452C0`/`0x452CE`) — checked rather than assumed, and now stated at the function; (2) the `0xC2` case is `beq.w 0x451D8`, a branch into `init_music_playback`'s `rts`, not a local return. **`algo-render.md`'s blitter shift path is now the one large untested transcription** |
 | **S5/S6/S7 resolved (audit 10j)** | 08-30 | The three port-side hypotheses, settled against our disassembly. **S5 false** — the ST's two ladder-grab sites are *byte-identical*; the port's asymmetry is port-side, and the ST rule (`(x&8)==0 \|\| (x&7)==0`, then snap `x=(x&0xF0)\|4`) differs from both port forms → new **Q22**. **S6 false** — ours is a real two-longword PRNG (`update_prng`, 2 callers, 1 consumer, turn on 1-in-4); the port's mixer picks direction 1-in-2. Unrelated, though both step a generator per frame. **S7 true and exact** — tabulating bit reachability across {upper,foot}×{outer,centre}, **all 32 cells agree**: ladder-top only from the centre foot column, one-way only from the foot row, ladder only from the centre column. Strongest corroboration in the comparison |
-| **O6 resolved** | 08-30 | The "26 unexplained bytes" at `0x4B336`–`0x4B34F` turned out to be **four 8-byte HUD render buffers** (score/bullets/dynamite/lives — 6 glyph cells + `0xFF` `draw_string` terminator + pad), addressed by four `lea`s at `0x4B3C8`/`0x4B46C`/`0x4B4A0`/`0x4B4D4` and filled by `draw_hud_count`. Solved statically; **no Hatari run needed**. The earlier "nothing references it" claim was an artifact of an operand search using zero-padded addresses (`0x0004b34`) where Ghidra renders them unpadded (`0x4b340`) — a search that could not have matched. Lesson added to `MEMORY.md` §8 |
+| **O6 resolved** | 08-30 | The "26 unexplained bytes" at `0x4B336`–`0x4B34F` turned out to be **four 8-byte HUD render buffers** (scokb/bullets/dynamite/lives — 6 glyph cells + `0xFF` `draw_string` terminator + pad), addressed by four `lea`s at `0x4B3C8`/`0x4B46C`/`0x4B4A0`/`0x4B4D4` and filled by `draw_hud_count`. Solved statically; **no Hatari run needed**. The earlier "nothing references it" claim was an artifact of an operand search using zero-padded addresses (`0x0004b34`) where Ghidra renders them unpadded (`0x4b340`) — a search that could not have matched. Lesson added to `MEMORY.md` §8 |
 | **T2 and T3 resolved** | 08-31 | **T2**: the bullet has **one** probe point on the ST — seeded at the muzzle as the leading edge, stepped ±8, and read **unmodified** by both `bullet_hits_entity` (`0x4CC1A`/`0x4CC20`) and `scripted_trap_update` (`0x4D1EC`/`0x4D1F2`). So triggers are tested at the leading edge; the port's separate centre point has no ST counterpart. **T3**: the escape-timer divider is genuinely `0x19` at **two** sites (`0x4BE3C`, `0x4BE84`), word-wide — so the three `25`s are independent instruction sites of differing widths, not one reading propagated. Both searches were validated before their negatives were trusted |
 | **T5 resolved** | 08-31 | The entity-dispatch "shape mismatch" was a **base mismatch** — the port writes types in hex, we write decimal; `0x18` = 24, so its `ent_actf[0..0x17]` + `>= 0x18` catch-all is exactly our 0–23 individual + 24–73 shared. One real divergence: the port marks a dying enemy by **rewriting the type** to `0x47`, we by setting the **`bDying` flag** (`0x4D87C`, `wType` untouched) — and the immediate `0x47` occurs nowhere in our program, so ST type 71 is an ordinary trap. Plus our type 74, which the port has no equivalent for. Mapping table added to `xref.md` |
-| **T8: PC code segment arrives, 13 of 17 adjudicated** | 08-31 | `re/ibmpc_cs.bin` (PC code segment) verified to correspond to the port's cited addresses — decisively at `map_resetMarks`, where `MOV CX,0x20B` (523) and `ADD BX,5` sit exactly at the cited `0x0025`. **Twelve differences confirmed as genuine PC-vs-ST divergences; zero port errors.** One new difference found (ceiling-bonk velocity: PC zeroes it, ST sets `0x80`) and eight new three-way agreements, including the arbitrary super-pad `0xFE` and `−0x800`. Four rows remain, blocked on locating the code, not on evidence |
-| **pm-baty inventory** | 09-09 | `pm-baty/` compared file-by-file against its base (xrick #021212, commit `28297ba`, identified via SDL 1.2 headers + 1998-2002 copyrights). Normalized token-level diffs; 16 files identical, ST sprite/tile/ents data byte-identical. Non-cosmetic deltas catalogued in `pm-baty.md`: 9 gameplay (G1 speed 75→60ms, G2 map-1 submap 0x12 skipped, cheats gone, zombie guards, bonus anim, bullet/enemy edge behavior, `WAV_ENTITY[-20]` OOB fix, sound flush on submap change) + 6 presentation (video rewrite w/ filter, status-bar overlay layout, intro rework, PC hiscore table, keys). Direction caveat: some deltas may be pre-021212 upstream, not pm-baty edits |
-| **pm-baty disposition + G8 analysis** | 09-09 | Decision: only **G2** and **G8** are port candidates; the rest ignored as pm-baty-specific. G8 dissected — the wakeup line hides 3 defects: (a) `snd==0` should be **silent** (ST census) but xrick indexes `WAV_ENTITY[-19/-20]` — 26 trigger-flagged placements with `snd==0` sit in **Egypt** alone (types 0x18/0x19/0x1a/0x25/0x26/0x49), the likely "jewel freeze"; pm-baty guards this, rework does not. (b) base off-by-one — rework fixed (R3.12a base 0x13), pm-baty did not. (c) ten ST tracks vs nine shipped `ent*.wav` — slot 9 NULL, silently swallowed. Full fix = pm-baty guard + rework base + tenth WAV. Details in `pm-baty.md` |
-| **G8(a) adjudicated against ST/PC** | 09-09 | Why the rework is still broken on (a): R3.12a only examined the ten **non-zero** `snd` values and fixed the base; `snd==0` was never tested. Originals verified at instruction level: **ST guards on zero at both `play_music` sites** (`0x4D262 tst.w/beq` at FIRE, `0x4D2C6-8` at the bit-7 replay site — decoded from `re/atari_ram.bin`); **PC plays no wakeup sound at all** (`ibmpc_cs.bin 0x2836-0x2860`, located by the unique `step_no=step_no_i` signature `8b 44 22 89 44 24`; body = zombie guard + lethal bits + step init only). So the aligned fix is the ST rule: play only when non-zero. New side finding **(d)**: the ST replay-at-anim-end (bit 7, two `0x9A` entries) is absent from the port. (c) accepted for now: ship ent0-8, fix later |
+| **T8: PC code segment arrives, 13 of 17 adjudicated** | 08-31 | `kb/ibmpc_cs.bin` (PC code segment) verified to correspond to the port's cited addresses — decisively at `map_resetMarks`, where `MOV CX,0x20B` (523) and `ADD BX,5` sit exactly at the cited `0x0025`. **Twelve differences confirmed as genuine PC-vs-ST divergences; zero port errors.** One new difference found (ceiling-bonk velocity: PC zeroes it, ST sets `0x80`) and eight new three-way agreements, including the arbitrary super-pad `0xFE` and `−0x800`. Four rows remain, blocked on locating the code, not on evidence |
+| **pm-baty inventory** | 09-09 | `pm-baty/` compared file-by-file against its base (xrick #021212, commit `28297ba`, identified via SDL 1.2 headers + 1998-2002 copyrights). Normalized token-level diffs; 16 files identical, ST sprite/tile/ents data byte-identical. Non-cosmetic deltas catalogued in `kb/pm-baty.md`: 9 gameplay (G1 speed 75→60ms, G2 map-1 submap 0x12 skipped, cheats gone, zombie guards, bonus anim, bullet/enemy edge behavior, `WAV_ENTITY[-20]` OOB fix, sound flush on submap change) + 6 presentation (video rewrite w/ filter, status-bar overlay layout, intro rework, PC hiscore table, keys). Direction caveat: some deltas may be pre-021212 upstream, not pm-baty edits |
+| **pm-baty disposition + G8 analysis** | 09-09 | Decision: only **G2** and **G8** are port candidates; the rest ignored as pm-baty-specific. G8 dissected — the wakeup line hides 3 defects: (a) `snd==0` should be **silent** (ST census) but xrick indexes `WAV_ENTITY[-19/-20]` — 26 trigger-flagged placements with `snd==0` sit in **Egypt** alone (types 0x18/0x19/0x1a/0x25/0x26/0x49), the likely "jewel freeze"; pm-baty guards this, rework does not. (b) base off-by-one — rework fixed (R3.12a base 0x13), pm-baty did not. (c) ten ST tracks vs nine shipped `ent*.wav` — slot 9 NULL, silently swallowed. Full fix = pm-baty guard + rework base + tenth WAV. Details in `kb/pm-baty.md` |
+| **G8(a) adjudicated against ST/PC** | 09-09 | Why the rework is still broken on (a): R3.12a only examined the ten **non-zero** `snd` values and fixed the base; `snd==0` was never tested. Originals verified at instruction level: **ST guards on zero at both `play_music` sites** (`0x4D262 tst.w/beq` at FIRE, `0x4D2C6-8` at the bit-7 replay site — decoded from `kb/atari_ram.bin`); **PC plays no wakeup sound at all** (`ibmpc_cs.bin 0x2836-0x2860`, located by the unique `step_no=step_no_i` signature `8b 44 22 89 44 24`; body = zombie guard + lethal bits + step init only). So the aligned fix is the ST rule: play only when non-zero. New side finding **(d)**: the ST replay-at-anim-end (bit 7, two `0x9A` entries) is absent from the port. (c) accepted for now: ship ent0-8, fix later |
 | **G8(a) fixed in the port** | 09-09 | `e_them.c` wakeup now zero-guarded, ST-aligned: `(trigsnd & 0x7F) != 0` (mirrors ST `bclr #7` + `tst.w/beq` at `0x4D262`), under `PLATFORM_ST && ENABLE_SOUND` per the defect-21 precedent (PC verified silent at wakeup). Slot-9 NULL note added in `sounds.c` (c accepted). Built in **WSL** `make` — clean, no new warnings; headless smoke run boots Egypt (`-data ../data -submap 10`) without panic; visible window launched for visual verification. Sound defect (OOB/wild pointer) is gone; (d) replay-at-anim-end stays open. Uncommitted |
-| **G2 adjudicated — port already correct, closed** | 09-09 | First **content-level** three-way compare of the 47 connect lists (D2/10d had only compared counts). New PC structure located: room headers **47×8 bytes at `ds1:0x84CC`** `{variant, pTileMap, pTransitions, pPlacements}` (room 0 → `0x523A` bnums, `0x88EF` marks), 6-byte waypoints `{side, row, pDest, entry}`, `0xff` list terminator, `0x00FF` = end-of-level; 106 waypoints, same as ST. **46/47 lists identical ST == PC == port on every field** (port dir is the known LEFT=1 flip). Sole divergence = room 0x11 waypoint 2: ST → 0x12@0x18 (bidirectional), PC → 0x13@0x68 (forward path skips Egypt room 0x12; still enterable backwards from 0x13). Port holds the ST value — BigOrno`s 021212 edit replaced his PC source value, which ds1 corroborates byte-exact. pm-baty = PC routing. **No port change needed**; optional `PLATFORM_PC` ifdef noted in `pm-baty.md` |
+| **G2 adjudicated — port already correct, closed** | 09-09 | First **content-level** three-way compare of the 47 connect lists (D2/10d had only compared counts). New PC structure located: room headers **47×8 bytes at `ds1:0x84CC`** `{variant, pTileMap, pTransitions, pPlacements}` (room 0 → `0x523A` bnums, `0x88EF` marks), 6-byte waypoints `{side, row, pDest, entry}`, `0xff` list terminator, `0x00FF` = end-of-level; 106 waypoints, same as ST. **46/47 lists identical ST == PC == port on every field** (port dir is the known LEFT=1 flip). Sole divergence = room 0x11 waypoint 2: ST → 0x12@0x18 (bidirectional), PC → 0x13@0x68 (forward path skips Egypt room 0x12; still enterable backwards from 0x13). Port holds the ST value — BigOrno`s 021212 edit replaced his PC source value, which ds1 corroborates byte-exact. pm-baty = PC routing. **No port change needed**; optional `PLATFORM_PC` ifdef noted in `kb/pm-baty.md` |
 | **G2 fixed: PLATFORM_ST/PC split applied** | 09-09 | Per user request, both platforms made truthful rather than ST-only. `dat_maps.c` submap 0x11 record now `#ifdef PLATFORM_ST` `{0,0x38,0x12,0x18}` `#else` `{0,0x38,0x13,0x68}` `#endif`, same pattern as the file`s existing `map_maps`/`map_eflg_c` splits. Verified in **WSL**: both `make PLATFORM=ST` and `make PLATFORM=PC` build clean; a standalone dumper linked against the compiled `dat_maps.o` printed the actual runtime array contents under each macro (not just inspected source) — confirmed ST and PC values land correctly with neighboring records and the list terminator unaffected; both full builds pass a headless smoke run at submap 0x11. G2 closed, uncommitted |
 | **T20: SDL2 → SDL3** | 09-10 | Verified SDL3 exists and 3.4.16 is the current latest (GitHub releases page + vcpkg's `sdl3` port agree independently); WSL build used Debian's packaged **3.2.10** instead (source build of 3.4.16 blocked on a `libxtst-dev` dependency needing interactive sudo). Migrated all 7 SDL-using files (window/renderer/texture API, pull-model audio via `SDL_OpenAudioDeviceStream`, event-type renames, joystick API, mutex renames) plus the Makefile (`pkg-config` instead of `sdl2-config`). Both `PLATFORM=ST`/`PLATFORM=PC` build clean, 266 warnings, none new. **Caught by running it, not by review**: the window was all-black after a clean build — SDL3 apparently defaults textures to alpha-blended rendering, and the game's texture alpha byte is always 0 — fixed with one `SDL_SetTextureBlendMode(..., SDL_BLENDMODE_NONE)` call, confirmed by the user looking at the relaunched window. `xrick.vcxproj`/`vcpkg.json` (Windows/MSBuild path) edited for consistency but not built — WSL-only build rule stands |
-| **T21: Windows x64-only, `bin\<Config>\`, Release default** | 09-10 | User granted one-time permission to build on Windows. Dropped Win32/x86 from `xrick.vcxproj`/`xrick.sln`; output moved to `bin\Debug`/`bin\Release`; added Release/x64 defaults for a bare `MSBuild xrick.vcxproj`. Found two real problems only by building: existing `<!-- -->` comments had invalid bare `--` inside them (`MSB4025`, project wouldn't even parse) — swept and fixed all of them; and `MSBuild xrick.sln` (vs `xrick.vcxproj` directly) ignores the new defaults and always builds Debug, an unfixable MSBuild solution-wrapper behavior — `build.md` now says to build the `.vcxproj`. `vcpkg install --triplet x64-windows` installed `sdl3@3.4.16` for real, confirming T20's baseline claim against an actual install. Built and ran on native Windows: video/audio/`-h` all confirmed. **Found by playing it, still open**: scrolling glitches + sprite misalignment on Windows only, not WSL; a real texture-pitch bug was found and fixed in `sysvid_update` but confirmed not the cause (symptom persisted identically) |
-| **T22: removed `-data`/zip/zlib** | 09-10 | Confirmed both the SNDH engine is fully compiled-in (T19, `dat_sndh_engine.c` is a 186 KB generated array) and `data_file_{open,read,close,seek,tell,size}` had zero callers anywhere in the tree — `-data`'s path was only ever fed to `data_setpath`, which opened a handle nothing read from. `xrick/data/` held only pre-T19 WAV leftovers. Deleted `data.c`/`data.h`/`unzip.c`/`unzip.h` outright; removed the `-data` CLI arg, `game_run`'s/`main`'s path parameter, `config.h`'s `WITH_ZLIB` toggle, and every zlib reference (Makefile `-lz`, `vcpkg.json`, `xrick.vcxproj`'s `z.lib`/`z.dll`, `build.md`'s package lists) — zlib had no other consumer. Verified: WSL warnings 266→216 (exactly the two deleted files' own warnings, confirming no other file needed them); `./xrick` runs with no `-data` arg; `vcpkg install` cleanly uninstalled zlib per the updated manifest; Windows build still runs with just `SDL3.dll` |
+| **T21: Windows x64-only, `bin\<Config>\`, Release default** | 09-10 | User granted one-time permission to build on Windows. Dropped Win32/x86 from `xrick.vcxproj`/`xrick.sln`; output moved to `bin\Debug`/`bin\Release`; added Release/x64 defaults for a bare `MSBuild xrick.vcxproj`. Found two real problems only by building: existing `<!-- -->` comments had invalid bare `--` inside them (`MSB4025`, project wouldn't even parse) — swept and fixed all of them; and `MSBuild xrick.sln` (vs `xrick.vcxproj` directly) ignores the new defaults and always builds Debug, an unfixable MSBuild solution-wrapper behavior — `kb/build.md` now says to build the `.vcxproj`. `vcpkg install --triplet x64-windows` installed `sdl3@3.4.16` for real, confirming T20's baseline claim against an actual install. Built and ran on native Windows: video/audio/`-h` all confirmed. **Found by playing it, still open**: scrolling glitches + sprite misalignment on Windows only, not WSL; a real texture-pitch bug was found and fixed in `sysvid_update` but confirmed not the cause (symptom persisted identically) |
+| **T22: removed `-data`/zip/zlib** | 09-10 | Confirmed both the SNDH engine is fully compiled-in (T19, `dat_sndh_engine.c` is a 186 KB generated array) and `data_file_{open,read,close,seek,tell,size}` had zero callers anywhere in the tree — `-data`'s path was only ever fed to `data_setpath`, which opened a handle nothing read from. `xrick/data/` held only pre-T19 WAV leftovers. Deleted `data.c`/`data.h`/`unzip.c`/`unzip.h` outright; removed the `-data` CLI arg, `game_run`'s/`main`'s path parameter, `config.h`'s `WITH_ZLIB` toggle, and every zlib reference (Makefile `-lz`, `vcpkg.json`, `xrick.vcxproj`'s `z.lib`/`z.dll`, `kb/build.md`'s package lists) — zlib had no other consumer. Verified: WSL warnings 266→216 (exactly the two deleted files' own warnings, confirming no other file needed them); `./xrick` runs with no `-data` arg; `vcpkg install` cleanly uninstalled zlib per the updated manifest; Windows build still runs with just `SDL3.dll` |
 | **T23: bomb-fuse sprite bug, self-inflicted** | 09-10 | User report: dropping dynamite shows random sprites during the fuse phase. Root cause was this project's own `review-log.md` A1/A6 pass, not the original port: it derived correct ST-native sprite-slot numbers (re-verified bit-exact) but used them directly as `dat_spritesST.c` array indices, which only matches slot number through `0x37` — dumped all 213 array entries' own provenance comments and found it permuted past that, confirming the port's original value (discarded by A1 as "wrong") was actually already correct. Same defect also in the box/bomb shared explosion table (`e_box.c`/`e_bomb.c`, half its 10 entries). Fixed with a generated `sprites_stnum_to_index[]` lookup (`sprites.h`, `dat_spritesST_stmap.c`), mechanically derived and verified as a true bijection, not hand-picked; wired into both tables; `review-log.md`'s A1/A6 corrected in place. User confirmed fixed by playing it |

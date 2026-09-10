@@ -15,8 +15,8 @@ mac/
 
 # Third-party SNDH player (downloaded for testing) and its UI state.
 # Kept on disk, not versioned — re-add deliberately if you want it tracked.
-re/assets/audio/SndhArchivePlayer*
-re/assets/audio/imgui.ini
+kb/assets/audio/SndhArchivePlayer*
+kb/assets/audio/imgui.ini
 
 # Hatari run artifacts (regenerable): RAM dumps, logs, screenshots.
 grab*.png

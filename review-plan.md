@@ -3,14 +3,14 @@
 **This is the plan for `PLAN.md` T1.** T1 originally read "build the reimplementation and
 diff it against the live game". That is superseded: **we are not writing a new
 implementation.** We take the existing xrick port as the starting body of code and bring
-it into verified agreement with `re/`.
+it into verified agreement with `kb/`.
 
 Three passes, in this order:
 
 1. **Data tables** — where each generated table came from, and whether it is ST or PC.
 2. **Data structures** — every struct and variable: width, signedness, layout, initial
    value.
-3. **Code** — every algorithm and fragment, against the matching `re/` document.
+3. **Code** — every algorithm and fragment, against the matching `kb/` document.
 
 Tables first because a table of unknown provenance makes every downstream comparison
 ambiguous. Structures before code because a wrong width silently changes correct-looking
@@ -38,13 +38,13 @@ Conventions to fix at the start of the work and then apply mechanically:
   this project's comparisons three-way ambiguous.
 - Prefer a named constant defined once per platform over an `#ifdef` at each use site, so
   the 17 differences read as a table rather than as scattered conditionals.
-- Every switched value cites its `xrick/re/xref.md` row.
+- Every switched value cites its `kb/xrick/xref.md` row.
 - A build with neither (or both) defined must fail to compile, not pick a default.
 
 ### 0.2 Licence — **closed, no constraint**
 
 The user holds the rights to the PC version. Earlier caution in
-`xrick/re/provenance.md` about "All rights reserved" and a README with no terms is
+`kb/xrick/provenance.md` about "All rights reserved" and a README with no terms is
 **not a blocker** for modifying, building or publishing this work. That note should be
 amended so it stops being read as an open question.
 
@@ -73,7 +73,7 @@ lines — 81% of the codebase — of unknown provenance.
 
 **Already measured, and the news is mostly good:**
 
-| Table | Port | ST (`re/`) | Verdict |
+| Table | Port | ST (`kb/`) | Verdict |
 |---|---|---|---|
 | `map_marks` | 523 records | `placement_table[523]` @ `0x481E4` | ✅ **value-identical — 523/523 on all four comparable fields.** ST stores the band as a word, the port and the PC as a byte (PC `mark_t` stride is 5, confirmed by `ADD BX,5`); the values are the same |
 | `map_connect` | 153 = 106 + 47 | 153 = 106 + 47 @ `0x478B2` | ✅ **identical, all 47 lists agree** (see `PLAN.md` T10 — an earlier "port defect" here was **our** miscount, retracted) |
@@ -81,7 +81,7 @@ lines — 81% of the codebase — of unknown provenance.
 | `map_maps` | 5 | `LevelStartInfo[5]` @ `0x4B522` | ⬜ counts agree; contents unchecked |
 | `ent_entdata` | 74 × 8 packed bytes | `object_type_defs[75]` × 16 bytes @ `0x47D34` | ⚠️ **`trig_w`/`trig_h`/`snd` agree 100%; `w`/`h` differ in 3 of 74** — indices 3, 22, 23, where ST is `0/0` and the port has `24/21`. Structures differ by design (T9) |
 | `map_bnums`, `map_eflg`, `ent_sprseq`, `ent_mvstep` | — | tile/attr banks, sprite tables | ⬜ **unchecked** |
-| `dat_spritesST/tilesST/picsST` | — | `re/assets/*` extractions | ⬜ **unchecked** — the artwork is nominally ST already |
+| `dat_spritesST/tilesST/picsST` | — | `kb/assets/*` extractions | ⬜ **unchecked** — the artwork is nominally ST already |
 
 **So the placement and connector data is common to both versions, and the entity template
 table is not.** That is exactly the mixed answer that justifies doing this properly rather
@@ -97,12 +97,12 @@ than assuming either way.
   relies on the `0x15` default row count, the port bakes in `24`/`21`. Establish whether
   that is behaviourally equivalent before switching or unifying it.
 - **R1.4** **Build our own extraction from the ST binary** for every table where we want
-  a known-provenance ST dataset. `re/extract_assets.py` already does this for artwork; the
+  a known-provenance ST dataset. `kb/extract_assets.py` already does this for artwork; the
   extension is the map/entity tables. Emit them in the port's own `dat_*.c` format so an
   ST build can compile against them directly, and so the diff against the existing tables
   *is* the audit.
 - **R1.5** Sprite/tile/picture data: confirm the `GFXST` tables really are ST by
-  byte-comparing against `re/assets/`. The sprite sheet is 212 occupied slots on our side
+  byte-comparing against `kb/assets/`. The sprite sheet is 212 occupied slots on our side
   (a corrected figure — it was long recorded as 185).
 
 ---
@@ -119,22 +119,22 @@ The logic partitions onto our documents with nothing left over:
 
 | Group | Lines | Files | Oracle |
 |---|---|---|---|
-| System / flow | 2,646 | `game.c`, `scr_*.c` (6), `control.c`, `xrick.c`, `devtools.c`, `data.c` | `re/algo-system.md` |
-| Entities | 1,759 | `ents.c`, `e_them.c`, `e_box.c`, `e_bonus.c`, `e_sbonus.c`, `e_bullet.c`, `e_bomb.c` | `re/algo-entities.md` |
-| Render | 1,090 | `draw.c`, `sprites.c`, `tiles.c`, `fb.c`, `rects.c`, `img.c`, `scroller.c` | `re/algo-render.md` |
-| Player | 568 | `e_rick.c` | `re/algo-player.md` |
-| Level / map | 557 | `maps.c`, `env.c` | `re/algo-level.md` |
+| System / flow | 2,646 | `game.c`, `scr_*.c` (6), `control.c`, `xrick.c`, `devtools.c`, `data.c` | `kb/algo-system.md` |
+| Entities | 1,759 | `ents.c`, `e_them.c`, `e_box.c`, `e_bonus.c`, `e_sbonus.c`, `e_bullet.c`, `e_bomb.c` | `kb/algo-entities.md` |
+| Render | 1,090 | `draw.c`, `sprites.c`, `tiles.c`, `fb.c`, `rects.c`, `img.c`, `scroller.c` | `kb/algo-render.md` |
+| Player | 568 | `e_rick.c` | `kb/algo-player.md` |
+| Level / map | 557 | `maps.c`, `env.c` | `kb/algo-level.md` |
 | Helpers | 210 | `util.c` | probes in `algo-player.md`, `algo-entities.md` |
-| Sound | 132 | `sounds.c` | `re/algo-music.md` |
+| Sound | 132 | `sounds.c` | `kb/algo-music.md` |
 
 ---
 
 ## 3. Ground rules
 
-- **Ghidra decides.** Not `re/`, not the port's comments, not plausibility. `re/` is a
+- **Ghidra decides.** Not `kb/`, not the port's comments, not plausibility. `kb/` is a
   well-audited index into the disassembly — 50 recorded defect fixes deep — but it has
   been wrong and will be again.
-- **Every change cites its evidence**: an address, an instruction, or a `re/` section.
+- **Every change cites its evidence**: an address, an instruction, or a `kb/` section.
 - **NEVER ASSUME ANYTHING — ALWAYS CHECK** (`CLAUDE.md`). This project has been bitten
   four times by searches that structurally could not find what they sought, and twice by a
   regex that counted braces inside comments — the second of which stood for five days as a
@@ -153,11 +153,11 @@ The logic partitions onto our documents with nothing left over:
   narrowing is a candidate width bug.
 - **R0.2** Run it; capture reference screenshots and a scripted demo run.
 - **R0.3** Stand up the A/B harness: one input script driven into both the port and the
-  ST build under Hatari. `re/hatari_probe.py` already drives the ST side and pokes
+  ST build under Hatari. `kb/hatari_probe.py` already drives the ST side and pokes
   `joystick1_state` at `0x4922B`. Sample comparable state — Rick's x/y, entity slots,
   score, level/submap — not pixels.
 - **R0.4** Start `review-log.md`: one row per finding — *id · file:line · evidence ·
-  port value · ST value · verdict · action*. Mirrors `re/byte-identity.md`'s role, and
+  port value · ST value · verdict · action*. Mirrors `kb/byte-identity.md`'s role, and
   makes the **absence** of a finding auditable too.
 
 ---
@@ -178,10 +178,10 @@ Our own side has the same pattern: `nPosY`'s low byte is accessed directly at `+
 four sites. **This is a census, not a search-and-replace.**
 
 - **R2.1** `ent_t` — every field, every read and write site, against
-  `re/data-structures.md` → *SpriteEntity* and the ST instruction widths/sign-extension.
+  `kb/data-structures.md` → *SpriteEntity* and the ST instruction widths/sign-extension.
 - **R2.2** The other structures: `entdata_t`, `mark_t`, `connect_t`, `submap_t`, `map_t`,
   `mvstep_t`, `hscore_t` (vs the 30-byte high-score record).
-- **R2.3** Module-level and file-static variables, against `re/data-structures.md`'s
+- **R2.3** Module-level and file-static variables, against `kb/data-structures.md`'s
   globals table.
 - **R2.4** Signedness audit driven by R0.1's warnings plus the ST `ext.w`/`ext.l`/`cmp`
   senses. Precedent for how much this matters: the music transpose defect — byte
@@ -189,7 +189,7 @@ four sites. **This is a census, not a search-and-replace.**
 - **R2.5** Table bounds: `ENT_ENTSNUM` (12, vs our 13-slot `sprite_list` + `0xFFFF`
   sentinel — reconcile), `ENT_NBR_SPRSEQ`, `ENT_NBR_MVSTEP`. `MAP_NBR_CONNECT` and
   `ENT_NBR_ENTDATA` are **already verified correct**.
-- **R2.6** Initial values and reset state, against what `re/` records as seeded at spawn
+- **R2.6** Initial values and reset state, against what `kb/` records as seeded at spawn
   and at level start.
 
 **Exit criterion:** every field and global has a recorded verdict with a citation.
@@ -216,9 +216,9 @@ phase 2:
 - **R3.7 Sound** (132) — track identity and trigger points; the port has no tracked-music
   engine.
 
-**Per file:** read the port function → read the `re/` transcription → check both against
-Ghidra → classify each difference → switch it, fix it, or record agreement. Where `re/` is
-silent, go to the disassembly and **extend `re/`** — the knowledge base is a deliverable
+**Per file:** read the port function → read the `kb/` transcription → check both against
+Ghidra → classify each difference → switch it, fix it, or record agreement. Where `kb/` is
+silent, go to the disassembly and **extend `kb/`** — the knowledge base is a deliverable
 of this pass, not just an input.
 
 ---
@@ -230,8 +230,8 @@ Evidence already recorded and cited:
 | Defect | Evidence | Fix |
 |---|---|---|
 | `e_them_rndseed` high half read out of bounds | `PLAN.md` T17 — PC `0x024A`/`0x0270` prove the seed is two words, low `0x7E4A` high `0x7E4C` | `sh = (U16*)&e_them_rndseed + 1` |
-| Trigger-sound table indexed from the wrong base | `xrick/re/xref.md` — `- 0x14` yields `-1` for the `0x13` entity; ten values `0x13`–`0x1C` | Correct the base |
-| Seven `if (x < 0)` tests on unsigned values | `xrick/re/divergences.md` §4.2 | Falls out of phase 2 |
+| Trigger-sound table indexed from the wrong base | `kb/xrick/xref.md` — `- 0x14` yields `-1` for the `0x13` entity; ten values `0x13`–`0x1C` | Correct the base |
+| Seven `if (x < 0)` tests on unsigned values | `kb/xrick/divergences.md` §4.2 | Falls out of phase 2 |
 | `6dbd` store omitted at both submap exits | `PLAN.md` T8 — PC writes `[0x7D77]` `0x00`/`0x01`; it **is** read at `0x0D99` | Restore, or prove `game_dir` equivalent |
 
 *(The `map_connect` "overrun" previously listed here was retracted — see `PLAN.md` T10.)*
@@ -261,7 +261,7 @@ comparing them as values.
 - **PC-side data cannot always be adjudicated.** We hold the PC code segment, not its
   data. Where the port's tables are the only record of PC data, "verify with Ghidra" is
   not available and the verdict must say so.
-- **`re/` is not infallible** — 50 recorded defect fixes, and recent audits found errors
+- **`kb/` is not infallible** — 50 recorded defect fixes, and recent audits found errors
   in claims that had survived nine earlier passes.
 - **Switchable code can rot.** A `PLATFORM_PC` path nobody builds will drift. R4.2 exists
   to keep both honest; CI building both configurations would be better.
@@ -282,10 +282,10 @@ and `PLATFORM_PC` select game behaviour and data, independently of `GFXST`/`GFXP
 select artwork. Where the two originals differ, both behaviours live in the tree behind
 `#ifdef PLATFORM_ST`, with the disassembly evidence in a comment at the site.
 
-**Three sources, and the rule for using them.** ST = `re/atari_ram.bin` (320 KB; offsets
-are addresses directly) and `re/hatari/ram.bin` (1 MB **in-game** dump, rebase delta
-`-0x2054`). PC = `re/ibmpc_cs.bin` (code segment) plus `re/ibmpc_ds1.bin` (data segment
-`0x179C`) and `re/ibmpc_ds2.bin` (segment `0x271D`) — **both data dumps are shift 0**, so a
+**Three sources, and the rule for using them.** ST = `kb/atari_ram.bin` (320 KB; offsets
+are addresses directly) and `kb/hatari/ram.bin` (1 MB **in-game** dump, rebase delta
+`-0x2054`). PC = `kb/ibmpc_cs.bin` (code segment) plus `kb/ibmpc_ds1.bin` (data segment
+`0x179C`) and `kb/ibmpc_ds2.bin` (segment `0x271D`) — **both data dumps are shift 0**, so a
 DS offset is a file offset. **The port's own comments are not evidence**; verify against
 the disassembly. Never decompile to C (project rule).
 
@@ -327,8 +327,8 @@ Build from **WSL**, not the Windows shell:
 - **Sound is ST-derived on both platforms.** The ST's `play_music` is `0x44CCE` and has 25
   call sites; the port has 25 trigger points. The PC used PC-speaker beeps and is **not**
   the reference for audio.
-- The Hatari harness works: `python3 re/hatari_probe.py boot` (from WSL) boots the
-  analysed ST build, reaches gameplay and dumps 1 MB to `re/hatari/ram.bin`.
+- The Hatari harness works: `python3 kb/hatari_probe.py boot` (from WSL) boots the
+  analysed ST build, reaches gameplay and dumps 1 MB to `kb/hatari/ram.bin`.
 
 ### 11.5 What remains — in priority order
 
@@ -359,7 +359,7 @@ SDL does it:
   `fb`'s fades are an 8-step gamma ramp with no counterpart in either original.
 - `scr_getname` — the hall-of-fame half is verified on both platforms; the entry UI is not.
 
-**R4 — Three known port bugs, unfixed, in no-counterpart code** (`xrick/re/divergences.md`
+**R4 — Three known port bugs, unfixed, in no-counterpart code** (`kb/xrick/divergences.md`
 4.4-4.6): `ENABLE_DEVTOOLS` does not compile (`game.c:299` assigns the nonexistent
 `INIT_GAME`); `data_file_size` returns an uninitialised value on the ZIP path;
 `syssnd_play` can dereference `channel[-1]`.
@@ -402,6 +402,6 @@ fires a frame late; it is aligned to `ENT_YDEAD` and documented rather than dele
 `review-log.md` — one section per finding, in order, each with disassembly citations.
 Sections R0.x-R4.x are phases 0-4; then group B (the seven bounded questions), group A (the
 six structural items), group G (`game.c` and the screens), R2/R3/R4 (render, sound,
-residuals) and I2/I3/I4 (the final audit items). `xrick/re/xref.md` is the PC-vs-ST
-difference worksheet; `xrick/re/divergences.md` lists port bugs; `re/*.md` is the ST
-knowledge base; `re/hatari.md` documents the emulator harness.
+residuals) and I2/I3/I4 (the final audit items). `kb/xrick/xref.md` is the PC-vs-ST
+difference worksheet; `kb/xrick/divergences.md` lists port bugs; `kb/*.md` is the ST
+knowledge base; `kb/hatari.md` documents the emulator harness.

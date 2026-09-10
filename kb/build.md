@@ -17,7 +17,7 @@ user permission for this session (this project's standing rule is otherwise to a
 build/verify in WSL; see `MEMORY.md`'s `build-in-wsl` note).
 
 Both build systems were verified working as of 2026-09-10 before any of T20/T21/T22
-too (T19's audio-latency investigation, see `audio-sndh.md`). Exact tool versions
+too (T19's audio-latency investigation, see `kb/audio-sndh.md`). Exact tool versions
 below are what was actually used, not guaranteed minimums; if you're on
 close-but-different versions and it doesn't build, that's real information, not
 something to assume away.
@@ -102,7 +102,7 @@ longer take or thread through a path at all. `./xrick -h` lists the rest of the 
 (`-demo`, `-submap`, `-nosound`, `-vol`, etc.).
 
 Under WSL specifically: audio goes out through WSLg's PulseAudio → RDP audio-channel
-path, which has substantial fixed latency (see `audio-sndh.md` §11 and the T19
+path, which has substantial fixed latency (see `kb/audio-sndh.md` §11 and the T19
 session that chased this down) — expected behavior for that path, not a bug in the
 build. For latency-sensitive audio testing, build natively on Windows instead (§2).
 

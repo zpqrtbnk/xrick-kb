@@ -210,7 +210,7 @@ This is the **display row** at `0x48F98`; the *selection* grid at `0x48FA1` hold
 
 ## Reproducing this extraction
 
-`0xFF`-terminated printable runs of ≥4 characters, over `re/atari_ram.bin`:
+`0xFF`-terminated printable runs of ≥4 characters, over `kb/atari_ram.bin`:
 
 ```python
 import re

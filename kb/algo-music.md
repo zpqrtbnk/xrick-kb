@@ -263,7 +263,7 @@ advance_music_channels();
 ## 5. `setup_timer_a` — 0x45006
 
 Installs `timer_a_music_isr` at vector `0x134` (MFP Timer A) and enables the
-interrupt in MFP IERA/IMRA (bit 5). See `re/functions.md`; unchanged this pass.
+interrupt in MFP IERA/IMRA (bit 5). See `kb/functions.md`; unchanged this pass.
 
 ---
 

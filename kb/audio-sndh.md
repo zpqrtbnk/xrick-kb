@@ -10,11 +10,11 @@ check on its own.
 
 The port (`xrick/`) currently plays 29 pre-rendered WAV files, made by ear, with no
 PSG data anywhere (`MEMORY.md` §9: "the port has no sound engine"). We now have
-`re/assets/audio/rick_dangerous.sndh` — the game's **actual** ST sound engine, lifted
+`kb/assets/audio/rick_dangerous.sndh` — the game's **actual** ST sound engine, lifted
 byte-for-byte from `atari_ram.bin`/`atari_ram_1M.bin` and packaged by
-`re/build_sndh.py`, verified by listening. The task: make the port call *that* engine
+`kb/build_sndh.py`, verified by listening. The task: make the port call *that* engine
 instead of `SDL_LoadWAV`, via Arnaud Carré's
-[AtariAudio](https://github.com/arnaud-carre/AtariAudio) library (MIT-licensed, header
+[AtariAudio](https://github.com/arnaud-carkb/AtariAudio) library (MIT-licensed, header
 `AtariAudio/README.md` fetched and read in full 2026-09-09), embedded in the binary and
 streamed to SDL's audio callback.
 
@@ -52,7 +52,7 @@ is exactly right for a jukebox that plays one subtune to completion — and exac
 for us: the real game calls `play_music()` for **level music, every sound effect, and
 both digidrums, all through the same live engine state**, while three PSG voices are
 shared between tracked music and SFX with a priority bit
-(`re/algo-music.md` §3, §12: `trigger_channel_note` sets `A6[0x18] |= 0x80`, "SFX voice
+(`kb/algo-music.md` §3, §12: `trigger_channel_note` sets `A6[0x18] |= 0x80`, "SFX voice
 priority"). A jump sound effect must not stop the level music. `SndhRenderer`'s
 one-subtune-at-a-time model cannot express that; `build_sndh.py`'s own SNDH (§4 below)
 is deliberately built with **one subtune per `music_track_table` entry** precisely so a
@@ -118,7 +118,7 @@ xrick/xrick/src/
   dat_sndh_engine.c  <-- NEW, generated: the 58,944-byte engine+table blob as a
                           const U8[] (same pattern as dat_tilesST.c, dat_maps.c —
                           this port already embeds big binary tables as C arrays)
-  audio_engine/      <-- NEW, vendored verbatim from arnaud-carre/AtariAudio (MIT),
+  audio_engine/      <-- NEW, vendored verbatim from arnaud-carkb/AtariAudio (MIT),
                           unmodified except for build-system glue:
     AtariMachine.{h,cpp}
     Mk68901.{h,cpp}
@@ -130,7 +130,7 @@ xrick/xrick/include/
   syssnd.h          <-- same public function names/signatures where possible (§6)
   sounds.h          <-- same WAV_* extern names (§6)
 
-re/                  <-- unchanged; still the RE source of truth
+kb/                  <-- unchanged; still the RE source of truth
   build_sndh.py       <-- unchanged; still produces the standalone .sndh artifact
                           (useful for archival / sc68 / SndhArchivePlayer playback)
 tools/ (new, top-level or under xrick/)
@@ -154,7 +154,7 @@ shares `build_sndh.py`'s dump-loading and `find_delta()` logic (the delta is not
 
 ## 4. Why the engine can be lifted at all (inherited invariant, not re-derived)
 
-`re/assets-manifest.md`'s audio section already establishes the containment audit this
+`kb/assets-manifest.md`'s audio section already establishes the containment audit this
 depends on: engine code `0x44C10`–`0x45720`, tables `0x44F08`–`0x46B66`, song data
 `0x45720`–`0x48F15`, three PCM samples at `0x4DF86`/`0x4FCF2`/`0x50DA8`, window
 `0x44C10`–`0x5324F` (58,944 bytes), nothing below it, nothing in the graphics blob, no
@@ -163,7 +163,7 @@ is ever found wrong, both `build_sndh.py` and this design need revisiting togeth
 
 ## 5. The `play_music(D0, D1)` calling convention, and why it maps cleanly
 
-`re/algo-music.md` §3 documents that `D1`'s meaning depends on the track's *type*:
+`kb/algo-music.md` §3 documents that `D1`'s meaning depends on the track's *type*:
 
 | Track type | D1 meaning |
 |---|---|
@@ -187,7 +187,7 @@ the sites that mean "play once" (level tunes, game-over `play_music(D0=6,D1=0)`)
   `D1=1` and a `D1=0` site — different contexts for the same track). **Open item:** a
   full per-callsite D1 census (mirror of the T16/assets-manifest.md census method) is
   cheap but not yet done — see task P3. Getting this wrong only affects which of two
-  overlapping SFX wins the shared voice, never correctness of pitch/timbre/track choice.
+  overlapping SFX wins the shared voice, never correctness of pitch/timbkb/track choice.
 - **Track type 2 (sample):** D1 irrelevant, pass `0`.
 
 Two static trampolines solve the "Jsr only sets D0" problem (`Jsr(addr,d0)` has no `d1`
@@ -226,17 +226,17 @@ rule, "unused" is asserted here only because the xref was actually run, not assu
 
 ## 7. The track-number census ✅ **DONE 2026-09-10 (task P3)**
 
-`re/assets-manifest.md`'s "Track map" section did the first pass; `re/algo-player.md`
+`kb/assets-manifest.md`'s "Track map" section did the first pass; `kb/algo-player.md`
 §0.3 ("Sound track IDs used here") turned out to already hold a complete literal census
 for the player's own tracks that the original scan hadn't been cross-referenced against.
-Combined with `re/algo-entities.md`'s pickup/trigger-zone transcriptions and the port's
+Combined with `kb/algo-entities.md`'s pickup/trigger-zone transcriptions and the port's
 *own* source comments (several call sites already cite the exact ST instruction, written
 during T1), every `WAV_*`/tune symbol now resolves to a track number on real evidence —
 no name-based guessing.
 
 | Port symbol | ST track | Type | Evidence |
 |---|---|---|---|
-| `WAV_ENTITY[0..9]` | `19`-`28` (`0x13`-`0x1C`) | 1 (mostly) | `wTriggerSound` **is** the track number directly (`data-structures.md:66`; `pm-baty.md`'s G8) |
+| `WAV_ENTITY[0..9]` | `19`-`28` (`0x13`-`0x1C`) | 1 (mostly) | `wTriggerSound` **is** the track number directly (`data-structures.md:66`; `kb/pm-baty.md`'s G8) |
 | `WAV_BULLET` | 8 | **PCM** | `algo-player.md:94` §0.3 "`0x08` bullet fire"; `assets-manifest.md` track 8 = gunshot, `player_controller` fire path |
 | `WAV_BOMBSHHT` | 9 | 1 | `algo-player.md:94` "`0x09` empty-click *and* dynamite fuse tick". **Confirmed at instruction level in the port's own source**: `e_rick.c:463-468`'s comment cites `4C530 move.w #0x9,D0 / moveq #1,D1 / jsr play_music` verbatim for the empty-gun click, and names this same track for `e_bomb.c:156`'s fuse tick |
 | `WAV_EXPLODE` | 10 | **PCM** | §0.3 "`0x0A` explosion"; `algo-entities.md:402` `destructible_pickup_update`'s `DESTROY:` path, `play_music(0x0A,0)` — matches `e_box.c`'s/`e_bomb.c`'s `explode()` |
@@ -322,18 +322,18 @@ the vendored headers). Needed changes, all confined to the Makefile:
 | P6 | Delete `dat_snd.c`/`.o` and the five dead `wav_*.e` files (confirmed unreferenced, §6) | P4 | ✅ 2026-09-10 |
 | P7 | Makefile: C++ rule, `audio_engine/` + generated sources on the build list, link with `g++` (§9) | P1, P2 | ✅ 2026-09-10 |
 | P8 | Build in WSL both `PLATFORM=ST` and `PLATFORM=PC`; headless smoke run; visible-window run for by-ear verification of music + every SFX + both digidrums, mirroring how `rick_dangerous.sndh` itself was verified | P4-P7 | ✅ engineering-verified 2026-09-10; **by-ear confirmation is the user's, not done by me** |
-| P9 | Update `xrick/re/` (the port knowledge base) — `sounds.c`/`syssnd.c` move from "no counterpart" to documented, closing part of T1's remaining item 3 | P8 | ✅ 2026-09-10 |
+| P9 | Update `kb/xrick/` (the port knowledge base) — `sounds.c`/`syssnd.c` move from "no counterpart" to documented, closing part of T1's remaining item 3 | P8 | ✅ 2026-09-10 |
 
 ## 12. Progress log
 
 - **2026-09-10 — P1 done.** `xrick/xrick/tools/extract_sound_engine.py` written (adapted
-  from `re/build_sndh.py`'s delta-finder, stub/header assembly dropped). Run against
-  `re/atari_ram_1M.bin`: delta measured at `-0x2054` (matches `MEMORY.md` §6's documented
+  from `kb/build_sndh.py`'s delta-finder, stub/header assembly dropped). Run against
+  `kb/atari_ram_1M.bin`: delta measured at `-0x2054` (matches `MEMORY.md` §6's documented
   value — self-consistent, not re-asserted from memory), blob `0x44C10`-`0x5324F`
   (58,944 bytes, nothing zero-filled). Wrote `xrick/xrick/include/dat_sndh_engine.h`
   (the `SNDH_*` address constants + extern declarations) and
   `xrick/xrick/src/dat_sndh_engine.c` (the generated byte array).
-- **2026-09-10 — P2 done.** Vendored verbatim from `arnaud-carre/AtariAudio` (commit at
+- **2026-09-10 — P2 done.** Vendored verbatim from `arnaud-carkb/AtariAudio` (commit at
   fetch time; MIT `LICENSE` copied alongside) into `xrick/xrick/src/audio_engine/`:
   `AtariMachine.{h,cpp}`, `Mk68901.{h,cpp}`, `SteDac.{h,cpp}`, `ym2149c.{h,cpp}`,
   `ym2149_tables.h`, and `external/Musashi/*` (the pre-generated `m68kops.cpp`, no
@@ -344,11 +344,11 @@ the vendored headers). Needed changes, all confined to the Makefile:
   so `syssnd.c` (plain C) can drive the vendored `AtariMachine` C++ class.
   **Not yet compiled** — that happens with the rest of the build in P7/P8.
 - **2026-09-10 — P3 done.** Full track census, §7 rewritten with a resolved table for
-  every `WAV_*`/tune symbol. The player-action tracks came from `re/algo-player.md`
+  every `WAV_*`/tune symbol. The player-action tracks came from `kb/algo-player.md`
   §0.3, a literal census that already existed but hadn't been cross-referenced against
   the port's WAV names. The pickup/trigger-zone tracks (`WAV_BOX`/`WAV_BONUS`/
   `WAV_SBONUS1`/`WAV_SBONUS2`) came from byte-exact matches against
-  `re/algo-entities.md` (same literal constants — `0x19` tick divider, `2000`/`0x2000`
+  `kb/algo-entities.md` (same literal constants — `0x19` tick divider, `2000`/`0x2000`
   bonus, `500`/`0x500` score, `12`/`0xC` sparkle counter — appearing on both sides).
   `WAV_BOMBSHHT`'s track 9 was independently confirmed already cited at instruction
   level inside the port's own `e_rick.c:463-468` comment. One genuine three-way reuse
@@ -370,7 +370,7 @@ the vendored headers). Needed changes, all confined to the Makefile:
     not just a plan.** `AtariMachine::Jsr(addr, d0)` only ever sets D0, and every real
     call site uses D1 ∈ {0, 1} (P3's census), so `syssnd.c` carries two 8-byte stubs
     (`moveq #0/1,d1 ; jmp play_music`) uploaded right after the engine blob. Both
-    opcodes trace to encodings `re/build_sndh.py` already verified against real
+    opcodes trace to encodings `kb/build_sndh.py` already verified against real
     instructions in `atari_ram.bin` (`0x7200`/`0x7201`, and `JMP` derived from its
     verified `JSR (xxx).l = 0x4EB9` by the standard one-bit 68000 encoding
     difference) — written up in the code comment, **still owed a live
@@ -379,7 +379,7 @@ the vendored headers). Needed changes, all confined to the Makefile:
     object plus a pointer to it — the same shape the port's own dead `wav_*.e` files
     used. `WAV_ENTITY` grew from 9 to **10** populated slots: the engine already
     contains track 28 like every other track, so there is no longer a reason to leave
-    slot 9 `NULL` — **this closes `pm-baty.md` G8 (c)** as a side effect, noted in both
+    slot 9 `NULL` — **this closes `kb/pm-baty.md` G8 (c)** as a side effect, noted in both
     `sounds.c` and the stale comment in `e_them.c` (now corrected).
   - **Call sites updated**, all mechanical given P3's numbers: `dat_maps.c`'s
     `map_t.tune` field is now `U8` (`maps.h` changed to match) holding the level
@@ -425,7 +425,7 @@ the vendored headers). Needed changes, all confined to the Makefile:
   video, real audio routed through WSLg's PulseAudio — confirmed opening without
   error) for the user's own listening pass; I cannot hear it myself, so this is
   reported as engineering-verified, not as "sounds right."
-- **2026-09-10 — P9 done.** Swept `xrick/re/` for every reference to the retired WAV
+- **2026-09-10 — P9 done.** Swept `kb/xrick/` for every reference to the retired WAV
   mixer and updated each in place (marked `⚠️ Superseded`, pre-T19 content kept as a
   labelled historical record rather than deleted, matching this knowledge base's own
   convention): `algo-system.md`'s Sound section rewritten to describe the engine-based
@@ -434,7 +434,7 @@ the vendored headers). Needed changes, all confined to the Makefile:
   note) marked resolved/moot; `assets.md`'s WAV/`.e`-file inventory marked unused/
   deleted; `data-model.md`'s `sound_t` layout updated; `xref.md`'s "what the port
   cannot help with" sound bullet inverted (with the caveat that the port now *imports*
-  `re/`'s extraction rather than independently corroborating it); `architecture.md`'s
+  `kb/`'s extraction rather than independently corroborating it); `architecture.md`'s
   layering table's "nothing corresponds to the platform layer" claim carved out an
   exception for `syssnd.c`. `MEMORY.md` §9's "the port has no sound engine" fact
   updated at the source. T19 is now fully implemented (P1-P9); remaining work is the
@@ -529,12 +529,12 @@ engine directly, drives it exactly like `syssnd.c`, reads engine RAM back; not
 committed):
 
 1. `sounds_setMusic(SND_TRACK_LEVEL0, 0)` (a level's one-shot theme, D1=0) holds
-   `*(byte*)0x45002` (`re/algo-music.md` §2's engine-state byte) at `1` for **815
+   `*(byte*)0x45002` (`kb/algo-music.md` §2's engine-state byte) at `1` for **815
    ticks at the engine's 50 Hz tick rate — 16.30 seconds** — before it drops back to
    `0` (idle) on its own.
 2. Firing the bullet sound (`WAV_BULLET` = `{ track 8, type 2 — digi sample }`,
    `sounds.c`) *while* state is `1`: refused, silently, state unchanged. This is
-   `play_music`'s own guard (`re/algo-music.md` §3, both the type-1 and type-2
+   `play_music`'s own guard (`kb/algo-music.md` §3, both the type-1 and type-2
    branches): `if (*(byte*)0x45002 == 1) return;`.
 3. Firing the identical call once state is back at `0`: succeeds immediately —
    state advances `0` → `2` (sample queued) → `0xFF` (sample playing) exactly as
@@ -589,11 +589,11 @@ require a deliberate, labeled decision about — not something to slip in as a "
 2. **Reserve one of the 3 PSG voices exclusively for SFX**, never letting tracked
    music's channel-arbitration touch it, closer to "one authentic chip used
    differently." Requires patching the disassembled channel-arbitration logic
-   (`advance_music_channels` / the 3-entry channel-state table in `re/algo-music.md`
+   (`advance_music_channels` / the 3-entry channel-state table in `kb/algo-music.md`
    §2), i.e. deviating from bit-exact engine code, with the attendant risk of new,
    subtler bugs — the same class of risk this project has spent considerable effort
    avoiding elsewhere (`MEMORY.md` §8's method lessons).
-3. **Leave it as-is**, since it is faithful to the original hardware/engine, and
+3. **Leave it as-is**, since it is faithful to the original hardwakb/engine, and
    just make sure the ~16 s window is documented (this section) rather than
    silently discovered by playing.
 

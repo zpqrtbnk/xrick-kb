@@ -253,7 +253,7 @@ through a register anywhere in the program.
 binary and diff them against our own documents. That cannot catch a fact we never
 derived, nor a number we derived once and then copied. Audit 10 diffs our documents
 against **a second, independent reverse-engineering of the same game** — the xrick C/SDL
-port (`../xrick/re/`), reversed from the *PC* executable by someone else, decades ago,
+port (`../kb/xrick/`), reversed from the *PC* executable by someone else, decades ago,
 with no shared method or tooling. Disagreement is then a signal that at least one side is
 wrong.
 
@@ -284,7 +284,7 @@ that survive checking against the ST disassembly count as defects here.
 
 ### Audit 10b — assumption sweep of the ST side (2026-08-30)
 
-A second pass over `re/` itself, re-**deriving** every checkable claim instead of
+A second pass over `kb/` itself, re-**deriving** every checkable claim instead of
 re-reading it. Ten more defects, one of them consequential for a reimplementation.
 
 | # | Defect | Impact |
@@ -334,7 +334,7 @@ hold `FF FF`, a 14th `wType` word, and **all three list walkers terminate on it 
 13.** The word has no xrefs, so nothing sets it at runtime — it must be part of the
 initial state. A reimplementation that allocates exactly 13 entries and relies on the
 sentinel walks into the dispatch table. Now documented in `data-structures.md`; also
-closes the slot-12 question in `xrick/re/xref.md`.
+closes the slot-12 question in `kb/xrick/xref.md`.
 
 **Everything else checked out, exactly.** Recorded because "verified" is only meaningful
 if the negative results are listed too:
@@ -364,7 +364,7 @@ surface was actually examined rather than skipped.
 
 ### Audit 10d — third assumption sweep (2026-08-30)
 
-**No defects found in `re/`.** Three previously-unmeasured quantities were measured, one
+**No defects found in `kb/`.** Three previously-unmeasured quantities were measured, one
 open question closed, and one defect found in *the port*.
 
 **Measured for the first time:**
@@ -479,10 +479,10 @@ found four defects in a subsystem four previous sweeps had left alone.
 
 ### Audit 10g — sixth assumption sweep (2026-08-30)
 
-**No defects in `re/`.** Two mechanical scans came back clean, one long-standing
+**No defects in `kb/`.** Two mechanical scans came back clean, one long-standing
 placeholder was resolved, and one loosely-stated fact was made precise.
 
-**Scan 1 — every `name`/`0xADDR` pair in `re/*.md` against Ghidra's symbol table.**
+**Scan 1 — every `name`/`0xADDR` pair in `kb/*.md` against Ghidra's symbol table.**
 Five hits, **all false positives**: range notations of the form
 `` `0x4D00C`/`0x4D020` … `destructible_pickup_16`/`17` `` where the regex paired the
 first name with the last address. No document names a function at another function's
@@ -505,7 +505,7 @@ re-verified against `save_checkpoint_state` (six moves, word×4 + byte×2) and t
 **ends exactly at `0x4BFC2`**, that function's first instruction — a hard boundary for
 the 10-byte size. Also newly recorded: `restore_checkpoint_state` calls
 `reset_player_state` **first**, then restores, then `spawn_player_entity` — an ordering
-a reimplementation must preserve. No `DAT_` placeholders remain anywhere in `re/`.
+a reimplementation must preserve. No `DAT_` placeholders remain anywhere in `kb/`.
 
 **Made precise — what the `−0x2054` delta actually does.** Every document said the 1 MB
 dump is "shifted by −0x2054" without saying what shifts. Measured:
@@ -598,7 +598,7 @@ large untested transcription.
 
 The last untested items in the comparison worksheet: three claims about the *port* that
 could only be settled against our disassembly. **All three resolved; no defect in
-`re/`, and one very strong corroboration.**
+`kb/`, and one very strong corroboration.**
 
 **S5 — "type-2 enemies use two different ladder-grab masks". FALSE for the ST.** The
 port has `(x & 0x07) == 0x04` after a fall and `(x & 0x0e) == 0x04` from the ground.
@@ -687,7 +687,7 @@ search-methodology point worth keeping.**
 
 So the ST tests **trigger boxes at the bullet's leading edge**. The port's separate
 centre point (`x + 0x0C`) has no ST counterpart; for *enemy* hits the two agree. The
-difference is confined to trigger tests and is now state in `xrick/re/xref.md`.
+difference is confined to trigger tests and is now state in `kb/xrick/xref.md`.
 
 **T3 — the third `0x19` is genuine, at two sites.** `0x4BE1A` carries
 `subi.w #0x1` @ `0x4BE32`, `move.w #0x19` @ `0x4BE3C` (reload) and `move.w #0x19` @
@@ -739,8 +739,8 @@ lacks because it builds its map intro from `screen_imapsteps` rather than from e
 types — already recorded when the object-type table sizes were reconciled.
 
 **Note on where this belongs.** The mapping is *correspondence*, so it went into
-`xrick/re/xref.md` → *Entity type dispatch*, and the dispatch row left the
-unadjudicated-differences table. Nothing changed in `re/` — our side was right
+`kb/xrick/xref.md` → *Entity type dispatch*, and the dispatch row left the
+unadjudicated-differences table. Nothing changed in `kb/` — our side was right
 throughout; only the comparison was unreconciled.
 
 **The structural finding.** Four of the six `algo-*.md` files ended with a block of
@@ -767,9 +767,9 @@ problems in an afternoon, at zero emulator cost.
 | 8 | Sign-extension / immediate signedness | ✅ **done — 7 sites, exhaustive; 2 more defects fixed** |
 | 9 | Instructions the decompiler hides | ✅ **done — only 4 indirect dispatches, all documented** |
 | 10 | Cross-check against an independent reversal (the xrick port) | ✅ **done — ~20 facts corroborated, 16 defects fixed** |
-| 10b | Assumption sweep: re-derive every checkable claim in `re/` | ✅ **done — 10 defects fixed, 3 fields promoted, region map closed** |
+| 10b | Assumption sweep: re-derive every checkable claim in `kb/` | ✅ **done — 10 defects fixed, 3 fields promoted, region map closed** |
 | 10c | Second sweep: tables, strings, palette, attribute LUTs | ✅ **done — 1 defect (the `0x4AADE` sentinel); ~16 claim groups verified exact** |
-| 10d | Third sweep: fuse/explosion tables, transition + placement census | ✅ **done — 0 defects in `re/`; 4 quantities measured, transition region closed, 1 port defect found** |
+| 10d | Third sweep: fuse/explosion tables, transition + placement census | ✅ **done — 0 defects in `kb/`; 4 quantities measured, transition region closed, 1 port defect found** |
 | 10e | Fourth sweep: `ObjectTypeDef[75]` field census, HUD structs | ✅ **done — 2 defects, 1 structural finding, 1 new open item** |
 | 10f | Fifth sweep: music engine tables, cross-document conflicts | ✅ **done — 4 defects, 2 new hard boundaries** |
 | 10g | Sixth sweep: name/address scan, global widths, relocation model | ✅ **done — 0 defects; placeholders resolved, relocation model measured** |
@@ -823,7 +823,7 @@ The one genuine hazard — `ya * 160` computed with `.w` shifts on a longword, l
 carry out of bit 15 — was checked rather than waved through, and is unreachable because
 the preceding clip bounds `ya` to `8..0xC7`. Five fidelity notes (register recycling,
 `A1` destruction, the unrolled plane-3 store) were added to `algo-render.md`. With this,
-**every large transcription in `re/` has been audited at instruction level.**
+**every large transcription in `kb/` has been audited at instruction level.**
 
 **Precedent for #8:** the music transpose was documented as
 `note_period_table[b + transpose + 12]`, but the engine does `add.b` / `addi.b` / `ext.w`

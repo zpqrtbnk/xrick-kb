@@ -19,11 +19,11 @@ validating the transcriptions against the running game (`../PLAN.md` T1).
 | Host | Windows 11, WSL2 **Debian 13 (trixie)** |
 | Hatari | **v2.5.0**, `/usr/bin/hatari` |
 | Display | **WSLg working** — `DISPLAY=:0`, `WAYLAND_DISPLAY=wayland-0` |
-| hconsole | **packaged**: `/usr/share/hatari/hconsole/hconsole.py` |
+| hconsole | **packaged**: `/usr/shakb/hatari/hconsole/hconsole.py` |
 | Repo from WSL | `/mnt/d/d/reverse/xrick` — no copying needed |
 | TOS | **EmuTOS 512k 1.4 US** — `../atari/emutos-512k-1.4/etos512us.img` |
 | Machine config | `--machine st --memsize 1`; status bar reads `1MB ST(WS3), EmuTOS 1.4.0` |
-| Driver | `re/hatari_probe.py` |
+| Driver | `kb/hatari_probe.py` |
 
 Relevant `--trace` flags: `psg_write`, `psg_read`, `video_color`, `video_addr`,
 `cpu_disasm`, `cpu_regs`, `ikbd_cmds`, `int`, `mem`, `os_base`.
@@ -34,7 +34,7 @@ Relevant `--trace` flags: `psg_write`, `psg_read`, `video_color`, `video_addr`,
 whole experiment batches run in one process.
 
 ```
-re/hatari_probe.py
+kb/hatari_probe.py
   └ imports hconsole
       └ binds an AF_UNIX socket, listens, then launches
         `hatari --control-socket <path> …`   (Hatari is the CLIENT; it connects to us)
@@ -43,7 +43,7 @@ re/hatari_probe.py
 ```
 
 **The control socket is command-only — nothing comes back on it.** Collect results
-from stdout: `python3 re/hatari_probe.py <probe> 2>&1 | tee run.log`. The debugger's
+from stdout: `python3 kb/hatari_probe.py <probe> 2>&1 | tee run.log`. The debugger's
 `logfile` command is unreliable here (it reports the file opened, but the buffer was
 empty at kill).
 
@@ -254,5 +254,5 @@ save states, no host-key problem. Two false conclusions retracted — see §8.
 - **Turn fast-forward off before trying to steer** (§5).
 - Collect results from **stdout**, not the debugger `logfile`.
 - The `screenshot` shortcut writes `grabNNNN.png` into Hatari's working directory, not
-  into `re/hatari/`. Dumps and screenshots are gitignored.
+  into `kb/hatari/`. Dumps and screenshots are gitignored.
 - `savemem` saves a Hatari *state snapshot*; a raw RAM image comes from `savebin`.

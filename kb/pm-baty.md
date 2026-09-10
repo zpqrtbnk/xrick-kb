@@ -185,7 +185,7 @@ The single line `syssnd_play(WAV_ENTITY[(trigsnd & 0x1F) - base], 1)` in `e_them
 
 | # | defect | #021212 | pm-baty | rework today |
 |---|---|---|---|---|
-| a | `snd == 0` means **silent** on the ST (`wTriggerSound` census, `re/data-structures.md:409`), but xrick plays anyway → index `0 − base` = **−20/−19**, an OOB read of a wild `sound_t*` | broken | **fixed** (G8 guard `(trigsnd&0x1f) != 0`) | **FIXED 2026-09-09** (`e_them.c` wakeup: `(trigsnd & 0x7F) != 0` guard, PLATFORM_ST only — the PC plays nothing here) |
+| a | `snd == 0` means **silent** on the ST (`wTriggerSound` census, `kb/data-structures.md:409`), but xrick plays anyway → index `0 − base` = **−20/−19**, an OOB read of a wild `sound_t*` | broken | **fixed** (G8 guard `(trigsnd&0x1f) != 0`) | **FIXED 2026-09-09** (`e_them.c` wakeup: `(trigsnd & 0x7F) != 0` guard, PLATFORM_ST only — the PC plays nothing here) |
 | b | index base: data holds `0x13`–`0x1C`, so base `0x14` sends `snd=0x13` (type 0x3B, map 4) to index **−1** | broken | broken | **fixed** (R3.12a, base `0x13`) |
 | c | ST has **ten** tracks `0x13`–`0x1C`; the port ships only `ent0`–`ent8` (nine), so with base `0x13`, `snd=0x1C` (type 0x3C, map 4 only) → `WAV_ENTITY[9]` = NULL — safely swallowed by `syssnd_play`'s NULL guard (present since #021212), but that tenth sound never plays | n/a (b masks it) | n/a (b masks it) | silent no-op |
 
@@ -207,13 +207,13 @@ that xrick dropped. **Complete fix for the port = pm-baty's guard (a) + rework's
 0x13 (b)**; (c) needs either a tenth WAV (`ent9.wav`) or an accepted silent slot 9.
 
 ### What the originals do at wakeup (verified 2026-09-09, instruction level)
-- **ST** (`re/atari_ram.bin`, decoded by hand): both `play_music` call sites guard on
+- **ST** (`kb/atari_ram.bin`, decoded by hand): both `play_music` call sites guard on
   zero. FIRE site: `0x4D25E move.w (0x44,A0),D0; 0x4D262 tst.w D0; 0x4D264 beq.s
   0x4D272` — zero skips the play. End-of-anim replay site: `0x4D2BC move.w; 0x4D2C0
   bclr #7,D0` (skip if replay bit clear) then `0x4D2C6 tst.w D0; 0x4D2C8 beq.s` (skip
-  if zero). Matches the `re/algo-entities.md:112` transcription; the abbreviated quote
-  in `re/data-structures.md:66` merely elided the `tst/beq`.
-- **PC** (`re/ibmpc_cs.bin` `0x2836`–`0x2860`, decoded by hand; located via the unique
+  if zero). Matches the `kb/algo-entities.md:112` transcription; the abbreviated quote
+  in `kb/data-structures.md:66` merely elided the `tst/beq`.
+- **PC** (`kb/ibmpc_cs.bin` `0x2836`–`0x2860`, decoded by hand; located via the unique
   `step_no = step_no_i` signature `8b 44 22 89 44 24` at `0x285A`): the wakeup body is
   zombie-guard → lethal-bit update → `sproffs=1; step_count=0; step_no=step_no_i` —
   **no sound call at all**. The PC plays nothing at wakeup (consistent with defect #21's
@@ -252,9 +252,9 @@ pm-baty's G2 value is the PC routing — a genuine PC-vs-ST platform difference.
 Full content-level three-way comparison (new — the earlier D2/audit-10d checks compared
 per-list *counts* only):
 
-- **ST** (`re/atari_ram.bin`): walked all 47 `RoomHeader.pTransitions` lists from
+- **ST** (`kb/atari_ram.bin`): walked all 47 `RoomHeader.pTransitions` lists from
   `0x47620` (14-byte headers), decoding all 106 ten-byte `TransitionWaypoint`s.
-- **PC** (`re/ibmpc_ds1.bin`): located the PC's room-header table — **47 × 8-byte
+- **PC** (`kb/ibmpc_ds1.bin`): located the PC's room-header table — **47 × 8-byte
   headers at ds1:`0x84CC`**, `{wTileBankVariant, pTileMap, pTransitions, pPlacements}`
   as LE words (room 0 → tilemap `0x523A` = the known `map_bnums` match, placements
   `0x88EF` = the marks table, found by byte-searching the port's first four

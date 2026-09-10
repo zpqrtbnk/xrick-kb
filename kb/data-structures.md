@@ -50,7 +50,7 @@ Confirmed via `render_sprites`, `blit_backgrounds`, `clear_sprite_flags`,
 | 0x1D | `bUnk1D` | byte | — | padding |
 | 0x1E | `nAnim_tick_b` | short | confirmed | Buffer-B counterpart of `nAnim_tick_a` |
 | 0x20 | `wScreen_offset_b` | ushort | confirmed | Buffer-B counterpart of `wScreen_offset_a` |
-| 0x22 | `gfx_data` | pointer | confirmed | Pointer to sprite graphics/mask pixel data (region `0x65B00`+). Refreshed from `anim_frame_table[nAnimFrameIdx]` each tick; for enemy types 4–15 it's frame-pointer + bank-offset (see `re/entities.md`) |
+| 0x22 | `gfx_data` | pointer | confirmed | Pointer to sprite graphics/mask pixel data (region `0x65B00`+). Refreshed from `anim_frame_table[nAnimFrameIdx]` each tick; for enemy types 4–15 it's frame-pointer + bank-offset (see `kb/entities.md`) |
 | 0x26 | `placement_record_ptr` | pointer | confirmed | Back-pointer to the source level-placement record; `mark_placement_dead` sets bit 7 of its byte +2 (no respawn on room re-entry) |
 | 0x2A | `nAnimFrameIdx` | short | confirmed | Index into `anim_frame_table`; advanced each tick. Sentinel `-1`: replays frames 0/1 as idle loop, or (if `wTriggerSound` bit 7 set) plays the sound again first |
 | 0x2C | `nPathStepIdx` | short | confirmed | **Multi-use**: path-step index for scripted traps; AI walk timer for enemies (reload from `nAiTimerReload`); 12-frame sparkle countdown for treasure pickups |
@@ -64,7 +64,7 @@ Confirmed via `render_sprites`, `blit_backgrounds`, `clear_sprite_flags`,
 | 0x40 | `nTrigBoxXMax` | short | confirmed | |
 | 0x42 | `nTrigBoxYMax` | short | confirmed | |
 | 0x44 | `wTriggerSound` | ushort | confirmed | *(was `wTypeFlags`)* Sound/music track played when a scripted trap triggers, **with bit 7 stripped**; bit 7 set = also replay at end of animation; 0 = silent. Copied from `ObjectTypeDef.wTriggerSound`. Confirmed from the two call sites' disassembly (`move.w (0x44,A0),D0; bclr #7,D0; jsr play_music` at `0x4D25E` and `0x4D2BC`) |
-| 0x46 | `bTriggerFlags` | byte | confirmed | **All four trigger bits together (`0xF0`) is the shipped encoding for a live enemy** — 78 of 523 placements carry it, 75 of them enemy types `4,5,7,8,10,11,13,14`. The PC build keys a sprite-base overload off exactly that pattern; **our build does not** (`../PLAN.md` T9, `xrick/re/xref.md`). Per-instance bitmask, copied verbatim from `PlacementRecord+3` (`move.b (0x3,A0),(0x46,A1)` at `0x49824`). **0x80** player-touch, probe point = player + (0x0B, 0x0A) (`0x4D192`) · **0x40** stick jab (`0x4D1B8`) · **0x20** bullet (`0x4D1DC`) · **0x10** explosion (`0x4D22E`) · **0x08** lethal while **triggered** (`0x4D27C`) · **0x04** lethal while **idle** (`0x4D168`) · **0x02** dual-purpose, see below · **0x01** one-shot: despawn at path end instead of resetting to the spawn position (`0x4D360`). See "The two readers of bit 0x02" |
+| 0x46 | `bTriggerFlags` | byte | confirmed | **All four trigger bits together (`0xF0`) is the shipped encoding for a live enemy** — 78 of 523 placements carry it, 75 of them enemy types `4,5,7,8,10,11,13,14`. The PC build keys a sprite-base overload off exactly that pattern; **our build does not** (`../PLAN.md` T9, `kb/xrick/xref.md`). Per-instance bitmask, copied verbatim from `PlacementRecord+3` (`move.b (0x3,A0),(0x46,A1)` at `0x49824`). **0x80** player-touch, probe point = player + (0x0B, 0x0A) (`0x4D192`) · **0x40** stick jab (`0x4D1B8`) · **0x20** bullet (`0x4D1DC`) · **0x10** explosion (`0x4D22E`) · **0x08** lethal while **triggered** (`0x4D27C`) · **0x04** lethal while **idle** (`0x4D168`) · **0x02** dual-purpose, see below · **0x01** one-shot: despawn at path end instead of resetting to the spawn position (`0x4D360`). See "The two readers of bit 0x02" |
 | 0x47 | `bAnimActive` | byte | confirmed | `0xFF` once the triggered/hit animation sequence is running |
 | 0x48 | `bChasing` | byte | confirmed | Enemy AI: homing-at-player mode (flying enemies) |
 | 0x49 | `bDying` | byte | confirmed | Enemy AI: death-tumble mode (set by `kill_enemy`) |
@@ -134,7 +134,7 @@ so a bullet stopped by it is removed outright rather than left to be erased in p
 slot-0 reader was correctly described in the "Slot 0" section immediately below — but
 neither correction was ever folded into this table, so the stale cell survived nine
 byte-identity audits. It was caught by the xrick port independently reading the same
-bit as `ENT_FLG_STOPRICK` (`xrick/re/xref.md` -> *Structural differences*).
+bit as `ENT_FLG_STOPRICK` (`kb/xrick/xref.md` -> *Structural differences*).
 
 ### Slot 0 — resolved 2026-08-28: there is no block-pushing mechanic
 
@@ -449,7 +449,7 @@ placement data". None of that holds:
   `scripted_trap_update`; index 73 (type 74) is `decorative_sprite_update`.
 
 Verified 2026-08-29 by dumping all 74 pointers from `atari_ram.bin`; the table
-decomposes into contiguous runs with no gaps. `re/entities.md` carries the full
+decomposes into contiguous runs with no gaps. `kb/entities.md` carries the full
 breakdown. So `ObjectTypeDef` holding real data for types 71–74 is expected, not
 anomalous.
 
@@ -584,7 +584,7 @@ Not a struct, but the single most important *asset* format for reimplementation.
   `mask = NOT(p0 | p1 | p2 | p3)`, i.e. colour index 0 is transparent. A
   reimplementation must derive it the same way rather than expecting mask data.
 - Frame data clusters around `0x2FC4E`–`0x334xx` inside the big blob; enemy sprite
-  banks are `0xD20` apart (see `re/entities.md`), with alternate banks at `0xA80`
+  banks are `0xD20` apart (see `kb/entities.md`), with alternate banks at `0xA80`
   stride.
 
 ✅ **Visually verified 2026-08-28** by rendering every asset — see
@@ -670,7 +670,7 @@ entries in the old copy were stale; all below are current.
 
 | Address | Name | Shape | Notes |
 |---------|------|-------|-------|
-| `0x4AAE0` | `sprite_type_dispatch` | `pointer[74]` | 296 bytes, `0x4AAE0`–`0x4AC07`. See `re/entities.md` |
+| `0x4AAE0` | `sprite_type_dispatch` | `pointer[74]` | 296 bytes, `0x4AAE0`–`0x4AC07`. See `kb/entities.md` |
 | `0x47D34` | `object_type_defs` | `ObjectTypeDef[75]` | **Resolved** — see "Level Data Structures" above |
 | `0x4B522` | `level_start_info` | `LevelStartInfo[5]`, 20 bytes each | **Fully laid out** — see "Level Data Structures" above. Five entries, not four: entry 4 is the game-complete pseudo-level. Ghidra carries the type as `LevelStartInfo[5]` |
 | `0x48E26` | high-score table | 8 × 0x1E bytes | word `score_hi`@+2, long `score_lo`@+4, **10 bytes of fixed decoration @+8**, 10-byte name **@+0x12**, `0xFF` terminator @+0x1C. Scores are *unpacked decimal digits*, one per byte. Full layout under `enter_highscore_name` in `algo-system.md` — the old "name text follows" implied +8 |
@@ -681,7 +681,7 @@ entries in the old copy were stale; all below are current.
 | `0x46B66` | **pitch-envelope segment table** | 8 bytes/entry, ≤32 entries | Indexed `((slot << 3) & 0xFF)` by `resolve_channel_note_period` (`lea (0x1780,PC),A0` @ `0x453E4`). **Not the vibrato table** — vibrato is separate, driven by `channel_coroutine_state_c` from the instrument's own fields |
 | `0x463CC` | **instrument table** | **10 bytes/entry** | `init_music_playback` seeds all three channels' instrument pointers to the base (`lea (0x122e,PC),A0` @ `0x4519C`), i.e. instrument 0 is the default. The 10-byte stride is proven by the instrument-slot table it builds at `0x450FD`: three runs of `0,10,20,…,70` (`moveq 0xa,D1` @ `0x451B2`) |
 | `0x22FEE` | tile-graphics table | 16 bytes/tile, 4 de-interleaved bitplane longword arrays | Source for `decode_level_tiles_to_cache` |
-| `0x23FEE` | title screen bitmap | 32768 bytes | Source for `draw_title_picture`, which copies exactly `0x8000` bytes (`move.w #0x3ff` × 8 longwords). The `0x1B01E`–`0x44BED` region is **fully mapped with no gaps** — see `re/memory_map.md` |
+| `0x23FEE` | title screen bitmap | 32768 bytes | Source for `draw_title_picture`, which copies exactly `0x8000` bytes (`move.w #0x3ff` × 8 longwords). The `0x1B01E`–`0x44BED` region is **fully mapped with no gaps** — see `kb/memory_map.md` |
 
 
 ---

@@ -4,7 +4,7 @@ Exact transcription of the sprite blitter, background restore, and HUD subsystem
 to a level sufficient to reimplement pixel-identically without consulting Ghidra.
 
 Source of truth: raw 68000 disassembly. Struct field names follow
-`re/data-structures.md`. Entity records are `SpriteEntity` (0x4C bytes) in
+`kb/data-structures.md`. Entity records are `SpriteEntity` (0x4C bytes) in
 `sprite_list` at `0x4A702`, terminated by a `wType == 0xFFFF` sentinel.
 
 **Calling convention:** hand-written assembler — arguments are in registers, there is
@@ -203,7 +203,7 @@ for (SpriteEntity *e = sprite_list; e->wType != 0xFFFF; e++) {
 ```
 
 Confirms the scroll axis is **Y** (offset 0x06), matching the axis note in
-`re/data-structures.md`.
+`kb/data-structures.md`.
 
 ### Stage 1 — despawn clipping (frees the slot)
 
@@ -417,7 +417,7 @@ There is **no stored mask**. For every row the blitter derives
 `mask = NOT(plane0 | plane1 | plane2 | plane3)`, so a pixel is transparent exactly
 when its colour index is 0. The composite is the classic
 `dst = (dst & mask) | src`. This matches the note already in
-`re/data-structures.md` and is confirmed at both `0x4B1C8` (shifted) and
+`kb/data-structures.md` and is confirmed at both `0x4B1C8` (shifted) and
 `0x4B2BA` (aligned).
 
 ---
@@ -447,7 +447,7 @@ Each is 6 glyph bytes followed by a **0xFF terminator** (verified in memory):
 
 Dirty flags: score `0x4B350`, bullets `0x4B352`, dynamite `0x4B354`, lives `0x4B356`.
 
-Note the score buffer overlaps what `re/data-structures.md` types as
+Note the score buffer overlaps what `kb/data-structures.md` types as
 `wScore_display_hi` (+0xA) and `dwScore_display_lo` (+0xC); functionally it is a
 single `char[6]` glyph string.
 
@@ -517,7 +517,7 @@ BCD idiom (ABCD only ever *clears* Z).
 
 `void start_level(void)`
 
-> ⚠️ **Corrects `re/data-structures.md`:** the `LevelStartInfo` table base is
+> ⚠️ **Corrects `kb/data-structures.md`:** the `LevelStartInfo` table base is
 > **`0x4B522`**, not `0x4B526`, and there is a leading pointer field at +0 that the
 > existing doc omits (its fields are all listed 4 bytes early).
 

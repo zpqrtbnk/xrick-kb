@@ -3,12 +3,12 @@
 Slow-changing knowledge about **the project itself**: what we are working on, the rules
 we work under, decisions that are settled, and lessons that cost something to learn.
 
-- Game knowledge lives in **`re/`** (entry point: `re/README.md`).
-- Knowledge about **the pre-existing C/SDL port** lives in **`xrick/re/`** (entry point:
-  `xrick/re/README.md`). See §9.
+- Game knowledge lives in **`kb/`** (entry point: `kb/README.md`).
+- Knowledge about **the pre-existing C/SDL port** lives in **`kb/xrick/`** (entry point:
+  `kb/xrick/README.md`). See §9.
 - Current status, open work and next steps live in **`PLAN.md`**.
 - Nothing here should duplicate either. If a fact is about the *game*, it belongs in
-  `re/`; if it is about *where we are*, it belongs in `PLAN.md`.
+  `kb/`; if it is about *where we are*, it belongs in `PLAN.md`.
 
 ---
 
@@ -19,10 +19,10 @@ we work under, decisions that are settled, and lessons that cost something to le
 | Game | Rick Dangerous (Core Design, 1989) |
 | Platform | Atari ST, Motorola 68000 |
 | Ghidra project | `ghidra.xrick` → single program `atari_ram.bin` |
-| Primary artifact | `re/atari_ram.bin` — 327,680-byte Hatari RAM snapshot. **Authoritative for every address in the knowledge base.** |
-| Secondary artifact | `re/atari_ram_1M.bin` — full 1 MB capture, used only as the source of the complete PCM samples |
-| **PC artifact** | `re/ibmpc_cs.bin` — 65,535-byte dump of the **IBM PC** build's code segment, in the Ghidra project as `x86:LE:16:Real Mode` at base `0000:0000`. Dense 8086 code in `0x0000`–`0x2FFF`. **Its offsets are exactly the `ASM nnnn` addresses in the xrick port's comments** (verified at `map_resetMarks`: `MOV CX,0x20B` = 523 marks, `ADD BX,5`, at the cited `0x0025`). This is what makes PC-vs-ST questions answerable — see `PLAN.md` T8 |
-| **PC data segments** | `re/ibmpc_ds1.bin` = segment **`0x179C`**, `re/ibmpc_ds2.bin` = segment **`0x271D`**, both **shift 0** (a DS offset is a file offset directly). Bases were derived from content, not assumed: the hall of fame lands at `ds2:0x46A5`, matching the code's `MOV SI,0x46A5`, and `ds1[0xF810+k] == ds2[k]` over the 2031-byte overlap (98.4%). `0x179C` holds the map/level tables (`map_bnums` at `0x523A`), `0x271D` the score (`0x490E`, six ASCII digits), score deltas (`0x4916`+) and HOF. **The port's generated tables were extracted from the PC build** — `map_bnums` matches `ds1` byte for byte and is absent from `atari_ram.bin`. Both dumps carry unexplained `DUMP1`/`DUMP2` PSP-shaped strings at `0x5D`/`0x81` |
+| Primary artifact | `kb/atari_ram.bin` — 327,680-byte Hatari RAM snapshot. **Authoritative for every address in the knowledge base.** |
+| Secondary artifact | `kb/atari_ram_1M.bin` — full 1 MB capture, used only as the source of the complete PCM samples |
+| **PC artifact** | `kb/ibmpc_cs.bin` — 65,535-byte dump of the **IBM PC** build's code segment, in the Ghidra project as `x86:LE:16:Real Mode` at base `0000:0000`. Dense 8086 code in `0x0000`–`0x2FFF`. **Its offsets are exactly the `ASM nnnn` addresses in the xrick port's comments** (verified at `map_resetMarks`: `MOV CX,0x20B` = 523 marks, `ADD BX,5`, at the cited `0x0025`). This is what makes PC-vs-ST questions answerable — see `PLAN.md` T8 |
+| **PC data segments** | `kb/ibmpc_ds1.bin` = segment **`0x179C`**, `kb/ibmpc_ds2.bin` = segment **`0x271D`**, both **shift 0** (a DS offset is a file offset directly). Bases were derived from content, not assumed: the hall of fame lands at `ds2:0x46A5`, matching the code's `MOV SI,0x46A5`, and `ds1[0xF810+k] == ds2[k]` over the 2031-byte overlap (98.4%). `0x179C` holds the map/level tables (`map_bnums` at `0x523A`), `0x271D` the score (`0x490E`, six ASCII digits), score deltas (`0x4916`+) and HOF. **The port's generated tables were extracted from the PC build** — `map_bnums` matches `ds1` byte for byte and is absent from `atari_ram.bin`. Both dumps carry unexplained `DUMP1`/`DUMP2` PSP-shaped strings at `0x5D`/`0x81` |
 | Source build | `disks/chaos43/RICK.PRG` — the Chaos #43 compilation disk; the build the snapshot was taken from |
 | **ST sprite pointers to port sprite numbers (T9 solved)** | ST animation tables hold **pointers**; the port holds **sprite numbers**. `index = (ST pointer - 0x2BE9E) / 0x150`, where `0x150` = `sizeof(sprite_t)` under `GFXST` (`U32[0x54]`). Derived from one anchor (the death-tumble table at `0x46BE6` vs the port's sprites `0x19`/`0x1A`), it then correctly predicted five further tables the port already used — walk `0x46BC2`, crawl `0x46BDA`, climb `0x46B9E`, box explosion `0x46C3E`, dynamite fuse `0x46BF2`. Every pointer in the region divides exactly. |
 
@@ -80,7 +80,7 @@ we work under, decisions that are settled, and lessons that cost something to le
   correctly instead of needing this rediscovered by hand. Both `e_bomb.c` and `e_box.c`
   corrected and re-documented; user confirmed fixed by playing it.
 - **T1 was rescoped on 2026-09-04: no new reimplementation.** The task is to review and
-  align the **existing xrick port** against `re/` — data structures and variable widths
+  align the **existing xrick port** against `kb/` — data structures and variable widths
   first, then algorithms. Plan in `review-plan.md`; `PLAN.md` T1 points at it. Surface is
   ~7k lines of real logic; the rest is generated tables and SDL glue.
 - **T1 ground rules set by the user 2026-09-04:** (a) target is **switchable** —
@@ -117,7 +117,7 @@ we work under, decisions that are settled, and lessons that cost something to le
 
 ## 3. The target bar
 
-`re/` must be complete enough to **mechanically re-code the game with identical
+`kb/` must be complete enough to **mechanically re-code the game with identical
 behaviour** — byte-for-byte correspondence with the original, not behavioural
 similarity. Every assessment of progress is made against that bar.
 
@@ -127,29 +127,29 @@ similarity. Every assessment of progress is made against that bar.
 |---|---|
 | `MEMORY.md` | This file — project-level memory |
 | `PLAN.md` | Current state, open work, next steps |
-| `re/` | The knowledge base: all game knowledge, organised by topic |
+| `kb/` | The knowledge base: all game knowledge, organised by topic |
 | `ghidra.xrick/` | Ghidra project (the analysis) |
 | `disks/` | Rick Dangerous disk images, incl. `chaos43/` |
 | `attempt.0/`, `attempt.1/` | Abandoned earlier attempts, deliberately kept in place |
 | `ghidra.xrick2/` | Out of scope — see §2 |
 | `xrick/` | **"The port"** — a clone of the xrick C/SDL clone (nested git repo). See §9 |
-| `xrick/re/` | Our knowledge base *about the port*, mirroring `re/`'s structure |
+| `kb/xrick/` | Our knowledge base *about the port*, mirroring `kb/`'s structure |
 | `hatari.sh`, `env.sh` | Emulator / environment helpers |
 
 ## 5. Where knowledge lives, and which layer wins
 
-`re/README.md` carries the full reading order. The authority order, which matters
+`kb/README.md` carries the full reading order. The authority order, which matters
 whenever two documents disagree:
 
 1. **Ghidra** (`ghidra.xrick`) — the only layer verified directly against bytes.
-2. **`re/algo-*.md`** — exact transcriptions; source of truth for *behaviour*.
-   `re/data-structures.md` and `re/strings.md` are authoritative for *data*.
+2. **`kb/algo-*.md`** — exact transcriptions; source of truth for *behaviour*.
+   `kb/data-structures.md` and `kb/strings.md` are authoritative for *data*.
 3. **Everything else** — `functions.md`, `entities.md`, `rick.md` are **indexes and
    narrative** and carry no derived detail by design.
 
 Two overrides on top of that:
 
-- For a **byte-identical** reimplementation, `re/byte-identity.md` overrides the prose.
+- For a **byte-identical** reimplementation, `kb/byte-identity.md` overrides the prose.
   The `algo-*.md` transcriptions are C-like and therefore lossy about operand *width*,
   *signedness* and *flag* semantics.
 - **Do not add behavioural detail to an index file.** That layering was introduced
@@ -175,7 +175,7 @@ Two overrides on top of that:
 | Question | Decision |
 |---|---|
 | Level loading at runtime | **There is none.** Two traps total (`Super`, `Setscreen`); all four levels resident. Do not re-search for GEMDOS/BIOS/XBIOS I/O — the answer is "absent", not "not yet found". |
-| ASCII string search | Done — **64 strings** in `re/strings.md`. Text is ASCII but **`0xFF`-terminated**; Ghidra's analyzer had *Require Null Termination* on. The old "text isn't ASCII" advice is **retracted**. |
+| ASCII string search | Done — **64 strings** in `kb/strings.md`. Text is ASCII but **`0xFF`-terminated**; Ghidra's analyzer had *Require Null Termination* on. The old "text isn't ASCII" advice is **retracted**. |
 | Slot-0 block pushing | **No such mechanic exists.** Slot 0 is the scripted crusher/boulder hazard, moved by `scripted_trap_update` through `A0`. |
 | The missing 12,880 bytes | Recovered via `atari_ram_1M.bin`; was stack + PCM, never code. |
 | Re-basing onto the 1 MB dump | **No.** `atari_ram.bin` numbering stays authoritative; convert with `1M_address = doc_address − 0x2054`. |
@@ -211,7 +211,7 @@ Two overrides on top of that:
   `scroll_view_up`/`scroll_view_down` had been renamed in the program while three
   documents still said `scroll_room_left`/`scroll_room_right`; `0x4922B` was
   `joystick1_state` in some files and `player_input_bitmask` in others. Ghidra is
-  authoritative (§5), so **after any rename, sweep `re/` for the old name.**
+  authoritative (§5), so **after any rename, sweep `kb/` for the old name.**
 - **A fact corrected in the documents can still be stale in the Ghidra plate comments.**
   `room_tile_map` was fixed to row-major in `data-structures.md` long before the plate at
   `0x4DA40` stopped saying "column-major". Corrections propagate in both directions.
@@ -275,8 +275,8 @@ Registered 2026-08-29. A second, independent reverse-engineering of Rick Dangero
 already exists: **xrick**, by "bigorno" (Arnaud Nolen), 1998–2005, re-coded in C on SDL.
 It is cloned into `xrick/` (its own nested git repo, remote
 `https://github.com/zpqrtbnk/xrick.git`, commit `c2aef3d`, version string `050500`).
-Our analysis of it lives in `xrick/re/` — 12 documents mirroring `re/`'s structure, with
-`xrick/re/xref.md` as the comparison worksheet.
+Our analysis of it lives in `kb/xrick/` — 12 documents mirroring `kb/`'s structure, with
+`kb/xrick/xref.md` as the comparison worksheet.
 
 Facts worth not rediscovering:
 
@@ -316,14 +316,14 @@ Facts worth not rediscovering:
 - **The port is a playable reconstruction, not a fidelity project.** It normalises struct
   layouts into C types, drops two entity fields as "never used", and its own comments
   admit it cannot explain several mechanisms. It discards exactly the width/signedness
-  information that `re/byte-identity.md` exists to capture.
+  information that `kb/byte-identity.md` exists to capture.
 - **The port had no sound engine — until 2026-09-10.** All audio used to be pre-rendered
-  WAVs made by ear; there was no PSG data anywhere. **T19 (`audio-sndh.md`) changed
+  WAVs made by ear; there was no PSG data anywhere. **T19 (`kb/audio-sndh.md`) changed
   this**: `syssnd.c` now runs the actual lifted ST sound-engine code under real 68000
-  emulation (Arnaud Carré's AtariAudio, vendored), the same bytes `re/algo-music.md`
-  and `re/assets/audio/rick_dangerous.sndh` document. Every `WAV_*` symbol's ST track
-  number is cited evidence (`audio-sndh.md` §7), not guessed. Still true: this is the
-  port *importing* `re/`'s own extraction, not a second independent reading, so it
+  emulation (Arnaud Carré's AtariAudio, vendored), the same bytes `kb/algo-music.md`
+  and `kb/assets/audio/rick_dangerous.sndh` document. Every `WAV_*` symbol's ST track
+  number is cited evidence (`kb/audio-sndh.md` §7), not guessed. Still true: this is the
+  port *importing* `kb/`'s own extraction, not a second independent reading, so it
   does not cross-validate `algo-music.md` the way other port-vs-ST comparisons do.
 - **It also has no timing model** — a 75 ms software-slept state machine, no VBlank, no
   interrupts. Per-frame *counts* are comparable; durations are not.
@@ -338,16 +338,16 @@ Facts worth not rediscovering:
   this session couldn't supply; this is a real constraint, recorded rather than
   silently settled for. Full detail, including a real bug the migration introduced
   (an all-black window, fixed with one `SDL_SetTextureBlendMode` call, found only by
-  the user actually looking at the running window): `build.md`.
+  the user actually looking at the running window): `kb/build.md`.
 - **T21 (2026-09-10): the Windows/MSBuild path was actually built** (user's one-time
   permission for that task; the standing rule below is otherwise unchanged) — x64
   only now, outputs to `bin\<Config>\`, defaults to Release. Found a still-open,
   Windows-only rendering defect (scrolling glitches, sprite misalignment) not
   reproducible on WSL; a real texture-pitch bug was fixed along the way but
-  confirmed not the cause. `build.md` §2.
+  confirmed not the cause. `kb/build.md` §2.
 - **T22 (2026-09-10): the `-data` directory and zlib are both gone.** Every asset,
   including the sound engine (T19), was already compiled in; `-data`'s file-reading
-  code had zero callers. `build.md` §1.
+  code had zero callers. `kb/build.md` §1.
 
 Cross-validated (both sides independent): the 523-record placement table, 47 rooms, all
 eight tile-attribute bits, all five common trigger bits, the enemy spawn-slot pools
@@ -357,7 +357,7 @@ score values, the 3-row room-transition window, the `0xCC` and `0xE8` thresholds
 player hitbox vertically, and the dynamite `+4/+5` / `-4/-5` offsets with the
 `(+0x0C, +0x0A)` explosion centre. The numeric pass is complete: **7 agree, 9
 remain open, 1 was our defect.** Seven semantic questions are still open. Worksheet:
-`xrick/re/xref.md`.
+`kb/xrick/xref.md`.
 
 - **A port comment saying "this is a fix for the ST version" may be describing the ST
   version faithfully.** The dynamite `+4/+5` spawn offset is written in the port as a
@@ -370,7 +370,7 @@ remain open, 1 was our defect.** Seven semantic questions are still open. Worksh
   one difference that did *not* fit — a count off by 27 — was ours.
 
 **Two findings landed on our side and are fixed:** the sprite sheet was 21 frames short
-(see §8), and `re/data-structures.md` carried two conflicting readings of placement flag
+(see §8), and `kb/data-structures.md` carried two conflicting readings of placement flag
 bit `0x02`. The latter is resolved — **the bit has two unrelated readers**, which is why
 two half-right descriptions coexisted: `spawn_level_entity` (`0x496B8`) routes the
 placement into `sprite_list[0]`, and `scripted_trap_update` (`0x4D204`) picks the spent

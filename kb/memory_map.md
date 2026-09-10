@@ -1,6 +1,6 @@
 # Rick Dangerous — Atari ST Memory Map
 
-Source: `re/atari_ram.bin` — Hatari RAM snapshot, 327,680 bytes (first 320 KB of Atari physical RAM, addresses `0x00000`–`0x4FFFF`).
+Source: `kb/atari_ram.bin` — Hatari RAM snapshot, 327,680 bytes (first 320 KB of Atari physical RAM, addresses `0x00000`–`0x4FFFF`).
 
 ---
 
@@ -43,7 +43,7 @@ exactly, and track 10 at `0x4FCF2`. See the resolution below.
 snapshot.
 
 ✅ **The two truncated sound samples were recovered 2026-08-28** from
-`re/atari_ram_1M.bin`, a complete 1 MB capture. ⚠️ That dump loads the game at a
+`kb/atari_ram_1M.bin`, a complete 1 MB capture. ⚠️ That dump loads the game at a
 **different base address** — everything shifted by **−0x2054** — so it is *not* a
 drop-in replacement. This file and the whole knowledge base use `atari_ram.bin`
 numbering; **decided: we do not re-base**. Convert with
@@ -140,7 +140,7 @@ The game uses **double buffering**. Two screen buffers are located at `0x70000` 
 
 Sprite pixel data is held in a separate area starting at `0x63800` (zeroed by `clear_screen_buffers` at startup, 0x1C800 bytes = 115,712 bytes).
 
-The sprite object list is at `0x4A702` inside the game's text segment (within the 320 KB snapshot). Entries are **0x4C bytes** each, terminated by a word of `0xFFFF`. **Confirmed (2026-08-27 pass): exactly 13 entries** (`0x4A702`–`0x4AADD`), sentinel at `0x4AADE`, immediately followed by the `sprite_type_dispatch` function-pointer table at `0x4AAE0`. Full field layout in `re/data-structures.md` (struct `SpriteEntity`).
+The sprite object list is at `0x4A702` inside the game's text segment (within the 320 KB snapshot). Entries are **0x4C bytes** each, terminated by a word of `0xFFFF`. **Confirmed (2026-08-27 pass): exactly 13 entries** (`0x4A702`–`0x4AADD`), sentinel at `0x4AADE`, immediately followed by the `sprite_type_dispatch` function-pointer table at `0x4AAE0`. Full field layout in `kb/data-structures.md` (struct `SpriteEntity`).
 
 ---
 
@@ -176,7 +176,7 @@ no loader at all** — just the resident tables.
 
 **Completely accounted for, with no gaps** (asset-extraction pass 2026-08-28;
 boundaries re-measured from the binary 2026-08-30). Every region below was confirmed by
-decoding it and looking at the result — see `re/assets-manifest.md` — and every start
+decoding it and looking at the result — see `kb/assets-manifest.md` — and every start
 address equals the previous region's end, from `0x1B01E` through to the first byte of
 code at `0x44BEE`.
 

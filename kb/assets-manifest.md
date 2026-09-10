@@ -1,7 +1,7 @@
 # Rick Dangerous — Asset Manifest
 
-Everything in `re/assets/` was produced by [`extract_assets.py`](extract_assets.py)
-from `atari_ram.bin`. Re-run it with `python re/extract_assets.py`.
+Everything in `kb/assets/` was produced by [`extract_assets.py`](extract_assets.py)
+from `atari_ram.bin`. Re-run it with `python kb/extract_assets.py`.
 
 **Every format below was validated by looking at the rendered output**, not by
 inference — the title screen, the sprite sheet and the tile blocks all come out as
@@ -99,7 +99,7 @@ included, so **sheet cell N is sprite number N** — which is what makes the she
 for cross-referencing `gfx_data` addresses.
 
 > **Corrected 2026-08-29 — the previous "185 frames" figure was wrong twice over,**
-> found while cross-checking against the xrick port (see `xrick/re/xref.md` -> *Where
+> found while cross-checking against the xrick port (see `kb/xrick/xref.md` -> *Where
 > the two agree*, sprite frame count).
 >
 > 1. **The grid was cut short.** The sweep ended at `0x3BA9E` (slot 190). Slots
@@ -377,14 +377,14 @@ clean boot state, and any routine that assumes prior initialisation will misbeha
 
 ## Rebuilt from the 1 MB dump — and a warning about that dump
 
-`re/atari_ram_1M.bin` is a complete 1 MB capture, and the SNDH is now built from it,
+`kb/atari_ram_1M.bin` is a complete 1 MB capture, and the SNDH is now built from it,
 so **all three PCM samples are complete** — including the death "waaaaa" (subtune 20,
 5,150 bytes), which was entirely absent before.
 
 > ⚠️ **`atari_ram_1M.bin` is NOT a drop-in replacement for `atari_ram.bin`.**
 > The game is loaded at a **different base address** in that capture — everything is
 > shifted by **−0x2054**. `reset_sound_chip` is at `0x42BBC` there, not `0x44C10`.
-> Every address in `re/` and in the Ghidra project refers to **`atari_ram.bin`
+> Every address in `kb/` and in the Ghidra project refers to **`atari_ram.bin`
 > numbering**; do not mix them. To convert: `1M_address = doc_address − 0x2054`.
 
 The two captures were verified to be the same program, not merely similar: with the

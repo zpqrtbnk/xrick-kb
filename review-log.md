@@ -71,7 +71,7 @@ Conversion warnings concentrate where the game logic is densest: `e_them.c` 25,
 
 ### W1 — always-false comparisons: **ten, not the seven on record** ⭐
 
-`xrick/re/divergences.md` §4.2 lists seven `if (x < 0)` tests on unsigned values that can
+`kb/xrick/divergences.md` §4.2 lists seven `if (x < 0)` tests on unsigned values that can
 never fire. The compiler finds **ten**. Three are new to us:
 
 | id | site | code | verdict |
@@ -99,7 +99,7 @@ intent — but it is the only `-Woverflow` in the tree and reads as an accident.
 The user's open question: nobody knows whether `dat_*.c` was extracted from the PC or the
 ST build. **Measured so far — the answer is mixed, which is why the census is worth doing.**
 
-| id | table | port | ST (`re/`) | verdict |
+| id | table | port | ST (`kb/`) | verdict |
 |---|---|---|---|---|
 | D1 | `map_marks` | 523 records | `placement_table[523]` @ `0x481E4` | ✅ `AGREE` — **value-identical, 523/523 on every comparable field** (`ent`, `flags`, `xy`, `lt`). ST stores the band as a word; the port and the PC as a byte (PC `mark_t` stride 5, from `ADD BX,5`). Same values |
 | D2 | `map_connect` | 153 = 106 + 47 | 153 = 106 + 47 @ `0x478B2` | ✅ `AGREE` — **all 47 lists match**, list 17 included |
@@ -148,20 +148,20 @@ fourteen, 252 six and 253 six — **40 live references**; only 254/255 are unref
 the PC they do not, and `0x02` is inside the `0x6F` centre-column mask, so it reaches the
 probe result. Verdict **`PCST` candidate** — confirm in `ibmpc_cs.bin`, then switch.
 
-### D6c — `0x08` FGND, and a claim in `re/` that needs re-examination ⚠️
+### D6c — `0x08` FGND, and a claim in `kb/` that needs re-examination ⚠️
 
 `0x08` differs on 70 tiles in bank 0 and 43 in bank 1. The port **reads it**, in two
 places: `sprites.c:147` and `sprites.c:240` use `MAP_EFLG_FGND` to hide entities behind
 foreground tiles, and it appears in every `util.c` probe mask.
 
-But `re/algo-entities.md` and `re/hatari.md` probe 1 both state that bits `0x01` and
+But `kb/algo-entities.md` and `kb/hatari.md` probe 1 both state that bits `0x01` and
 `0x08` are *"inert background classes tested by no reader"*, with the ST's three LUT
 readers enumerated by Ghidra xref. **That sits uneasily with the ST's own `0x6F` mask,
 which contains both bits.** Either the ST accumulates them and discards them at the final
 `(D0 & 0xD0)` blocked test — in which case "tested by no reader" is imprecise rather than
 wrong — or a reader was missed.
 
-✅ **Resolved 2026-09-04 — `re/` was right, and is now backed by stronger evidence.**
+✅ **Resolved 2026-09-04 — `kb/` was right, and is now backed by stronger evidence.**
 
 Reading `probe_player_tile_collision` (`0x4CD70`) to its end shows the accumulated `D0` is
 AND-ed with a runtime mask (`and.b (0x4BF16).l,D0b` @ `0x4CFE4`) and then stored **whole**
@@ -181,7 +181,7 @@ All seven consumers are `btst.b #n,(0x4D00A).l`:
 plus the blocked/carry test `andi.b #0xD0` at `0x4CFF0` → bits 7, 6, 4.
 
 **Union of every bit with any effect: `0xF6`. Bits `0x01` and `0x08` are read by nothing.**
-So `re/`'s claim stands — and the evidence is now an enumeration of the *consumers* by
+So `kb/`'s claim stands — and the evidence is now an enumeration of the *consumers* by
 `btst` bit number, which is stronger than the LUT-reader xref it originally rested on.
 
 **Consequence: FGND is a PC-only feature.** The ST computes the bit and discards it; the
@@ -209,7 +209,7 @@ confirmed in `ibmpc_cs.bin`.
 ### D5b — `map_maps[4]` has no ST counterpart
 
 Port entry 4 is `{x=0x74, y=0xC8, row=8, submap=0x26, "tune4.wav"}`. ST entry 4 reads
-`{x=8, y=0x8B, row=8, roomIdx=0}` — a duplicate of entry 0's start, and `re/` records
+`{x=8, y=0x8B, row=8, roomIdx=0}` — a duplicate of entry 0's start, and `kb/` records
 that the 5th `pIntroText` points at the **game-ending text**, not a fifth level, with
 `process_level_transition_point` treating `level_index == 4` as game-complete.
 
@@ -288,7 +288,7 @@ naive switch could have broken 26 live entities. Checking rather than assuming:
 
 - **Row 3 (bomb)** — type 3 is placed **0 times** in all 523 placement records, and
   `e_bomb_init` sets the entity directly. The row is never read.
-- **Rows 22/23** — `re/entities.md` records these as *"invisible trigger points (gfx=0)"*,
+- **Rows 22/23** — `kb/entities.md` records these as *"invisible trigger points (gfx=0)"*,
   which is exactly why the ST template is blank (null `anim_frame_table`, zero `w`/`h`).
   **The port already implements the same behaviour in code**: `e_sbonus_start` and
   `e_sbonus_stop` both set `ent.sprite = 0`, and test contact with `u_trigbox()`, which
@@ -405,7 +405,7 @@ separate — its arguments are rectangle coordinates, not entity fields.
 - **`0x3A wHazardActive`** — tested `tst.w`, set two different ways: `move.w #0xff`
   (`0x4D080`) gives `0x00FF`, but `move.b #-0x1,(0x3a,A0)` (`0x4D170`, `0x4D284`) writes
   the **high** byte, giving `0xFF00`. Both are non-zero so the `tst.w` behaves the same,
-  but **the stored value differs**. `re/data-structures.md` describes it as "0xFF while
+  but **the stored value differs**. `kb/data-structures.md` describes it as "0xFF while
   lethal", which is true of only one of the two writes. A reimplementation storing `0x00FF`
   everywhere is observationally equivalent *today*, but the ST does not.
 - **`0x0A nPosYFrac`** — word everywhere except `clr.b (0xa,A1)` at spawn, which clears
@@ -442,7 +442,7 @@ decimal compares numerically. The port stores a binary `U32`.
 |---|---|---|
 | 0-7 | 8000, 7000, 6000, 5000, 4000, 3000, 2000, 1000 | SIMES, JAYNE, DANGERSTU, KEN, ROB N BOB, TELLY, NOBBY, JEZEBEL |
 
-**Pad character differs**: the ST pads names with `0x5E` (the blank glyph, `re/strings.md`),
+**Pad character differs**: the ST pads names with `0x5E` (the blank glyph, `kb/strings.md`),
 the port with `'@'` (`0x40`). Every name matches under that mapping, including
 `ROB^N^BOB^` where `0x5E` doubles as a word separator. This is each build's own character
 set, not a defect — but any code that writes a name must use the right pad for its
@@ -611,7 +611,7 @@ Recorded so the same ground is not covered twice. Four approaches tried, all neg
 
 | approach | result |
 |---|---|
-| Apply the `+0x17E` delta to `e_them_gozombie`'s `ASM 237B` → `0x24F9` | ✗ that region is entity **physics** (`offsy`/`ylow` handling), not the kill path. **Confirms again that the delta is per-module, not global** (`xrick/re/provenance.md`) |
+| Apply the `+0x17E` delta to `e_them_gozombie`'s `ASM 237B` → `0x24F9` | ✗ that region is entity **physics** (`offsy`/`ylow` handling), not the kill path. **Confirms again that the delta is per-module, not global** (`kb/xrick/provenance.md`) |
 | Search for score constants as 16-bit immediates (`0x50`, `0x500`, `2000`, and their decimal forms) | ✗ only `MOV AX,0x2000` at `0x1B3E`/`0x1E30`, and both are **video setup** — `MOV DS,0x271D` … `MOV [0x4907],AX` — not the super bonus |
 | Locate a BCD score routine via x86 `DAA`/`DAS`/`AAA`/`AAS` | ✗ the four `0x27` candidates are bytes **inside `MOV AX,0x271D`**, not instructions. No BCD adjust found in context |
 | Infer the score variable from the port's `e_sbonus.c:47-49` annotations (`6DD5`, `6DDB`, `291A-291D`) | ✗ those are **data-segment** addresses, and we hold only the code segment (`review-plan.md` §10) |
@@ -2061,7 +2061,7 @@ claim actually held there, and it doesn't: `dat_spritesST.c`'s array is identity
 ST sprite-slot numbers only through slot `0x36` (63 entries), then permuted (extraction
 pulled a different bank in first) for the rest. The formula for computing the *ST-native
 slot number* from a pointer is still exactly right — re-verified bit-exact against
-`re/atari_ram.bin` for both A1's and A6's tables — but a slot number `>= 0x37` needs
+`kb/atari_ram.bin` for both A1's and A6's tables — but a slot number `>= 0x37` needs
 translating through `sprites_stnum_to_index[]` (`include/sprites.h`,
 `src/dat_spritesST_stmap.c`, added 2026-09-10) before use as a `dat_spritesST.c` index. Found
 by a user bug report (bomb fuse showing random sprites), not by re-review.
@@ -2076,7 +2076,7 @@ the lethal flag then does `subi.w #4` on x and `subi.w #5` on y. Its author's co
 faithful, as R3.13 suspected.
 
 **Correction, 2026-09-10 (user-reported bug: bomb fuse showed random sprites):** `0x81..0x8F`
-is the ST's own sprite-*slot* number (correct, verified again against `re/atari_ram.bin`),
+is the ST's own sprite-*slot* number (correct, verified again against `kb/atari_ram.bin`),
 not a `dat_spritesST.c` array index — the two are only identity below slot `0x37`; past
 that the array is permuted. `0x99..0xA7` was the port's *original* value, and it was
 already correct, expressed as the real array position for those same 15 frames. This
@@ -2140,12 +2140,12 @@ difference can never change an outcome. `AGREE` in effect. No change.
 
 ## C1 — ST `map_bnums` ✅ RESOLVED by an in-game dump; **no code change needed**
 
-**The dump was produced here**, with the existing harness: `re/hatari_probe.py boot` boots
+**The dump was produced here**, with the existing harness: `kb/hatari_probe.py boot` boots
 `disks/chaos43/RICK.PRG` under Hatari, drives to gameplay by poking the joystick byte, and
 `Session.to_game()` already calls `dump_ram()` -> `savebin 0 0x100000`. The run reported
 `delta = -0x2054`, the track-table self-check **PASS**, and the `player_controller`
 breakpoint **fired** — so the snapshot is genuinely in gameplay. Output:
-`re/hatari/ram.bin` (1,048,576 bytes).
+`kb/hatari/ram.bin` (1,048,576 bytes).
 
 `(0x495CC)`, null in `atari_ram.bin`, now holds **`0x0001EFCA`**, and the table there is
 `46 46 46 46 …` — the port's `map_bnums` head. The table's extent is confirmed by what
@@ -2327,7 +2327,7 @@ regions exist (`0x0355`-`0x035D`, `0x2B4D`-`0x2B78`), reached from a handful of 
 the ST's `play_music` (`0x44CCE`) is the thing to compare against. It has **25** call
 sites; the port has **25** `syssnd_play`/`sounds_setMusic` sites.
 
-Confirmed mappings, against the track map in `re/assets-manifest.md`:
+Confirmed mappings, against the track map in `kb/assets-manifest.md`:
 
 | ST track | trigger | port |
 |---|---|---|
@@ -2362,7 +2362,7 @@ Three port sites are not yet pinned to a track — `WAV_PAD`, `WAV_STICK`, `WAV_
 All three are in `player_controller`/`effect_*` territory, which is where the manifest's
 unattributed track 11 and the 14/15 pair live. Plausible, not proven; left `OPEN`.
 
-### R3.2 ❌ correction to `re/assets-manifest.md`'s track map
+### R3.2 ❌ correction to `kb/assets-manifest.md`'s track map
 Its note *"Remaining subtunes (1–8, 21–29) have no literal call site"* is **wrong for
 subtunes 6, 7, 8**. Re-scanning the 25 sites across both encodings:
 

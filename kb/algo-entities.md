@@ -6,7 +6,7 @@ these implement entity types 4–23 and 24–69, the shared trap/AI engine, the
 collision helper suite, and the checkpoint/timer state.
 
 **Bar:** reimplementable from this document alone. Constants are literal; branch
-order is preserved. Field names follow `re/data-structures.md`.
+order is preserved. Field names follow `kb/data-structures.md`.
 
 ## Calling conventions used throughout
 
@@ -702,7 +702,7 @@ Record layout: `{ duration.w, dX.w, dY.w, anim_frame_table.l }` = 10 bytes;
 
 # Corrections — all applied (closed 2026-08-29)
 
-Eight discrepancies this transcription pass found against the then-current `re/` docs.
+Eight discrepancies this transcription pass found against the then-current `kb/` docs.
 The fork that produced them deliberately did not edit the owning files, and **the block
 then sat unprocessed**, which is how a known-wrong reading of `bTriggerFlags` bit `0x02`
 survived nine byte-identity audits with the right reading two sections away. All eight
