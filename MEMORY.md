@@ -318,6 +318,24 @@ Facts worth not rediscovering:
 - **Licence is unsettled.** Source headers say "All rights reserved" and point at a
   README that carries no terms. Use the port as a reference for understanding only; do
   not copy its code into this project's output without settling this.
+- **T20 (2026-09-10): the port's SDL dependency is now SDL3, not SDL2.** Verified SDL3
+  exists and 3.4.16 is the latest release (cross-checked against the upstream GitHub
+  releases page and vcpkg's `sdl3` port, independently agreeing). The WSL/Makefile
+  build uses Debian's packaged **3.2.10**, not that latest — building 3.4.16 from
+  source hit a missing `libxtst-dev` build dependency that needed interactive sudo
+  this session couldn't supply; this is a real constraint, recorded rather than
+  silently settled for. Full detail, including a real bug the migration introduced
+  (an all-black window, fixed with one `SDL_SetTextureBlendMode` call, found only by
+  the user actually looking at the running window): `build.md`.
+- **T21 (2026-09-10): the Windows/MSBuild path was actually built** (user's one-time
+  permission for that task; the standing rule below is otherwise unchanged) — x64
+  only now, outputs to `bin\<Config>\`, defaults to Release. Found a still-open,
+  Windows-only rendering defect (scrolling glitches, sprite misalignment) not
+  reproducible on WSL; a real texture-pitch bug was fixed along the way but
+  confirmed not the cause. `build.md` §2.
+- **T22 (2026-09-10): the `-data` directory and zlib are both gone.** Every asset,
+  including the sound engine (T19), was already compiled in; `-data`'s file-reading
+  code had zero callers. `build.md` §1.
 
 Cross-validated (both sides independent): the 523-record placement table, 47 rooms, all
 eight tile-attribute bits, all five common trigger bits, the enemy spawn-slot pools

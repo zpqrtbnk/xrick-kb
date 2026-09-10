@@ -507,3 +507,96 @@ Still open:
   itself was verified (`assets-manifest.md`: "Fully verified by listening").
 - **License attribution**: MIT requires the notice to ship with the binary/docs; add it
   to whatever the port's own README/about screen does for its existing SDL/zlib credits.
+
+## 13. Sound mixing regressed from the WAV era — measured, not yet fixed
+
+**Report (2026-09-10, post-ship): "if music is playing and I fire a bullet, I don't
+hear the bullet."** True, and worth stating plainly against what came before: the
+pre-T19 WAV-based `syssnd.c` mixed sounds in software (multiple independent PCM
+buffers additively summed in the SDL callback), so any number of WAVs — music
+sting, gunshot, footstep, pickup jingle — could and did play back simultaneously
+without a second thought. That capability is gone. **This single `AtariMachine`
+instance can only ever be "doing" one thing** from the small set `{idle, playing a
+tracked song, playing a queued/active PCM sample}`, because that is a real
+constraint of the one Atari ST YM2149 chip the instance emulates, enforced by the
+*original, unmodified* `play_music` dispatch code running under 68000 emulation —
+not something this port added. §2 already knew tracked music and SFX would share
+voices; what wasn't measured until now is how *large* the resulting gap is in
+practice.
+
+**Measured with a throwaway harness** (same method as P8 — links the vendored
+engine directly, drives it exactly like `syssnd.c`, reads engine RAM back; not
+committed):
+
+1. `sounds_setMusic(SND_TRACK_LEVEL0, 0)` (a level's one-shot theme, D1=0) holds
+   `*(byte*)0x45002` (`re/algo-music.md` §2's engine-state byte) at `1` for **815
+   ticks at the engine's 50 Hz tick rate — 16.30 seconds** — before it drops back to
+   `0` (idle) on its own.
+2. Firing the bullet sound (`WAV_BULLET` = `{ track 8, type 2 — digi sample }`,
+   `sounds.c`) *while* state is `1`: refused, silently, state unchanged. This is
+   `play_music`'s own guard (`re/algo-music.md` §3, both the type-1 and type-2
+   branches): `if (*(byte*)0x45002 == 1) return;`.
+3. Firing the identical call once state is back at `0`: succeeds immediately —
+   state advances `0` → `2` (sample queued) → `0xFF` (sample playing) exactly as
+   §3 documents.
+
+So every level currently opens with a genuine **~16 second window in which no
+gameplay sound effect can be heard at all** — not a rare edge case, but the common
+case, since players routinely start moving and firing within the first few seconds
+of a level. `screen_introMap` (`scr_imap.c`) starts this tune once, at the map-intro
+screen that precedes gameplay; whether that screen's own on-screen duration is
+long enough to fully absorb the 16.3 s window was not checked here — plausibly not,
+since the report describes it happening during ordinary play, not during the intro
+animation.
+
+**Why this is not a bug to fix by correcting the engine.** The busy-guard is the
+*actual original ST 68000 code*, byte-identical, already independently verified
+faithful by P8 (§11: "exactly matching the original engine, not a bug in this
+port"). Removing or loosening it would mean patching or bypassing genuine game
+code, which is exactly the kind of change T1's ground rules (`PLAN.md`) exist to
+require a deliberate, labeled decision about — not something to slip in as a "fix."
+
+**Options for real mixing, not yet implemented (user decision pending):**
+
+1. **A second, independent `AtariMachine` instance dedicated to SFX/samples,
+   summed with the music instance's output in the audio callback.** Both instances
+   run the same unmodified engine blob, so pitch/timbre stay period-accurate; this
+   only removes the *"can't play while music plays"* restriction, not the
+   synthesis itself. Clean call-site split already exists: `sounds_setMusic`
+   (type-0 only) is the sole entry point for tracked music; every other call goes
+   through `syssnd_play`/`syssnd_play_track` — route the former to engine A, the
+   latter to engine B.
+
+   **Important limit, easy to miss:** this buys music-plus-*one*-effect, not
+   music-plus-*several*-effects. A single engine instance is still the same
+   one-thing-at-a-time state machine among its *own* callers — a type-2 (PCM
+   sample) call holds that instance's state busy at `2`/`0xFF` for the sample's
+   whole duration (measured above: this is exactly what a gunshot is), refusing
+   any other type-1/2 call on the *same* instance meanwhile. `WAV_BULLET`,
+   `WAV_EXPLODE` and `WAV_DIE` (tracks 8/10/19) are all type-2 for this reason. So
+   two SFX engine instances gives "music + one sample-type effect, and that effect
+   blocks a second overlapping one until it finishes" — not true polyphony among
+   effects. **Getting N simultaneously-audible one-shot effects needs N dedicated
+   engine instances**, one per concurrently-playable slot, each ticked and mixed
+   into the callback the same way. Non-sample SFX (type 1, e.g. `WAV_STICK`,
+   `WAV_JUMP`) are cheaper to overlap *within* one instance — `play_music`'s type-1
+   branch clears state back to `0` immediately after triggering (§3: `*(byte*)
+   0x45002 = 0;` at the end of the type-1 case) and arbitrates via per-voice bits
+   (`A6[0x18] |= 0x80`) across the alternating/dedicated voice slots instead — but
+   that arbitration is still bounded by 3 real PSG voices per instance, and a
+   type-2 call on the same instance still locks the whole instance out regardless
+   of type-1's own accounting.
+2. **Reserve one of the 3 PSG voices exclusively for SFX**, never letting tracked
+   music's channel-arbitration touch it, closer to "one authentic chip used
+   differently." Requires patching the disassembled channel-arbitration logic
+   (`advance_music_channels` / the 3-entry channel-state table in `re/algo-music.md`
+   §2), i.e. deviating from bit-exact engine code, with the attendant risk of new,
+   subtler bugs — the same class of risk this project has spent considerable effort
+   avoiding elsewhere (`MEMORY.md` §8's method lessons).
+3. **Leave it as-is**, since it is faithful to the original hardware/engine, and
+   just make sure the ~16 s window is documented (this section) rather than
+   silently discovered by playing.
+
+No option has been implemented. This section exists to record the measurement and
+the trade-offs so a decision can be made deliberately, per the project's standing
+practice for anything that would touch verified-faithful original code.

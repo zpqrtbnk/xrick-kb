@@ -75,6 +75,112 @@ not what to do. The history of what each pass found is in `re/byte-identity.md`.
 None of these blocks a reimplementation. `re/` is not known to be missing anything
 structural.
 
+### T20 — Upgrade the port from SDL2 to SDL3 ✅ **DONE 2026-09-10 (WSL); Windows/vcpkg side edited but unverified**
+
+Full detail: `build.md` (build/run instructions and the one bug found) and
+`MEMORY.md` §9 (summary). Verified SDL3 exists and that 3.4.16 is the current latest
+release (GitHub releases page and vcpkg's `sdl3` port agree independently); the
+WSL/Makefile build uses Debian's packaged 3.2.10 instead, a real constraint (source
+build of 3.4.16 hit a `libxtst-dev` dependency needing interactive sudo), not an
+unrecorded shortcut.
+
+Touched 7 SDL-using files under `xrick/xrick/src/` (`sysvid.c`, `sysevt.c`,
+`sysjoy.c`, `syskbd.c`, `syssnd.c`, `system.c`, `sysarg.c`) plus the `Makefile`
+(pkg-config instead of `sdl2-config`). Both `PLATFORM=ST` and `PLATFORM=PC` build
+clean, same 266 warnings as the pre-T20 SDL2 baseline (none new). The audio rewrite
+(T19) needed its own SDL3 migration too — SDL3's audio device is a pull-callback
+model (`SDL_OpenAudioDeviceStream` + `SDL_PutAudioStreamData`), not SDL2's
+fill-a-buffer one — but is otherwise unrelated to T19's engine-correctness work.
+
+**One real bug, caught only by running it, not by review:** after a clean build the
+window was entirely black despite correct audio — SDL3 apparently defaults new
+textures to alpha-blended rendering where SDL2 didn't, and the game's raster texture
+never populates its alpha byte (always 0), so the whole frame blended down to black.
+Fixed with one `SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_NONE)` call; confirmed
+fixed by the user looking at the re-launched window.
+
+`xrick.vcxproj`/`vcpkg.json` (the Windows/MSBuild path) were edited for consistency
+— the source now needs `<SDL3/SDL.h>`, so leaving them on SDL2 would just not
+compile — but **not built or run**, per this project's standing rule to always
+build/verify in WSL (`MEMORY.md`, `build-in-wsl` memory). Confirmed the pinned
+`builtin-baseline` commit already resolves `sdl3` to 3.4.16 (checked the registry's
+raw `versions/s-/sdl3.json` at that exact commit), so no baseline bump was needed.
+**Update, T21: the Windows side was actually built** (user granted one-time
+permission to build on Windows for that task) — see T21.
+
+### T21 — Windows project: x64-only, `bin\<Config>\` output, Release by default ✅ **DONE 2026-09-10, built and verified on Windows**
+
+User request: drop the Win32/x86 configs (x64 only needed), build into
+`bin\Debug`/`bin\Release` instead of `<Platform>\<Config>\`, and default to Release.
+Full detail in `build.md` §2.
+
+`xrick.vcxproj`: removed the `Debug|Win32`/`Release|Win32` `ProjectConfiguration`/
+`PropertyGroup`/`ItemDefinitionGroup`/`PropertySheets` blocks; `VcpkgTriplet` no
+longer needs a per-platform condition (x64-windows unconditionally); added
+`<Configuration Condition="'$(Configuration)'==''">Release</Configuration>` /
+`<Platform Condition="'$(Platform)'==''">x64</Platform>` before
+`Microsoft.Cpp.Default.props` (must be set there, since that's what actually
+consumes `$(Platform)`); set `OutDir`/`IntDir` to `$(ProjectDir)bin\$(Configuration)\`
+/ `$(ProjectDir)obj\$(Platform)\$(Configuration)\`. `xrick.sln`: dropped the
+`Debug|x86`/`Release|x86` solution-configuration/project-configuration-mapping
+entries, reordered `Release|x64` first.
+
+**Two real problems found only by actually building, not by reading the edited
+XML:** (1) The vcxproj had never been fed through MSBuild since the T19/T20 edits —
+several `<!-- ... -->` comments (added in those sessions, including this session's
+own T20 edits) contained a bare `--` inside the comment body, which is invalid XML;
+`MSBuild.exe` refused to parse the whole project file (`MSB4025`). Sweep-checked and
+fixed every comment in `xrick.vcxproj`/`xrick.vcxproj.filters` (script: strip every
+`-->`/`<!--` delimiter first, then grep the remainder for `--`, since the closing
+delimiter itself legitimately contains `--`). (2) **A bare `MSBuild xrick.sln` (no
+`/p:Configuration`) ignores the new Release/x64 defaults and builds Debug anyway** —
+MSBuild's solution-to-project wrapper hardcodes `Configuration=Debug` before the
+per-project `PropertyGroup` conditions ever get a chance to apply, and this is not
+fixable from any project or solution file edit. Confirmed by building both ways;
+**`build.md` now documents `MSBuild xrick.vcxproj` directly** (not `xrick.sln`) as
+the command that actually honors the defaults.
+
+vcpkg: ran `vcpkg install --triplet x64-windows` (this session, with the user's
+explicit one-time permission to build on Windows — the standing rule is otherwise
+WSL-only, see `MEMORY.md`'s `build-in-wsl` memory) — installed `sdl3:x64-windows@
+3.4.16`, confirming T20's baseline-resolution claim against a real install, not just
+the registry file. Built and ran successfully: video, audio, and the `-h` output all
+confirmed working on native Windows.
+
+**Found by playing the native build (not by review), still open:** scrolling
+glitches and sprite misalignment that don't reproduce on WSL. A texture-pitch bug
+was found and fixed in `sysvid_update` (`build.md` §1) but confirmed **not** the
+cause — the defect persisted identically afterward. Ruled out by direct code
+inspection: `rect_t` struct layout, the scroller's map-row-copy loop, and
+`PLATFORM_ST` resolving identically on both builds (checked both actual compiler
+invocations). Not root-caused; see `build.md` §2's note.
+
+### T22 — Remove the dead `-data`/zip/zlib asset-loading path ✅ **DONE 2026-09-10**
+
+Prompted by: now that sound comes from the compiled-in SNDH engine (T19), is the
+`-data` directory still needed? **Confirmed no**, on two independent counts: (1)
+`dat_sndh_engine.c` is a generated 186 KB source file — `sndh_engine_blob` is a byte
+array literal compiled into the binary, nothing is loaded from a `.sndh` file at
+runtime; (2) `data_file_open`/`_read`/`_close`/`_seek`/`_tell`/`_size` (`data.c`) —
+the only things `-data`'s path was ever *for* — had **zero call sites anywhere in
+the tree** outside their own definitions; only `data_setpath`/`data_closepath` were
+ever called (from `game_run`), and they just open/close a handle nothing reads from.
+`xrick/data/` on disk held only pre-T19 WAV files. Every asset (sprites, tiles,
+rooms, the demo script) has been a compiled-in `dat_*.c` table this whole time —
+audio (T19) was simply the last holdout.
+
+Removed outright: `src/data.c`, `include/data.h`, `src/unzip.c`, `include/unzip.h`,
+the `-data` CLI argument (`sysarg.c`/`sysarg.h`), `game_run`'s/`main`'s path
+parameter, `config.h`'s `WITH_ZLIB`/`NOZLIB` toggle, and every zlib reference
+(`-lz` in the Makefile, `zlib` from `vcpkg.json`, `z.lib`/`z.dll` from
+`xrick.vcxproj`, `zlib1g-dev`/`zlib-devel`/`libz` from `build.md`'s dependency
+lists) — zlib had no other consumer. Verified: `make clean && make` (both
+`PLATFORM=ST`/`PLATFORM=PC`) drops from 266 to **216 warnings** (exactly the
+`data.c`/`unzip.c`-local ones going away, none elsewhere); `./xrick` (no `-data`
+argument at all) still runs correctly in WSL. `vcpkg install --triplet x64-windows`
+cleanly *removed* zlib per the updated manifest; the Windows build (T21) still
+builds and runs with just `SDL3.dll` next to the exe, no `z.dll`.
+
 ### T19 — Replace the port's WAV audio with the real SNDH engine ⭐ **P1-P8 DONE 2026-09-10 — P9 (knowledge-base writeup) remaining**
 
 **Architecture, phased plan and full progress log: [`audio-sndh.md`](audio-sndh.md).**
@@ -113,6 +219,17 @@ one-line warm-up call fixes it for the instance's remaining lifetime).
 the user's own by-ear pass — audible correctness is the one thing engineering
 verification can't confirm. P9 (folding this into `xrick/re/`'s knowledge base) is
 the only phase left.
+
+**Regression found by playing it, 2026-09-10: sound mixing is gone.** The pre-T19
+WAV mixer could play any number of sounds at once (independent PCM buffers summed
+in software); the single emulated `AtariMachine` can only ever be doing one of
+`{idle, tracked music, one PCM sample}` at a time, because that's a real limit of
+the one YM2149 chip it emulates, enforced by the original unmodified `play_music`
+code. Measured with a throwaway harness: a level's one-shot theme blocks every
+gameplay sound effect for **16.30 seconds** at the start of each level. Not a bug
+in this port (bit-exact original behavior, already verified faithful by P8) — but
+a real usability regression worth a deliberate decision. Three options, none
+implemented yet, written up with their trade-offs in `audio-sndh.md` §13.
 
 ### T18 — Demo (attract) mode in the port ✅ **ENGINE DONE 2026-09-08 — scripts to record**
 
@@ -731,3 +848,6 @@ Known, understood, and not being pursued:
 | **G8(a) fixed in the port** | 09-09 | `e_them.c` wakeup now zero-guarded, ST-aligned: `(trigsnd & 0x7F) != 0` (mirrors ST `bclr #7` + `tst.w/beq` at `0x4D262`), under `PLATFORM_ST && ENABLE_SOUND` per the defect-21 precedent (PC verified silent at wakeup). Slot-9 NULL note added in `sounds.c` (c accepted). Built in **WSL** `make` — clean, no new warnings; headless smoke run boots Egypt (`-data ../data -submap 10`) without panic; visible window launched for visual verification. Sound defect (OOB/wild pointer) is gone; (d) replay-at-anim-end stays open. Uncommitted |
 | **G2 adjudicated — port already correct, closed** | 09-09 | First **content-level** three-way compare of the 47 connect lists (D2/10d had only compared counts). New PC structure located: room headers **47×8 bytes at `ds1:0x84CC`** `{variant, pTileMap, pTransitions, pPlacements}` (room 0 → `0x523A` bnums, `0x88EF` marks), 6-byte waypoints `{side, row, pDest, entry}`, `0xff` list terminator, `0x00FF` = end-of-level; 106 waypoints, same as ST. **46/47 lists identical ST == PC == port on every field** (port dir is the known LEFT=1 flip). Sole divergence = room 0x11 waypoint 2: ST → 0x12@0x18 (bidirectional), PC → 0x13@0x68 (forward path skips Egypt room 0x12; still enterable backwards from 0x13). Port holds the ST value — BigOrno`s 021212 edit replaced his PC source value, which ds1 corroborates byte-exact. pm-baty = PC routing. **No port change needed**; optional `PLATFORM_PC` ifdef noted in `pm-baty.md` |
 | **G2 fixed: PLATFORM_ST/PC split applied** | 09-09 | Per user request, both platforms made truthful rather than ST-only. `dat_maps.c` submap 0x11 record now `#ifdef PLATFORM_ST` `{0,0x38,0x12,0x18}` `#else` `{0,0x38,0x13,0x68}` `#endif`, same pattern as the file`s existing `map_maps`/`map_eflg_c` splits. Verified in **WSL**: both `make PLATFORM=ST` and `make PLATFORM=PC` build clean; a standalone dumper linked against the compiled `dat_maps.o` printed the actual runtime array contents under each macro (not just inspected source) — confirmed ST and PC values land correctly with neighboring records and the list terminator unaffected; both full builds pass a headless smoke run at submap 0x11. G2 closed, uncommitted |
+| **T20: SDL2 → SDL3** | 09-10 | Verified SDL3 exists and 3.4.16 is the current latest (GitHub releases page + vcpkg's `sdl3` port agree independently); WSL build used Debian's packaged **3.2.10** instead (source build of 3.4.16 blocked on a `libxtst-dev` dependency needing interactive sudo). Migrated all 7 SDL-using files (window/renderer/texture API, pull-model audio via `SDL_OpenAudioDeviceStream`, event-type renames, joystick API, mutex renames) plus the Makefile (`pkg-config` instead of `sdl2-config`). Both `PLATFORM=ST`/`PLATFORM=PC` build clean, 266 warnings, none new. **Caught by running it, not by review**: the window was all-black after a clean build — SDL3 apparently defaults textures to alpha-blended rendering, and the game's texture alpha byte is always 0 — fixed with one `SDL_SetTextureBlendMode(..., SDL_BLENDMODE_NONE)` call, confirmed by the user looking at the relaunched window. `xrick.vcxproj`/`vcpkg.json` (Windows/MSBuild path) edited for consistency but not built — WSL-only build rule stands |
+| **T21: Windows x64-only, `bin\<Config>\`, Release default** | 09-10 | User granted one-time permission to build on Windows. Dropped Win32/x86 from `xrick.vcxproj`/`xrick.sln`; output moved to `bin\Debug`/`bin\Release`; added Release/x64 defaults for a bare `MSBuild xrick.vcxproj`. Found two real problems only by building: existing `<!-- -->` comments had invalid bare `--` inside them (`MSB4025`, project wouldn't even parse) — swept and fixed all of them; and `MSBuild xrick.sln` (vs `xrick.vcxproj` directly) ignores the new defaults and always builds Debug, an unfixable MSBuild solution-wrapper behavior — `build.md` now says to build the `.vcxproj`. `vcpkg install --triplet x64-windows` installed `sdl3@3.4.16` for real, confirming T20's baseline claim against an actual install. Built and ran on native Windows: video/audio/`-h` all confirmed. **Found by playing it, still open**: scrolling glitches + sprite misalignment on Windows only, not WSL; a real texture-pitch bug was found and fixed in `sysvid_update` but confirmed not the cause (symptom persisted identically) |
+| **T22: removed `-data`/zip/zlib** | 09-10 | Confirmed both the SNDH engine is fully compiled-in (T19, `dat_sndh_engine.c` is a 186 KB generated array) and `data_file_{open,read,close,seek,tell,size}` had zero callers anywhere in the tree — `-data`'s path was only ever fed to `data_setpath`, which opened a handle nothing read from. `xrick/data/` held only pre-T19 WAV leftovers. Deleted `data.c`/`data.h`/`unzip.c`/`unzip.h` outright; removed the `-data` CLI arg, `game_run`'s/`main`'s path parameter, `config.h`'s `WITH_ZLIB` toggle, and every zlib reference (Makefile `-lz`, `vcpkg.json`, `xrick.vcxproj`'s `z.lib`/`z.dll`, `build.md`'s package lists) — zlib had no other consumer. Verified: WSL warnings 266→216 (exactly the two deleted files' own warnings, confirming no other file needed them); `./xrick` runs with no `-data` arg; `vcpkg install` cleanly uninstalled zlib per the updated manifest; Windows build still runs with just `SDL3.dll` |
