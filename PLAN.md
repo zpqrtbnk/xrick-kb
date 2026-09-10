@@ -155,6 +155,37 @@ inspection: `rect_t` struct layout, the scroller's map-row-copy loop, and
 `PLATFORM_ST` resolving identically on both builds (checked both actual compiler
 invocations). Not root-caused; see `build.md` §2's note.
 
+### T23 — Bomb fuse showed random sprites: a self-inflicted port defect ✅ **DONE 2026-09-10**
+
+User report: dropping dynamite shows the wrong sprites during the ticking/fuse phase
+("random other sprites", not a bomb). Traced to `review-log.md` A1/A6: that review
+pass derived ST-native sprite-*slot* numbers from the real 68000 pointer tables
+(re-verified bit-exact against `re/atari_ram.bin` — the formula itself is right) and
+then used them **directly as `dat_spritesST.c` array indices**, on the unchecked
+assumption that the two numberings are the same. They are, but **only through slot
+`0x37`** — dumped and cross-referenced all 213 of `dat_spritesST.c`'s own per-entry
+provenance comments against their array position and found the array is permuted
+past that point (a different bank was extracted first, then this one). Confirmed:
+the port's *original* fuse-table value that A1 "corrected" away (`0x99..0xA7`) was
+already right, just expressed as the real array position rather than the ST's own
+slot number — the review swapped a working value for a broken one.
+
+**Not local to the bomb**: the same defect, same review pass, is in the box/bomb
+shared explosion table (`0x90..0x94`, half its 10 entries) — `e_box.c` and
+`e_bomb.c` both use it.
+
+Fixed with a real lookup rather than picking one numbering by hand for these two
+spots: `sprites_stnum_to_index[0xD5]` (`include/sprites.h`'s declaration/rationale,
+`src/dat_spritesST_stmap.c`'s table), mechanically generated from
+`dat_spritesST.c`'s own comments (paired each entry's array position with its
+comment value, sorted by the comment value), verified a true bijection over
+`0..0xD4` before using it. `e_bomb.c`'s fuse/explosion tables and `e_box.c`'s
+ST-explosion table now read `sprites_stnum_to_index[...]` instead of the raw
+ST-derived number — fixes this bug and any future ST-slot-derived number `>= 0x37`
+used the same way. `review-log.md`'s A1 and A6 entries corrected in place rather
+than left wrong. Both WSL platforms and the Windows build verified clean (no new
+warnings); user confirmed fixed by playing it.
+
 ### T22 — Remove the dead `-data`/zip/zlib asset-loading path ✅ **DONE 2026-09-10**
 
 Prompted by: now that sound comes from the compiled-in SNDH engine (T19), is the
@@ -851,3 +882,4 @@ Known, understood, and not being pursued:
 | **T20: SDL2 → SDL3** | 09-10 | Verified SDL3 exists and 3.4.16 is the current latest (GitHub releases page + vcpkg's `sdl3` port agree independently); WSL build used Debian's packaged **3.2.10** instead (source build of 3.4.16 blocked on a `libxtst-dev` dependency needing interactive sudo). Migrated all 7 SDL-using files (window/renderer/texture API, pull-model audio via `SDL_OpenAudioDeviceStream`, event-type renames, joystick API, mutex renames) plus the Makefile (`pkg-config` instead of `sdl2-config`). Both `PLATFORM=ST`/`PLATFORM=PC` build clean, 266 warnings, none new. **Caught by running it, not by review**: the window was all-black after a clean build — SDL3 apparently defaults textures to alpha-blended rendering, and the game's texture alpha byte is always 0 — fixed with one `SDL_SetTextureBlendMode(..., SDL_BLENDMODE_NONE)` call, confirmed by the user looking at the relaunched window. `xrick.vcxproj`/`vcpkg.json` (Windows/MSBuild path) edited for consistency but not built — WSL-only build rule stands |
 | **T21: Windows x64-only, `bin\<Config>\`, Release default** | 09-10 | User granted one-time permission to build on Windows. Dropped Win32/x86 from `xrick.vcxproj`/`xrick.sln`; output moved to `bin\Debug`/`bin\Release`; added Release/x64 defaults for a bare `MSBuild xrick.vcxproj`. Found two real problems only by building: existing `<!-- -->` comments had invalid bare `--` inside them (`MSB4025`, project wouldn't even parse) — swept and fixed all of them; and `MSBuild xrick.sln` (vs `xrick.vcxproj` directly) ignores the new defaults and always builds Debug, an unfixable MSBuild solution-wrapper behavior — `build.md` now says to build the `.vcxproj`. `vcpkg install --triplet x64-windows` installed `sdl3@3.4.16` for real, confirming T20's baseline claim against an actual install. Built and ran on native Windows: video/audio/`-h` all confirmed. **Found by playing it, still open**: scrolling glitches + sprite misalignment on Windows only, not WSL; a real texture-pitch bug was found and fixed in `sysvid_update` but confirmed not the cause (symptom persisted identically) |
 | **T22: removed `-data`/zip/zlib** | 09-10 | Confirmed both the SNDH engine is fully compiled-in (T19, `dat_sndh_engine.c` is a 186 KB generated array) and `data_file_{open,read,close,seek,tell,size}` had zero callers anywhere in the tree — `-data`'s path was only ever fed to `data_setpath`, which opened a handle nothing read from. `xrick/data/` held only pre-T19 WAV leftovers. Deleted `data.c`/`data.h`/`unzip.c`/`unzip.h` outright; removed the `-data` CLI arg, `game_run`'s/`main`'s path parameter, `config.h`'s `WITH_ZLIB` toggle, and every zlib reference (Makefile `-lz`, `vcpkg.json`, `xrick.vcxproj`'s `z.lib`/`z.dll`, `build.md`'s package lists) — zlib had no other consumer. Verified: WSL warnings 266→216 (exactly the two deleted files' own warnings, confirming no other file needed them); `./xrick` runs with no `-data` arg; `vcpkg install` cleanly uninstalled zlib per the updated manifest; Windows build still runs with just `SDL3.dll` |
+| **T23: bomb-fuse sprite bug, self-inflicted** | 09-10 | User report: dropping dynamite shows random sprites during the fuse phase. Root cause was this project's own `review-log.md` A1/A6 pass, not the original port: it derived correct ST-native sprite-slot numbers (re-verified bit-exact) but used them directly as `dat_spritesST.c` array indices, which only matches slot number through `0x37` — dumped all 213 array entries' own provenance comments and found it permuted past that, confirming the port's original value (discarded by A1 as "wrong") was actually already correct. Same defect also in the box/bomb shared explosion table (`e_box.c`/`e_bomb.c`, half its 10 entries). Fixed with a generated `sprites_stnum_to_index[]` lookup (`sprites.h`, `dat_spritesST_stmap.c`), mechanically derived and verified as a true bijection, not hand-picked; wired into both tables; `review-log.md`'s A1/A6 corrected in place. User confirmed fixed by playing it |

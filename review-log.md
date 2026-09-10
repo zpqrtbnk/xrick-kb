@@ -2044,20 +2044,47 @@ five other places — which is what makes it evidence rather than a curve fit:
 | `0x46C3E` | `90 24 91 25 92 26 93 27 94 28` | box explosion `0x24..0x28` |
 
 Every pointer in the region divides exactly — remainder 0 in all cases, none out of range
-(`< SPRITES_NBR_SPRITES 0xD5`). The port's own sprite sheet and the ST's are the same
-ordering.
+(`< SPRITES_NBR_SPRITES 0xD5`). ~~The port's own sprite sheet and the ST's are the same
+ordering.~~
 
 *Method note:* the first table scan found nothing because it stepped by 4 from an aligned
 origin and `0x46BE6` is not 4-aligned relative to it. Re-scanned at every byte offset.
 
-### A1 — dynamite fuse ✅ implemented
+**Correction, 2026-09-10: "the same ordering" is false past slot `0x37`, and the five-table
+validation above never actually tested that.** Every entry in the table except the box
+explosion row is `< 0x37`; for the box explosion row, only the *odd* positions (`0x24..0x28`)
+were genuinely "already used" by the pre-existing port — the *even* positions (`0x90..0x94`)
+were this same review's own new derivation, unvalidated against anything. So the "predicts
+five further tables" claim, read carefully, validated the formula only within `0x00-0x36`;
+it was then applied at `0x81..0x8F` and `0x90..0x94` (A1, A6) without checking the ordering
+claim actually held there, and it doesn't: `dat_spritesST.c`'s array is identity-mapped to
+ST sprite-slot numbers only through slot `0x36` (63 entries), then permuted (extraction
+pulled a different bank in first) for the rest. The formula for computing the *ST-native
+slot number* from a pointer is still exactly right — re-verified bit-exact against
+`re/atari_ram.bin` for both A1's and A6's tables — but a slot number `>= 0x37` needs
+translating through `sprites_stnum_to_index[]` (`include/sprites.h`,
+`src/dat_spritesST_stmap.c`, added 2026-09-10) before use as a `dat_spritesST.c` index. Found
+by a user bug report (bomb fuse showing random sprites), not by re-review.
+
+### A1 — dynamite fuse ✅ implemented — ⚠️ **the "fix" below was wrong, corrected 2026-09-10**
 ST fuse = the 17 pointers at `0x46BF2` -> `0x22 0x23 0x81..0x8F`, each held **two** ticks
 (`0x4CAC8` `bclr #0,D0 / add.w D0,D0`), so 34 fuse ticks; `E_BOMB_TICKER` is `0x2B` on ST
 (34 + 9) against the PC's `0x2D` (45). The port had the right *shape* — two frames then
-fifteen — but the wrong second range, `0x99..0xA7` instead of `0x81..0x8F`.
+fifteen — but ~~the wrong second range, `0x99..0xA7` instead of `0x81..0x8F`~~.
 **The port's `x -= 4` / `y -= 5` at detonation is confirmed exactly right**: `0x4CB06` sets
 the lethal flag then does `subi.w #4` on x and `subi.w #5` on y. Its author's comment was
 faithful, as R3.13 suspected.
+
+**Correction, 2026-09-10 (user-reported bug: bomb fuse showed random sprites):** `0x81..0x8F`
+is the ST's own sprite-*slot* number (correct, verified again against `re/atari_ram.bin`),
+not a `dat_spritesST.c` array index — the two are only identity below slot `0x37`; past
+that the array is permuted. `0x99..0xA7` was the port's *original* value, and it was
+already correct, expressed as the real array position for those same 15 frames. This
+review swapped a correct value for an incorrect one on an unchecked assumption. Fixed for
+real by translating through a generated `sprites_stnum_to_index[]` lookup
+(`include/sprites.h`, `src/dat_spritesST_stmap.c`) instead of picking one numbering by
+hand — `e_bomb.c`'s fuse table now reads `sprites_stnum_to_index[fuse[...]]`. Confirmed
+by the user playing it.
 
 ### A2 — `e_them` climb gate ✅ implemented
 Both gates: condition `((x & 8) == 0 || (x & 7) == 0)`, `y <= rick.y` (gate 1, inclusive) /

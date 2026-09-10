@@ -67,6 +67,18 @@ we work under, decisions that are settled, and lessons that cost something to le
   a data-model consequence, and the two "port defects" we thought we had — the connector
   overrun and the `ent_entdata` excess — were both our own miscounts. The remaining real
   port bugs are the ones the author flagged himself plus the `rndseed +2` pointer.
+- **Correction, 2026-09-10: one of "the port's own bugs" wasn't the port's bug — it was
+  ours.** A1/A6 (`review-log.md`) replaced the port's dynamite-fuse and box/bomb-explosion
+  sprite numbers with ones derived from the ST's raw pointer tables, on the unchecked
+  assumption that an ST-derived sprite-slot number can be used directly as a
+  `dat_spritesST.c` array index. It can't past slot `0x37` — the array is permuted there
+  (extraction order, not a bug in the array) — and the port's *original* numbers were
+  already the correct array positions. The "fix" broke a working animation; user-reported
+  (bomb fuse showing random sprites), confirmed by reading `dat_spritesST.c`'s own
+  per-entry provenance comments, fixed with a generated `sprites_stnum_to_index[]` lookup
+  (`sprites.h`/`src/dat_spritesST_stmap.c`) so any future ST-slot-derived number translates
+  correctly instead of needing this rediscovered by hand. Both `e_bomb.c` and `e_box.c`
+  corrected and re-documented; user confirmed fixed by playing it.
 - **T1 was rescoped on 2026-09-04: no new reimplementation.** The task is to review and
   align the **existing xrick port** against `re/` — data structures and variable widths
   first, then algorithms. Plan in `review-plan.md`; `PLAN.md` T1 points at it. Surface is
