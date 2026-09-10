@@ -305,9 +305,14 @@ Facts worth not rediscovering:
   layouts into C types, drops two entity fields as "never used", and its own comments
   admit it cannot explain several mechanisms. It discards exactly the width/signedness
   information that `re/byte-identity.md` exists to capture.
-- **The port has no sound engine.** All audio is pre-rendered WAVs made by ear; there is
-  no PSG data anywhere. `re/algo-music.md` and our SNDH have no counterpart, and the port
-  can contribute nothing there.
+- **The port had no sound engine — until 2026-09-10.** All audio used to be pre-rendered
+  WAVs made by ear; there was no PSG data anywhere. **T19 (`audio-sndh.md`) changed
+  this**: `syssnd.c` now runs the actual lifted ST sound-engine code under real 68000
+  emulation (Arnaud Carré's AtariAudio, vendored), the same bytes `re/algo-music.md`
+  and `re/assets/audio/rick_dangerous.sndh` document. Every `WAV_*` symbol's ST track
+  number is cited evidence (`audio-sndh.md` §7), not guessed. Still true: this is the
+  port *importing* `re/`'s own extraction, not a second independent reading, so it
+  does not cross-validate `algo-music.md` the way other port-vs-ST comparisons do.
 - **It also has no timing model** — a 75 ms software-slept state machine, no VBlank, no
   interrupts. Per-frame *counts* are comparable; durations are not.
 - **Licence is unsettled.** Source headers say "All rights reserved" and point at a

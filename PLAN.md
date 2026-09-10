@@ -75,6 +75,45 @@ not what to do. The history of what each pass found is in `re/byte-identity.md`.
 None of these blocks a reimplementation. `re/` is not known to be missing anything
 structural.
 
+### T19 — Replace the port's WAV audio with the real SNDH engine ⭐ **P1-P8 DONE 2026-09-10 — P9 (knowledge-base writeup) remaining**
+
+**Architecture, phased plan and full progress log: [`audio-sndh.md`](audio-sndh.md).**
+
+The port had no sound engine — all 29 sounds were WAVs made by ear (`MEMORY.md` §9,
+now superseded for `sounds.c`/`syssnd.c`). Implemented: the game's real lifted ST
+sound engine (`re/assets/audio/rick_dangerous.sndh`'s source bytes, re-extracted
+without the SNDH container by `xrick/xrick/tools/extract_sound_engine.py`) now runs
+under Arnaud Carré's AtariAudio library (MIT, vendored verbatim into
+`xrick/xrick/src/audio_engine/`), embedded in the binary and driven as one persistent
+`AtariMachine` instance for the whole game session — not `SndhRenderer`, whose
+one-subtune-at-a-time model would reset state on every trigger, wrong for a game that
+layers music, SFX and two digidrums through one live engine.
+
+Every `WAV_*`/tune symbol's ST track number is now backed by cited evidence (P3's
+census, audio-sndh.md §7) — none guessed from the sound's English name. `syssnd.c`/
+`sounds.c` rewritten; `dat_maps.c`'s level-tune field is now the track number directly;
+dead legacy files (`dat_snd.c`, ten `wav_*.e`) removed; Makefile builds the vendored
+C++ library alongside the tree's C. Both `PLATFORM=ST` and `PLATFORM=PC` build clean
+in WSL (268 warnings, none new).
+
+**A standalone verification harness (P8, not committed) caught a real bug the build
+and a crash-free smoke run could not have**: the engine blob's internal absolute
+references are relocated by the source dump's own load delta, and the first
+implementation uploaded them at the wrong (canonical, non-delta-adjusted) address —
+silently breaking every internal table lookup and hardware-vector install by
+`-0x2054` while still running without crashing. Fixed, then re-verified byte-exact:
+D1 delivery, `play_music` dispatch, the busy-guard behaviour (type-1/2 SFX correctly
+refused while a type-0 track is active, confirmed directly rather than assumed), and
+a PCM sample's data pointer all read back correct from emulated engine RAM. Also
+fixed: a missing `silence_all_channels` call, and a first-`Jsr`-call reliability
+quirk in the vendored library (segfaults or silently no-ops on a fresh machine; a
+one-line warm-up call fixes it for the instance's remaining lifetime).
+
+`xrick` is running interactively (real video + real audio via WSLg PulseAudio) for
+the user's own by-ear pass — audible correctness is the one thing engineering
+verification can't confirm. P9 (folding this into `xrick/re/`'s knowledge base) is
+the only phase left.
+
 ### T18 — Demo (attract) mode in the port ✅ **ENGINE DONE 2026-09-08 — scripts to record**
 
 **Design, decisions and verification: [`demo.md`](demo.md).**
@@ -128,6 +167,14 @@ Remaining, in priority order (detail in `review-plan.md` §11.5):
 84 further functions (`unzip`, `syssnd`, `data`, `sysvid`, …) have **no counterpart** in
 either original and are out of scope by the user's rule: what matters is the right sound
 at the right time and the right bytes on screen, not how SDL delivers them.
+
+**Note on item 3 and `syssnd`, 2026-09-10 (T19):** `sounds.c`/`syssnd.c` no longer need
+a logic-alignment review the way the rest of item 3 does — they were rewritten to embed
+and run the actual ST sound-engine bytes under 68000 emulation, so "the right sound at
+the right time" is now enforced by construction rather than by re-derived C logic.
+`intro screens` and the render layer's *when sound plays* still need item 3's review;
+see `audio-sndh.md` for what changed and `re/algo-system.md`'s Sound section for the
+current design.
 
 ### T2 — ~~Bullet probe points: one or two?~~ ✅ **RESOLVED 2026-08-31**
 
