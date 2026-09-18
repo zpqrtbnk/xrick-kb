@@ -1,12 +1,4 @@
-# Leftover Ghidra project — permanently out of scope for this analysis.
-# See the warning at the top of reverse-plan.md.
-ghidra.xrick2/
-
-# A macOS-side copy of the whole tree (~357 MB, mostly ._ resource forks).
-# Not part of the project.
-mac/
-
-# Ghidra transient files: locks, temp snapshots, scratch.
+# Ghidra transient files: locks, temp snapshots, scratch...
 *.lock
 *.lock~
 **/tmp*.ps
@@ -16,9 +8,10 @@ mac/
 # Third-party SNDH player (downloaded for testing) and its UI state.
 # Kept on disk, not versioned — re-add deliberately if you want it tracked.
 kb/assets/audio/SndhArchivePlayer*
-kb/assets/audio/imgui.ini
+imgui.ini
 
 # Hatari run artifacts (regenerable): RAM dumps, logs, screenshots.
 grab*.png
 
+# Python caches
 __pycache__/
