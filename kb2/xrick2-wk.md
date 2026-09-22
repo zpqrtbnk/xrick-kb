@@ -3,10 +3,13 @@
 > struct layouts, and the reasoning behind each conclusion, written as a
 > chronological session log (newest findings appended at the end; earlier
 > sections may show questions later resolved further down). This file is
-> append-only historical evidence: nothing is ever deleted from it, but a
-> 2026-09-16 documentation audit added two inline `SUPERSEDED` annotations
-> at points where an earlier statement was later corrected further down —
-> each annotation points forward to the section with the corrected finding.
+> append-only historical evidence: nothing is ever deleted from it, but
+> documentation audits (2026-09-16, and a 2026-09-22 sweep that found
+> three more, now-corrected claims later re-verified directly against the
+> disassembly) added inline `SUPERSEDED` annotations at points where an
+> earlier statement was later corrected — each annotation points forward
+> to the section (or, for the 2026-09-22 batch, to `kb2/xrick2-ref.md`)
+> with the corrected finding.
 > Use this file when you need the actual evidence for a claim. For a fast,
 > topic-organized summary of what's currently established, see
 > [xrick2-ref.md](xrick2-ref.md) instead; for a consolidated list of every
@@ -884,7 +887,13 @@ Behavior confirmed from the decompile:
   result flags in `DAT_00015f14` (bit meanings partially inferred: bit
   `0x20` = "died"/"trapdoor", bits `0x02`/`0x04` = blocked direction, bits
   `0x08`/`0x10` = ledge/step detection, bit `0x40` = "teleport to explicit
-  position"). This function is the single most important remaining piece
+  position"). **SUPERSEDED 2026-09-22 — corrected in `kb2/xrick2-ref.md`,
+  found by a documentation sweep**: the bits `0x08`/`0x10`/`0x40` guessed
+  here are wrong, not just unconfirmed. Re-transcribed from the
+  disassembly (`algo-player.md` §3, `algo-actors.md` §6) and live-
+  validated (120 samples, `kb2/hatari_live_validate.py`): bit `0x08` =
+  ladder tile present, bit `0x10` = ladder-top entry, bit `0x40` =
+  standing on a platform actor. This function is the single most important remaining piece
   to fully decode for mechanical reproduction — it's effectively **the
   tile/level-collision query** the whole physics model is built on.
 - **Per-map physics tuning is hard-coded by `g_current_map_number` value**
@@ -3131,10 +3140,22 @@ bytes 2-3 exists anywhere in the game-logic call graph reachable from
 by a rendering-side subsystem (e.g. an on-screen door/exit graphic) —
 out of scope either way. Not investigating further.
 
+**SUPERSEDED 2026-09-22 — corrected in `kb2/xrick2-ref.md`, found by a
+documentation sweep**: this conclusion is wrong, not just unconfirmed.
+Re-disassembling `check_submap_exit_triggers` (`$14362`) directly shows
+byte 2 (`move.b (0x2,A0),D0b`) and byte 3 (`move.b (0x3,A0),D1b`, shifted
+and combined with the scroll/Y term) both moved into D0/D1 and passed to
+`bsr $14434`, which uses them as the target submap and target row
+(`level-tables.md` §2, `algo-flow.md` §9). The call-graph search here
+evidently didn't reach `$14434` itself — a tooling/coverage miss, not a
+fact about the code.
+
 ### Updated open follow-ups
 
-12. ~~submap-trigger-table bytes 2-3~~ — **resolved (as "no game-logic
-    reader exists")**, see above.
+12. ~~submap-trigger-table bytes 2-3~~ — was marked "resolved (as
+    'no game-logic reader exists')"; **that resolution was wrong**, see
+    the SUPERSEDED note above — bytes 2/3 are the target submap/row,
+    consumed by `$14434`.
 
 ## `FUN_000146a0` fully decoded — detail-block `byte3&0x3c` switch resolves items 7 and 9 (2026-09-15)
 
@@ -3481,7 +3502,14 @@ clamped to `0x800`), tile-collision probing via
 patterns selected by the low byte of offset `0x00` (`1`=oscillate
 between two X bounds using a counter pair at `0x29`/`0x2a` mirroring
 `FUN_00014862`'s per-type-1 field, confirming that derived byte `0x54`
-value from the earlier write-up is indeed this oscillation's *period*;
+value from the earlier write-up is indeed this oscillation's *period*.
+**SUPERSEDED 2026-09-22 — corrected in `kb2/xrick2-ref.md`, found by a
+documentation sweep**: `0x29`/`0x2a` is a decompiler pointer-scaled index
+(see the raw pseudocode at "`FUN_00014862` fully decoded" below, which
+self-annotates `unaff_A6[0x29] // byte 0x52`), not a byte offset — the
+period `0x54` was right, the counter is byte offset **`0x52`**, confirmed
+directly from the `$150c0` disassembly (`move.w (0x52,A6),D5w`), matching
+`algo-objects.md`.
 `2`/`3`=directional movers with several `g_current_map_number`-specific
 special cases), and a full despawn/reset path at the bottom (calls
 `FUN_00014a12` when the object scrolls past `x >= 0x12a`). This

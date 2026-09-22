@@ -4,7 +4,7 @@ Everything learned about **Rick Dangerous 2** (Core Design, 1990, Atari ST /
 68000) lives here: the RAM captures it was all derived from, the reverse-
 engineering documents, and the one finished artifact.
 
-Rick Dangerous **1** is a different game and a separate effort — see `../re/`
+Rick Dangerous **1** is a different game and a separate effort — see `../kb/`
 (built from `disks/chaos43/RICK.PRG` and its own RAM dump).
 
 ## Contents
@@ -44,8 +44,12 @@ consolidated table and `PORTING.md`.
 - `list_globals` / `get_xrefs_to` have been caught silently missing real
   references at least three times — cross-check with `audit_global` or
   `get_function_pcode` before concluding a symbol is unread.
-- Prefer raw 68000 disassembly over the decompiler for byte-vs-word struct
-  offsets; the decompiler has produced a real, documented contradiction there.
+- **Never decompile to C** (Ghidra's decompiler included) — the game is hand-written
+  assembly. Disassemble with Ghidra only; never write our own disassembler. Ghidra
+  p-code (`get_function_pcode`) is fine — it is not C. Earlier
+  passes used the decompiler and produced a real, documented contradiction; their
+  decompiler-derived claims are to be re-verified against the disassembly
+  (`../PLAN.md` T24 step 7).
 - Re-read the bytes for any load-bearing address rather than trusting a claim
   in a document. The sound effort found four separate misread addresses that
   had been recorded as "confirmed", one of which caused a shipped regression.

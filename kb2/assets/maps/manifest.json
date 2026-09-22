@@ -1,0 +1,74 @@
+{
+ "map1": {
+  "demo": {
+   "hnk": "RICK_01.HNK",
+   "hnk_bytes": 68,
+   "hnk_md5": "3c287a3ea1ab489390bc7ec8f8959f80",
+   "bytes": 1024,
+   "md5": "d411e33e36ed3817ac996e50ec17623c"
+  },
+  "level": {
+   "hnk": "RICK_02.HNK",
+   "hnk_bytes": 27976,
+   "hnk_md5": "93573afc0bcc1cd738e384c211eef715",
+   "stage1_bytes": 34816,
+   "stage1_md5": "e808d4be1305c584632c040ccbe79d24",
+   "bytes": 73472,
+   "md5": "eb58751a02037c2c3f03b875707b5941"
+  }
+ },
+ "map2": {
+  "demo": {
+   "hnk": "RICK_03.HNK",
+   "hnk_bytes": 166,
+   "hnk_md5": "043978cb01d97d5259e81cb552b5fd17",
+   "bytes": 1024,
+   "md5": "c93b403f78543e5bc070ee8a48ae6990"
+  },
+  "level": {
+   "hnk": "RICK_04.HNK",
+   "hnk_bytes": 32450,
+   "hnk_md5": "96f45f1a6b4228e7f8febc3573330257",
+   "stage1_bytes": 37888,
+   "stage1_md5": "53fc3e14a0a37303cfad77676a4df082",
+   "bytes": 73472,
+   "md5": "b191547c9773e0508d52fcb70c2a3d49"
+  }
+ },
+ "map3": {
+  "demo": {
+   "hnk": "RICK_05.HNK",
+   "hnk_bytes": 76,
+   "hnk_md5": "ff145159f0454c5582ae3586131d1e31",
+   "bytes": 512,
+   "md5": "7b0299aef5507902f7235c79f595a712"
+  },
+  "level": {
+   "hnk": "RICK_06.HNK",
+   "hnk_bytes": 31982,
+   "hnk_md5": "cdea003e8aadb9f8e1f0f73be6affa32",
+   "stage1_bytes": 37376,
+   "stage1_md5": "bcec3e5f88d6f27fdd4abbc46ac423e7",
+   "bytes": 73472,
+   "md5": "e8679c869db7b68846b36218e50a0bc3"
+  }
+ },
+ "map4": {
+  "demo": {
+   "hnk": "RICK_07.HNK",
+   "hnk_bytes": 118,
+   "hnk_md5": "2ec540cfe29c86ed76442f5307ad05bd",
+   "bytes": 1024,
+   "md5": "7e82ad59c50a96fd94aa90074a2cb6c1"
+  },
+  "level": {
+   "hnk": "RICK_08.HNK",
+   "hnk_bytes": 34178,
+   "hnk_md5": "3271d32155f0e11377617d6d01223572",
+   "stage1_bytes": 39936,
+   "stage1_md5": "7e6e5f5c422af93eee87a9ddf0693acb",
+   "bytes": 73472,
+   "md5": "afd8e228e73b4cbb60b4f58a58a17619"
+  }
+ }
+}

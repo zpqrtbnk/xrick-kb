@@ -1,0 +1,557 @@
+{
+ "map1": {
+  "level_image": "map1_level.bin",
+  "submap_headers": [
+   {
+    "index": 0,
+    "block_map_offset": 0,
+    "max_scroll": 0,
+    "height_px": 192,
+    "block_rows": 6,
+    "trigger_table_image_offset": 6280,
+    "spawn_table_image_offset": 6285
+   },
+   {
+    "index": 1,
+    "block_map_offset": 64,
+    "max_scroll": 896,
+    "height_px": 1088,
+    "block_rows": 34,
+    "trigger_table_image_offset": 6338,
+    "spawn_table_image_offset": 6347
+   },
+   {
+    "index": 2,
+    "block_map_offset": 304,
+    "max_scroll": 896,
+    "height_px": 1088,
+    "block_rows": 34,
+    "trigger_table_image_offset": 6552,
+    "spawn_table_image_offset": 6577
+   },
+   {
+    "index": 3,
+    "block_map_offset": 624,
+    "max_scroll": 0,
+    "height_px": 192,
+    "block_rows": 6,
+    "trigger_table_image_offset": 6766,
+    "spawn_table_image_offset": 6771
+   },
+   {
+    "index": 4,
+    "block_map_offset": 688,
+    "max_scroll": 832,
+    "height_px": 1024,
+    "block_rows": 32,
+    "trigger_table_image_offset": 6796,
+    "spawn_table_image_offset": 6809
+   },
+   {
+    "index": 5,
+    "block_map_offset": 944,
+    "max_scroll": 832,
+    "height_px": 1024,
+    "block_rows": 32,
+    "trigger_table_image_offset": 7018,
+    "spawn_table_image_offset": 7031
+   },
+   {
+    "index": 6,
+    "block_map_offset": 1200,
+    "max_scroll": 64,
+    "height_px": 256,
+    "block_rows": 8,
+    "trigger_table_image_offset": 7228,
+    "spawn_table_image_offset": 7233
+   },
+   {
+    "index": 7,
+    "block_map_offset": 1264,
+    "max_scroll": 64,
+    "height_px": 256,
+    "block_rows": 8,
+    "trigger_table_image_offset": 7266,
+    "spawn_table_image_offset": 7271
+   },
+   {
+    "index": 8,
+    "block_map_offset": 0,
+    "max_scroll": 0,
+    "height_px": 192,
+    "block_rows": 6,
+    "trigger_table_image_offset": 7304,
+    "spawn_table_image_offset": 7305,
+    "same_layout_as": 0
+   },
+   {
+    "index": 9,
+    "block_map_offset": 0,
+    "max_scroll": 0,
+    "height_px": 192,
+    "block_rows": 6,
+    "trigger_table_image_offset": 7306,
+    "spawn_table_image_offset": 7307,
+    "same_layout_as": 0
+   },
+   {
+    "index": 10,
+    "block_map_offset": 0,
+    "max_scroll": 0,
+    "height_px": 192,
+    "block_rows": 6,
+    "trigger_table_image_offset": 7308,
+    "spawn_table_image_offset": 7309,
+    "same_layout_as": 0
+   },
+   {
+    "index": 11,
+    "block_map_offset": 0,
+    "max_scroll": 0,
+    "height_px": 192,
+    "block_rows": 6,
+    "trigger_table_image_offset": 7310,
+    "spawn_table_image_offset": 7311,
+    "same_layout_as": 0
+   },
+   {
+    "index": 12,
+    "block_map_offset": 0,
+    "max_scroll": 0,
+    "height_px": 192,
+    "block_rows": 6,
+    "trigger_table_image_offset": 7312,
+    "spawn_table_image_offset": 7313,
+    "same_layout_as": 0
+   },
+   {
+    "index": 13,
+    "block_map_offset": 0,
+    "max_scroll": 0,
+    "height_px": 192,
+    "block_rows": 6,
+    "trigger_table_image_offset": 7314,
+    "spawn_table_image_offset": 7315,
+    "same_layout_as": 0
+   },
+   {
+    "index": 14,
+    "block_map_offset": 0,
+    "max_scroll": 0,
+    "height_px": 192,
+    "block_rows": 6,
+    "trigger_table_image_offset": 7316,
+    "spawn_table_image_offset": 7317,
+    "same_layout_as": 0
+   },
+   {
+    "index": 15,
+    "block_map_offset": 0,
+    "max_scroll": 0,
+    "height_px": 192,
+    "block_rows": 6,
+    "trigger_table_image_offset": 7318,
+    "spawn_table_image_offset": 7319,
+    "same_layout_as": 0
+   },
+   {
+    "index": 16,
+    "block_map_offset": 0,
+    "max_scroll": 0,
+    "height_px": 192,
+    "block_rows": 6,
+    "trigger_table_image_offset": 7320,
+    "spawn_table_image_offset": 7321,
+    "same_layout_as": 0
+   }
+  ]
+ },
+ "map2": {
+  "level_image": "map2_level.bin",
+  "submap_headers": [
+   {
+    "index": 0,
+    "block_map_offset": 0,
+    "max_scroll": 0,
+    "height_px": 192,
+    "block_rows": 6,
+    "trigger_table_image_offset": 6256,
+    "spawn_table_image_offset": 6261
+   },
+   {
+    "index": 1,
+    "block_map_offset": 64,
+    "max_scroll": 1152,
+    "height_px": 1344,
+    "block_rows": 42,
+    "trigger_table_image_offset": 6290,
+    "spawn_table_image_offset": 6303
+   },
+   {
+    "index": 2,
+    "block_map_offset": 400,
+    "max_scroll": 128,
+    "height_px": 320,
+    "block_rows": 10,
+    "trigger_table_image_offset": 6568,
+    "spawn_table_image_offset": 6577
+   },
+   {
+    "index": 3,
+    "block_map_offset": 480,
+    "max_scroll": 576,
+    "height_px": 768,
+    "block_rows": 24,
+    "trigger_table_image_offset": 6618,
+    "spawn_table_image_offset": 6627
+   },
+   {
+    "index": 4,
+    "block_map_offset": 640,
+    "max_scroll": 896,
+    "height_px": 1088,
+    "block_rows": 34,
+    "trigger_table_image_offset": 6740,
+    "spawn_table_image_offset": 6753
+   },
+   {
+    "index": 5,
+    "block_map_offset": 880,
+    "max_scroll": 128,
+    "height_px": 320,
+    "block_rows": 10,
+    "trigger_table_image_offset": 6934,
+    "spawn_table_image_offset": 6947
+   },
+   {
+    "index": 6,
+    "block_map_offset": 944,
+    "max_scroll": 704,
+    "height_px": 896,
+    "block_rows": 28,
+    "trigger_table_image_offset": 6988,
+    "spawn_table_image_offset": 7001
+   },
+   {
+    "index": 7,
+    "block_map_offset": 1168,
+    "max_scroll": 64,
+    "height_px": 256,
+    "block_rows": 8,
+    "trigger_table_image_offset": 7174,
+    "spawn_table_image_offset": 7183
+   },
+   {
+    "index": 8,
+    "block_map_offset": 1232,
+    "max_scroll": 64,
+    "height_px": 256,
+    "block_rows": 8,
+    "trigger_table_image_offset": 7220,
+    "spawn_table_image_offset": 7225
+   },
+   {
+    "index": 9,
+    "block_map_offset": 1296,
+    "max_scroll": 64,
+    "height_px": 256,
+    "block_rows": 8,
+    "trigger_table_image_offset": 7258,
+    "spawn_table_image_offset": 7263
+   },
+   {
+    "index": 10,
+    "block_map_offset": 1536,
+    "max_scroll": 1024,
+    "height_px": 1216,
+    "block_rows": 38,
+    "trigger_table_image_offset": 7296,
+    "spawn_table_image_offset": 7305
+   },
+   {
+    "index": 11,
+    "block_map_offset": 1840,
+    "max_scroll": 768,
+    "height_px": 960,
+    "block_rows": 30,
+    "trigger_table_image_offset": 7550,
+    "spawn_table_image_offset": 7559
+   },
+   {
+    "index": 12,
+    "block_map_offset": 2096,
+    "max_scroll": 64,
+    "height_px": 256,
+    "block_rows": 8,
+    "trigger_table_image_offset": 7756,
+    "spawn_table_image_offset": 7765
+   },
+   {
+    "index": 13,
+    "block_map_offset": 0,
+    "max_scroll": 0,
+    "height_px": 192,
+    "block_rows": 6,
+    "trigger_table_image_offset": 7790,
+    "spawn_table_image_offset": 7791,
+    "same_layout_as": 0
+   }
+  ]
+ },
+ "map3": {
+  "level_image": "map3_level.bin",
+  "submap_headers": [
+   {
+    "index": 0,
+    "block_map_offset": 0,
+    "max_scroll": 512,
+    "height_px": 704,
+    "block_rows": 22,
+    "trigger_table_image_offset": 6256,
+    "spawn_table_image_offset": 6265
+   },
+   {
+    "index": 1,
+    "block_map_offset": 160,
+    "max_scroll": 1152,
+    "height_px": 1344,
+    "block_rows": 42,
+    "trigger_table_image_offset": 6334,
+    "spawn_table_image_offset": 6351
+   },
+   {
+    "index": 2,
+    "block_map_offset": 512,
+    "max_scroll": 768,
+    "height_px": 960,
+    "block_rows": 30,
+    "trigger_table_image_offset": 6572,
+    "spawn_table_image_offset": 6597
+   },
+   {
+    "index": 3,
+    "block_map_offset": 768,
+    "max_scroll": 1152,
+    "height_px": 1344,
+    "block_rows": 42,
+    "trigger_table_image_offset": 6818,
+    "spawn_table_image_offset": 6843
+   },
+   {
+    "index": 4,
+    "block_map_offset": 1120,
+    "max_scroll": 64,
+    "height_px": 256,
+    "block_rows": 8,
+    "trigger_table_image_offset": 7180,
+    "spawn_table_image_offset": 7189
+   },
+   {
+    "index": 5,
+    "block_map_offset": 1184,
+    "max_scroll": 0,
+    "height_px": 192,
+    "block_rows": 6,
+    "trigger_table_image_offset": 7214,
+    "spawn_table_image_offset": 7223
+   },
+   {
+    "index": 6,
+    "block_map_offset": 1248,
+    "max_scroll": 896,
+    "height_px": 1088,
+    "block_rows": 34,
+    "trigger_table_image_offset": 7252,
+    "spawn_table_image_offset": 7265
+   },
+   {
+    "index": 7,
+    "block_map_offset": 1536,
+    "max_scroll": 64,
+    "height_px": 256,
+    "block_rows": 8,
+    "trigger_table_image_offset": 7570,
+    "spawn_table_image_offset": 7579
+   },
+   {
+    "index": 8,
+    "block_map_offset": 1608,
+    "max_scroll": 960,
+    "height_px": 1152,
+    "block_rows": 36,
+    "trigger_table_image_offset": 7612,
+    "spawn_table_image_offset": 7621
+   },
+   {
+    "index": 9,
+    "block_map_offset": 1904,
+    "max_scroll": 448,
+    "height_px": 640,
+    "block_rows": 20,
+    "trigger_table_image_offset": 7846,
+    "spawn_table_image_offset": 7851
+   },
+   {
+    "index": 10,
+    "block_map_offset": 0,
+    "max_scroll": 0,
+    "height_px": 192,
+    "block_rows": 6,
+    "trigger_table_image_offset": 7984,
+    "spawn_table_image_offset": 7985
+   },
+   {
+    "index": 11,
+    "block_map_offset": 0,
+    "max_scroll": 0,
+    "height_px": 192,
+    "block_rows": 6,
+    "trigger_table_image_offset": 7986,
+    "spawn_table_image_offset": 7987,
+    "same_layout_as": 10
+   },
+   {
+    "index": 12,
+    "block_map_offset": 0,
+    "max_scroll": 0,
+    "height_px": 192,
+    "block_rows": 6,
+    "trigger_table_image_offset": 7988,
+    "spawn_table_image_offset": 7989,
+    "same_layout_as": 10
+   },
+   {
+    "index": 13,
+    "block_map_offset": 0,
+    "max_scroll": 0,
+    "height_px": 192,
+    "block_rows": 6,
+    "trigger_table_image_offset": 7990,
+    "spawn_table_image_offset": 7991,
+    "same_layout_as": 10
+   }
+  ]
+ },
+ "map4": {
+  "level_image": "map4_level.bin",
+  "submap_headers": [
+   {
+    "index": 0,
+    "block_map_offset": 0,
+    "max_scroll": 960,
+    "height_px": 1152,
+    "block_rows": 36,
+    "trigger_table_image_offset": 6248,
+    "spawn_table_image_offset": 6261
+   },
+   {
+    "index": 1,
+    "block_map_offset": 304,
+    "max_scroll": 64,
+    "height_px": 256,
+    "block_rows": 8,
+    "trigger_table_image_offset": 6522,
+    "spawn_table_image_offset": 6531
+   },
+   {
+    "index": 2,
+    "block_map_offset": 368,
+    "max_scroll": 576,
+    "height_px": 768,
+    "block_rows": 24,
+    "trigger_table_image_offset": 6568,
+    "spawn_table_image_offset": 6577
+   },
+   {
+    "index": 3,
+    "block_map_offset": 576,
+    "max_scroll": 768,
+    "height_px": 960,
+    "block_rows": 30,
+    "trigger_table_image_offset": 6730,
+    "spawn_table_image_offset": 6747
+   },
+   {
+    "index": 4,
+    "block_map_offset": 832,
+    "max_scroll": 192,
+    "height_px": 384,
+    "block_rows": 12,
+    "trigger_table_image_offset": 6908,
+    "spawn_table_image_offset": 6925
+   },
+   {
+    "index": 5,
+    "block_map_offset": 944,
+    "max_scroll": 384,
+    "height_px": 576,
+    "block_rows": 18,
+    "trigger_table_image_offset": 7014,
+    "spawn_table_image_offset": 7031
+   },
+   {
+    "index": 6,
+    "block_map_offset": 1104,
+    "max_scroll": 384,
+    "height_px": 576,
+    "block_rows": 18,
+    "trigger_table_image_offset": 7136,
+    "spawn_table_image_offset": 7141
+   },
+   {
+    "index": 7,
+    "block_map_offset": 1264,
+    "max_scroll": 256,
+    "height_px": 448,
+    "block_rows": 14,
+    "trigger_table_image_offset": 7286,
+    "spawn_table_image_offset": 7291
+   },
+   {
+    "index": 8,
+    "block_map_offset": 1376,
+    "max_scroll": 64,
+    "height_px": 256,
+    "block_rows": 8,
+    "trigger_table_image_offset": 7352,
+    "spawn_table_image_offset": 7357
+   },
+   {
+    "index": 9,
+    "block_map_offset": 1440,
+    "max_scroll": 64,
+    "height_px": 256,
+    "block_rows": 8,
+    "trigger_table_image_offset": 7398,
+    "spawn_table_image_offset": 7403
+   },
+   {
+    "index": 10,
+    "block_map_offset": 1536,
+    "max_scroll": 1600,
+    "height_px": 1792,
+    "block_rows": 56,
+    "trigger_table_image_offset": 7444,
+    "spawn_table_image_offset": 7461
+   },
+   {
+    "index": 11,
+    "block_map_offset": 1984,
+    "max_scroll": 256,
+    "height_px": 448,
+    "block_rows": 14,
+    "trigger_table_image_offset": 7798,
+    "spawn_table_image_offset": 7807
+   },
+   {
+    "index": 12,
+    "block_map_offset": 2096,
+    "max_scroll": 384,
+    "height_px": 576,
+    "block_rows": 18,
+    "trigger_table_image_offset": 7888,
+    "spawn_table_image_offset": 7897
+   }
+  ]
+ }
+}

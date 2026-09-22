@@ -75,6 +75,334 @@ not what to do. The history of what each pass found is in `kb/byte-identity.md`.
 None of these blocks a reimplementation. `kb/` is not known to be missing anything
 structural.
 
+### T41 — One executable, `-rd [1|2]`: split the port tree into common/rd1/rd2 ⭐ **step 1 DONE 2026-09-22 — reorg only, no RD2 code yet**
+
+Goal: a single `xrick` binary that plays either game, selected at runtime by `-rd 1` /
+`-rd 2`. Port tree: `xrick/xrick/` (nested repo, checked out at `xrick/xrick`).
+
+**Step 1 (done today):** introduced `include/rd1`, `include/rd2`, `src/rd1`, `src/rd2`
+under the port's `xrick/` project dir. Read every file in `include/`+`src/` (not just
+names) and moved everything that is strictly RD1 into `rd1/`; kept the platform/SDL/OS
+layer and the vendored Atari chip emulator at the top as common. `git mv` throughout, so
+history follows each file.
+
+- **Common (stayed at top):** `config.h`, `control.*`, `debug.h`, `img.*`, `rects.*`,
+  `sysarg.*`, `sysevt.*`, `sysjoy.*`, `syskbd.*`, `system.*`, `sysvid.*`, `xrick.c`
+  (entry point — future `-rd` dispatch goes here), and all of `src/audio_engine/`
+  (generic Atari ST 68000/YM2149/MFP/DAC emulation, vendored from arnaud-carre/AtariAudio
+  — no RD1-specific addresses baked in, confirmed by grep).
+- **Moved to `rd1/`:** the entity engine (`ents.*`, `e_*.*`), map/tile/sprite engine
+  (`maps.*`, `tiles.*`, `sprites.*`, `scroller.*`), `game.*`, `demo.*`, `env.*`,
+  `devtools.*`, all `dat_*.*` (compiled-in game data/assets), `scr_*.c`, `screens.h`,
+  `pics.h`, `sounds.*`, `util.*`, and `syssnd.*` + `dat_sndh_engine.*` (the RD1 68000
+  sound-engine blob extracted verbatim from the ST binary — track/D1 calling convention
+  is RD1-specific, not reusable).
+- **Judgment call, resolved by the user:** `fb.*` and `draw.*` are structurally generic
+  (framebuffer fade/palette, two screen rects) but embed RD1-specific data (ST/PC RGB
+  palettes, RD1's HUD rect layout) — user chose **move to rd1 now**, re-derive a truly
+  generic pair later once RD2's actual needs are known. `img_icon.e` (window icon) and
+  `img_splash.e` (splash bitmap) — RD1 branding data quote-included from otherwise-common
+  files — moved to `src/rd1/` for the same reason.
+- **Makefile updated:** `CSRC`/`CXXSRC` wildcards now also sweep `src/rd1` and `src/rd2`;
+  `-Iinclude/rd1 -Iinclude/rd2 -Isrc -Isrc/rd1 -Isrc/rd2` added (the `-Isrc*` paths are
+  needed because `sysvid.c`'s `"img_icon.e"` and `syssnd.c`'s
+  `"audio_engine/AtariMachineC.h"` are quote-includes that no longer sit next to their
+  includer). PC-variant `dat_*.c` filter-out paths updated to `src/rd1/...`.
+- **Verified:** `make clean && make -j4` in WSL (Debian) — links cleanly, `xrick` binary
+  produced. Only pre-existing `-Wconversion`/`-Wsign-conversion` warnings, nothing new.
+  Windows `.vcxproj` was **not** touched (`MEMORY.md` — WSL is the build of record).
+
+**Known follow-on coupling** (not fixed in step 1 — reorg only): a few common files
+quote-include or call into what is now an `rd1/` header, and will need genuine
+adjustment once `rd2/` exists — `sysvid.c` → `fb.h`/`img_icon.e`, `sysevt.c` →
+`game.h`/`game_toggleCheat()`, `sysarg.c` → `game.h`/`maps.h`/`syssnd.h` (help text and
+`-map`/`-submap` bounds), `xrick.c` → `game.h`/`game_run()`, `img.c`/`rects.c`/`sysvid.c`
+→ `fb.h`. All are cited above so `-Iinclude/rd1` compiles today without a real RD2 side.
+
+**Still open:**
+- Step 2: populate `include/rd2`/`src/rd2` from `kb2/` (RD2's engine is structurally
+  different — 88-byte `ActorRecord`, script-driven movement/animation, two actor tables
+  per `kb2/algo-actors.md` — this is a full port, not a data swap).
+- Step 3: namespace the common↔game coupling above (e.g. `rd1_game_run()`/
+  `rd2_game_run()` behind a function-pointer table) and wire `-rd` into `sysarg.c` +
+  `xrick.c` to select it at runtime.
+
+**Full plan for steps 2+3: [`port-rd2.md`](port-rd2.md)**, written 2026-09-22 after
+re-reading all of `kb2/` end to end. Verdict: **ready to start** — logic, data,
+rendering and sound are all done statically *and* live (`kb2/PORTING.md`), the only
+carried-forward gaps (T39, T36, one unexplained live sample) are non-blocking. Ten
+data-pipeline sub-steps (P1a–j), headers (P2), an 8-module engine port (P3), a
+4-module render port (P4), sound (P5), the `-rd` wire-up (P6), build/verify/audit/docs
+(P7–P10) — tracked with a status column in that file, the way `review-plan.md` tracks
+T1. The one open decision (ship the reconstructed map-3 demo stream, T25) was resolved
+by the user the same day: ship it, flagged reconstructed (`port-rd2.md` §4).
+
+### T24 — Complete the Rick Dangerous 2 reverse ✅ **DONE — registered 2026-09-19, static AND live reverse complete by 2026-09-22 — see T27 checkpoint, `kb2/PORTING.md` (rewritten 2026-09-22)**
+
+Project: `ghidra.xrick2` + `kb2/` (see `MEMORY.md` §10). RD1 is finished (everything above);
+this is the second game. Assessment source: `kb2/PORTING.md`, `kb2/xrick2-gaps.md` (28-row
+table), `kb2/assets/README.md`, plus checks run on 2026-09-19 (below). **The Ghidra MCP server
+failed to connect this session, so nothing was checked inside Ghidra; every claim about
+function names/counts/comments is the docs' word, unverified.**
+
+**Where it stands** (kb2's own four-area split):
+
+| Area | State |
+|---|---|
+| Game logic | ~90% understood (kb2's estimate). Solid: main loop, 88-byte `ActorRecord`, enemy AI byte-code VM, `g_object_table`, player physics, input/attract. Weakness is *breadth of validation* — nearly all live checks used one capture (map 1, attract mode) |
+| Game data | Container + depackers **done**: both transcribed and checked (kb2 reports 4 independent byte-exact checks; not re-run today). All 8 `.HNK` unpacked. **But no table has been located inside the 73,472-byte level images** (spawn, submap-trigger, scripts, tile IDs) except the descriptor table start and the `$65200` attribute table |
+| Rendering | Untouched, excluded by design |
+| Sound | **Done** — `kb2/sound-ref.md`, `kb2/rick2_sfx.sndh` |
+
+**Checked in Ghidra and on the live game, 2026-09-19** (disassembly listings/xrefs only, no decompile):
+
+- Program `prg2-ram.bin` (`/prg2-ram.bin.0`): **151 functions**, spanning `$7000`–`$1b056`. By my count of
+  the listing **41 have real names and 110 are `FUN_xxxxxxxx`** (41+110 matches the reported 151).
+  `ActorRecord` (88 B) exists as a struct. 707 defined data items. Function `main_loop_body` at `$10a90`
+  confirmed. `get_xrefs_to` works (28 refs to `$1239c`, `g_current_map_number`); `list_globals` returns nothing
+  — so whether the `g_*` labels kb2 quotes exist in this project is **unchecked**.
+- `find_code_gaps`: inside the game-code span `$10a90`–`$1b08d` (42,494 B) **17,363 B (40.9%) are outside
+  any function** (mix of orphaned instructions and data tables — not yet classified). The sound code
+  (`$19e96`–`$1c6aa` per `kb2/sound-ref.md`) is only partly inside functions: the last one starts at `$1b056`.
+  `$7590`–`$10a8f` (38 KB) is mostly zero words (BSS/buffer space), not code.
+- Live boot of `disks/chaos43_noauto.st` (`kb2/hatari_rd2.py`): the RAM dump matches `kb2/prg2-ram.bin` —
+  main loop `$10a00`–`$11000` 100%, `$12000`–`$13000` 100%, level image `$53400`–`$65300` 100%; and
+  `$3EFC0` equals the depacked `RICK_01.HNK` (now `map1_demo.bin`) for all 1024 B. The depacked `RICK_02.HNK` (now `map1_level.bin`) differs from live RAM by
+  exactly the **same 10 bytes (all `0x80`, the "already spawned" bit)** as kb2 reported — deterministic,
+  so this is a second, independent confirmation of the map-1 depack.
+- The disk files are byte-identical to `disks/chaos43/` (FAT12 walk); `RICK_05.HNK` on it is the same junk.
+
+**Second pass, 2026-09-19 (forced map loads on the live game, disassembly read in Ghidra):**
+
+- **Maps 2, 3, 4 verified live.** `kb2/hatari_rd2.py <out> 20 2,3,4` forces each map inside the frame loop
+  (two one-shot breakpoints: `pc=$10a36` writes `$1239c`, `pc=$10a3c` dumps RAM right after `load_map`
+  returned) and the level image at `$53400` equals our depacked `RICK_04/06/08.bin` with **0 differing
+  bytes** in each case (map 1: only the known spawn-bit bytes). So all four big images and both
+  depackers are now checked against the running game, not just map 1. Loading map N runs through the
+  same `load_map` `$123c4` — the "does HNK 3–8 load like 1–2" question (kb2 gap #22) is answered for the
+  forced path; who triggers it in normal play (gap #21) is not.
+- **Poking `$1239c` alone does not work** — within a second something sets it back to 1 while the attract
+  demo runs (observed by polling). Reason not yet found; the breakpoint method sidesteps it.
+- **Ghidra's `main_loop_body` was mis-bounded — FIXED 2026-09-19 (user go-ahead).** It started at `$10a90`,
+  4 bytes into `tst.w ($115dc).l` (`$10a8c`, bytes `4a79 0001 15dc`), so its first instruction was garbage,
+  and the loop head/set-up sat outside any function. Now **`game_main` @ `$10992`–`$10c27`** (660 B; the
+  data word at `$10b5c` excluded). Structure, all read from the disassembly: `$10992` restores MFP regs/vectors
+  saved at boot; `$10a18` `state_top_demo_or_title` (`$178dc`, `$17a46`, `$1771c`, `$123a0`); `$10a30`
+  `level_start` (`$19388`, `$123b0`, `$17760`, …); **`$10a54` `frame_loop` is the per-frame loop**
+  (`$14594`, `$15bc0`, `$14d48`, `$150a2`, `$15826`, `$13096`, `$13e14`, `$13e98`, `$16658`, `$18dac`, …,
+  `$14362`); map advance `addi.w #1,$1239c` at `$10b1a`. **This answers kb2 gap #1**: nothing "calls" the
+  loop — the boot code at `$10000` reaches `$1010c` via a return-address trick (pushes
+  `0x9131a73−0x9121967 = $1010c`, then `rts`), which does `bra.w $10992`; `$10114`–`$10991` is jumped over.
+  Also: the bogus function on `0xFF` data at `$12394` (named `load_map_if_changed`) deleted;
+  **`$123b0` renamed `load_map_if_changed`**, `$123a0` → `set_current_map_from_choice`; labels/words for
+  `g_current_map_number` `$1239c`, `g_loaded_map_number` `$1239e`; plate comments on `game_main` and `$10114`.
+  **Side effect to know about:** `clear_flow_and_repair` re-disassembled orphaned flow and Ghidra created
+  **10 new functions** (`FUN_000164de`, `…1653e`, `…166ae`, `…16718`, `…16786`, `…171a4`, `…17644`,
+  `…17694`, `…1884c`, `…1888e`); the program now reports **159 functions** (was 151). Their bounds are
+  Ghidra's own, unreviewed. **Not done:** Ghidra refuses the instructions at `$10000` (`move.w SR,D0`) and
+  `$1006a` (tool reports 0 instructions), so the boot entry has no function; scripts are disabled
+  (`GHIDRA_MCP_ALLOW_SCRIPTS`), so range-clearing was done with the plain tools.
+- Screenshots (Hatari `--screenshot-dir`): crack screen text `AUTOMATION PRESENTS / RICK DANGEROUS II /
+  CRACK/PACK/FILES BY HANK! / HIT ANY KEY TO CONTINUE`, then a Hall of Fame (8 entries), then the attract
+  demo with a HUD (6-digit score, then a lightning-bolt row, a bullet row and a lives row — icon
+  counts not read).
+
+**Earlier checks:**
+
+- `kb2/assets/RICK2.PRG` md5 == `disks/chaos43/RICK2.PRG`; RICK.PRG (93,326 B) is the RD1 build, so
+  kb2 gap #23 ("`RICK.PRG` purpose unexplored") is **answered by `kb/`**.
+- **the depacked `RICK_05.HNK` (now `kb2/assets/maps/map3_demo.bin`) is junk, not a demo stream**: 512 B (the other small ones are 1024 B),
+  begins with ASCII `Rob Northen Comp` then a repeating pattern. The user confirmed (2026-09-19)
+  the disk's `RICK_05.HNK` really is this — no better copy exists. **Not an extraction fault**
+  (the HNK header itself declares 0x200). Investigated 2026-09-19 — see **T25**: a likely
+  replacement for map 3's table was found in `disks/RICKDA2/RD2`.
+- kb2 said `disks/chaos43_noauto.st`, `chaos43_backup.msa` and `disks/tools/msa_convert.py` were
+  "already committed"; they were missing. **The user supplied them 2026-09-19** (see step 2).
+- kb2 commands use macOS paths (`/opt/homebrew/...`). (`kb2/README.md`'s dead `../re/` link fixed
+  2026-09-19 → `../kb/`; it was the only such reference in `kb2/`.)
+
+**User decisions, 2026-09-19:**
+
+- **Rendering is in scope, limited to what an SDL port needs**: extract the assets (sprites, tiles,
+  palette) and understand how the screen is composed. Atari hardware details are not a goal.
+- **No decompiling to C, for RD1 or RD2, by any means** (both games are hand-written assembly).
+  **Disassembling with Ghidra is fine; writing our own disassembler is not. Ghidra p-code is
+  fine too** — it is not C. This *replaces* an
+  earlier same-day note that allowed Ghidra's decompiler — that was a misunderstanding. See
+  `MEMORY.md` §2. **Consequence: kb2 was written partly from decompiler output** (its `wk.md`
+  mentions "decompile" 90 times; gaps A1/A3 cite "decompile-confirmed" facts) — see step 7.
+- **RICK_05 / HNK state is unsure** (user, 2026-09-19): expect **another cleanup phase around the
+  HNK files** before the level data can be trusted. See T25 and step 3.
+
+**Next steps, in order:**
+
+1. ~~Reconnect the Ghidra MCP~~ **DONE 2026-09-19** — connected, `prg2-ram.bin` open (151 functions).
+2. ~~Restore the run harness for RD2~~ **DONE 2026-09-19** — `disks/chaos43_noauto.st` supplied and
+   checked; `kb2/hatari_rd2.py` boots it headless-capable in WSL Hatari 2.5.0 and dumps RAM. What
+   remains of the harness is the per-frame trace/probe layer (step 4), modelled on `kb/hatari_probe.py`.
+3. **Locate and extract the level tables** inside `maps/map<N>_level.bin` for all four maps (spawn,
+   submap-trigger, move/anim scripts, tile-ID map), validating each against `prg2-ram.bin` as was
+   done for the attribute table. (The small `RICK_0[1357]` files are demo streams, not level tables — **T25**.) **Progress 2026-09-19:** the submap header table at image `0x1800` locates every submap's block map, scroll limit, trigger table and spawn table (`kb2/graphics.md` §3a, `kb2/assets/gfx/levelmaps.json`); **Then decoded (same day, `kb2/level-tables.md`, `kb2/extract_tables.py` → `kb2/assets/levels/tables.json`):** trigger table (106 records), spawn table (769 records) and monster type table (49/43/50/68 types) — grammars confirmed by an exact chain check over all 58 submaps; **Scripts decoded too** (`kb2/decode_scripts.py` → `scripts.json`: all 420 monster scripts + 4 in-program scripts, every jump lands on a record boundary) and the actor update / trigger-box logic transcribed from the disassembly (`kb2/algo-actors.md`). Still open: live validation (kb2 gaps #3, #4), the meaning of the `F & 0x1c` behaviour classes, `update_object_slots` (`FUN_000150c0`).
+4. **Live validation** with Hatari traces (kb2 gaps #3, #4, #5, #6, #7, #21, #22): the
+   `< 0x75` monster-descriptor path (`FUN_000146a0`), the `dispatch_spawn_record` trigger branch,
+   `g_collision_result_flags` bits, whether HNK 3–8 load through the same routine.
+5. **Rendering, SDL-port scope** — **assets and formats DONE 2026-09-19; frame composition partly read; the level
+   tile map itself is NOT extracted.** Tiles (8×8, 40 B, per map), sprites (32×21, 336 B, 4 banks), palette and
+   the screen model are decoded, extracted (`kb2/extract_gfx.py` → `kb2/assets/gfx/`) and viewed; details and
+   what is unchecked in `kb2/graphics.md`, open points in **T26**.
+6. **Static gaps** from kb2 (#1 top-level caller of `main_loop_body`, #8, #9, #11–#14, #19, #26–#27;
+   #12 Ghidra rename `g_tile_attribute_map` → `$65200`, not checked whether done).
+7. **Re-derive kb2's decompiler-based facts from the disassembly** (see decisions above). Sweep
+   `xrick2-wk.md` (90 "decompile" mentions) and `xrick2-gaps.md` for every claim resting on decompiler
+   output — e.g. gaps A1 ("decompile-confirmed" occupancy test), A3 (`$144c4`), the `FUN_000146a0`
+   `extraout_A1` item (#9), and the `ActorRecord` field table — re-check each against the 68000
+   disassembly, and mark it re-verified or corrected. Where Ghidra failed to disassemble a region,
+   fix the code units (clear + disassemble + create function, as done for gap #2). **Ghidra's
+   p-code (`get_function_pcode`) is allowed as a cross-check** (user, 2026-09-19); only C output
+   (`decompile_function`, `force_decompile`) is not. `kb2/` tooling notes updated accordingly.
+8. **Bring RD2 up to RD1's bar**: a function inventory (none exists in `kb2/`), an `algo-*.md`-style
+   transcription of every function, and the byte-identity audit method (`kb/byte-identity.md`).
+9. **Apply the "zero untracked assumptions" rule**: kb2 `xrick2-gaps.md` §B holds hedged
+   assumptions as prose; each must become a numbered T-item here.
+10. **Differential harness** vs. the original (PORTING §5), then a port — only if the user wants one.
+
+### T25 — `RICK_05.HNK` (map 3's demo recording) is junk; is the `RD2`-disk candidate the real one? ✅ **candidate VERIFIED 2026-09-20 against the original disk; HNK cleanup still open**
+
+**Rebuilt 2026-09-20 (user: "the RICK_nn.bin files were produced by a model, they may be bogus"; source of truth = the HNK files + the program):** full write-up in `kb2/hnk-system.md`. Facts: `.HNK` = LSD!-packed contiguous sector ranges of the original disk,
+the game's per-map descriptor pair = (demo, level); the small file is the map's **demo input recording**, the large one the level image; `hnk.depack(HNK)` equals the raw sectors of the original-disk image `disks/RICKDA2/RD2` for 7 of 8 files (independent check);
+`RICK_05.HNK` is a crack error (512 bytes starting `Rob Northen Comp…`, header size `$200`); the real map-3 demo is `RD2[7680:8704]` (sectors 15–16: 52 pairs, 663 frames, terminator at byte 104). The old `RICK_0N.bin` are replaced by `kb2/assets/maps/map<N>_{demo,level_stage1,level}.bin`
+(generated by `kb2/extract_hnk.py`, checked by `kb2/verify_hnk.py`). T37/T38 are closed (2026-09-22, unrelated to this file despite the shared numbering coincidence). Still open: T36 (how the crack got that
+payload — parked, a Copylock-weak-sector hypothesis, not provable statically) and the port decision on map 3's demo (use the original-disk one or none).
+
+(Original text of the entry follows.)
+
+**State of RICK_05 / the HNK files is UNSURE** (user, 2026-09-19): another cleanup phase around the HNK
+files is probably still needed. What is now *known*:
+
+- **The four small files (`RICK_01/03/05/07`) are not level tables — they are the attract-mode demo
+  input recordings.** Checked in the disassembly: `FUN_00014222` (`$14222`) sets `[$3efba] = $3EFC0` when
+  `$3efb6` (demo flag) is set, and `read_player_input` (`$141cc`) reads from `[$3efba]` as
+  *(count byte, joystick-state byte)* pairs: count 0 ends the stream (`$3efb8 = -1`), otherwise it
+  returns the state for `count` calls. So `$3EFC0` is the demo stream buffer, and each map has its own demo.
+  (kb2 documented the load into `$3EFC0` but never said what it is.) The state-bit layout for RD2 is not yet
+  checked; RD1's is `0x01/02/04/08/0x80` and every state in the good streams is a combination of exactly
+  those five bits.
+- **Live (Hatari, `kb2/hatari_rd2.py`, map forced at `$10a36`):** map 1/2/4 put `RICK_01/03/07.bin`
+  into `$3EFC0` unchanged (all 1024 B, `RICK_07`'s trailing `6d b6 db` junk included); **map 3 puts the
+  512 junk bytes of `RICK_05.HNK`** there. So the game loads the junk exactly as extracted — no
+  extraction fault. The junk stream has 256 pairs, **no terminator** within 512 B, random-looking
+  states (26,021 frames) — a map-3 demo would run garbage input. Harmless to gameplay; it only matters
+  for an attract-mode/demo reproduction.
+- **Candidate replacement:** `disks/RICKDA2/RD2` (raw 391,680 B image of the Gamex release) stores the small
+  files uncompressed at 1024-byte pitch: `RICK_01` @5632, `RICK_03` @6656, **[empty] @7680**, `RICK_07` @8704;
+  the three known ones are byte-identical to ours. The 7680 block decodes as **52 pairs, terminated at byte
+  104, 663 frames, states drawn from the same five bits** — i.e. it looks like a genuine demo, whereas the
+  junk does not. **Still unverified** (no original to compare); do not present it as fact.
+- `RICK_05.HNK`'s payload starts with `Rob Northen Comp`, and its first 24 B equal `RD2[2560:2584]`; `RD2` carries
+  `Rob Northen Computing, U.K. All Rights Reserved.` at offset 215. So the junk is a copy-protection
+  area, not demo data. How it ended up in the file (the crack screen says `CRACK/PACK/FILES BY HANK!`)
+  is not established.
+
+**Open:** (a) decide whether the port needs demos at all (RD1's port has attract mode — T18); if yes,
+adopt the candidate, marked as reconstructed; (b) confirm the RD2 bit layout of the state byte;
+(c) the wider HNK cleanup the user expects. Everything else about maps is unaffected: the big images
+are verified (see T24).
+
+### T26 — Graphics: what is still unchecked ✅ **CLOSED 2026-09-22 — every static item answered**
+
+Formats and extraction are in `kb2/graphics.md` (§7 is now a closed checklist, kept for provenance). Final state:
+
+1. ~~The level tile map~~ found 2026-09-19; ~~window rows read past a submap's last row~~ **closed 2026-09-22**: the `rows = w1÷4+6` header formula always leaves exactly 6 block-rows of margin at maximum
+   scroll, checked for all 58 submaps of all 4 maps — never exhausted, so the tail bytes past the last submap's range are simply unused (`graphics.md` §3a). ~~Visual behaviour at submap transitions~~ the
+   16-step slide, its two blit routines fully read (`graphics.md` §3b, `algo-flow.md` §9).
+2. ~~Tile "extra byte" semantics~~ done 2026-09-20. Tile ids ≥ `$f8` done.
+3. Palette: table at `$18ee6`. ~~Who rewrites colour 1~~ **closed 2026-09-22: nobody** — exhaustive xref search on the table and the hardware register found only the two generic fade routines; the old "colour 1
+   varies" observation is the STE-only 4th colour bit, invisible on the real ST. ~~Other screens' palettes~~ **closed: there is only the one palette** (plus the SPACE-key grey one) — title/hall-of-fame/picker/
+   loading are 2-bitplane images over the *same* palette, not separate palettes (`graphics.md` §2).
+4. Font done. Draw order and sprite entry point done 2026-09-20. ~~Which HUD slot draws which icon row~~ **closed 2026-09-22**: ammo=bolt(`$0a`) col 13, bombs=bullet(`$0b`) col 21, lives=Rick's-head(`$0c`)
+   col 30, all on HUD row 0 with the score — read from `update_hud_text_slots` plus a live record dump. ~~Title/hall-of-fame/intro images~~ **closed 2026-09-22**: `FUN_000194ce`'s 4 arguments select 4 banners
+   at `$35a74` ("CONGRATULATIONS!"/"HALL OF FAME"/"SELECT LEVEL"/"LOADING..."), decoded and extracted to PNG (`graphics.md` §4b, `kb2/extract_gfx.py`). ~~The two blitters' internals~~ done 2026-09-20 already.
+5. Where `RICK2.PRG` stores the shared sprite banks before it unpacks itself — still genuinely open, but low priority: the banks are already extracted correctly straight from live RAM regardless.
+
+### T27 — Static reverse of RD2: what is done and what is left ✅ **CLOSED 2026-09-22 — static AND live validation both complete**
+
+**Done statically** (each with its check in the linked doc): tile/sprite/font/animated-tile formats and extraction
+(`kb2/graphics.md`); level layouts, submap headers, trigger / spawn tables, monster type table
+(`kb2/level-tables.md`); enemy movement/animation scripts, all 420 decoded (`kb2/decode_scripts.py`); `update_actor_ai`, trigger boxes,
+spawn scan, pickups/HUD counters, collision probe (`kb2/algo-actors.md`); the palette table (`$18ee6`); Ghidra function bounds of
+the top-level loop.
+
+**Left that is still static** (not started unless noted): `update_player_rick` `$13096` — read once, outline + constants in `kb2/algo-player.md`, the branch-by-branch transcription is still to do;
+`update_object_slots` / `FUN_000150c0` `$150c0` (read once, not transcribed: gravity `+$80` per frame capped at `$800`, three
+per-kind movement patterns); game flow — title / hall of fame / name entry / level picker (`$178dc`, `$17a46`, `$17bda`, `$17c06`,
+`$17f22`), lives and game over, `handle_screen_edge_and_respawn` `$15bc0`, `FUN_00015b3c`, submap load `$18abe`/`$18bb2`; scoring
+(`FUN_00017810`), the countdown bonus (`update_countdown_timer_bcd` `$15826`); the title / hall-of-fame images (`FUN_000194ce`); who
+rewrites palette colour 1; the sound dispatcher's callers (which event plays which id — ids seen so far in the code read: 1, 16, 17, 19, 20, 21, 23, 24, 25, 26; scripts use 18-47);
+naming the tile attribute bits and the `F & 0x1c` behaviour classes. **Needs a live run:** kb2 gaps #3, #4, #7, and confirming every
+"inferred from the flow" note in `kb2/algo-actors.md`.
+
+**Checkpoint 2026-09-20 (static pass, no live run):** done since the block above — `update_player_rick` (`kb2/algo-player.md`, incl. the bomb §11), `update_object_slots` (`kb2/algo-objects.md`),
+scene scripts (`kb2/decode_scenes.py` → `scenes.json`; maps 1–4), and the whole game flow (`kb2/algo-flow.md`: title/attract, picker, level start, respawn, map advance and endings, score/lives/bonus timer,
+submap transition, the 5-actor group `$15bc0`/`$15b3c`, game over and hall of fame). New/open items from this pass: T28 ("level 5", closed), T30–T33/T37/T38.
+
+**Final static pass 2026-09-22 — T26, T30–T33, T37, T38 all closed** (see each item below and `kb2/graphics.md`, `algo-flow.md` §12, `sound-ref.md`).
+
+**Live validation, same day, user lifted "no live run for now" — kb2 gaps #3, #4, #5, #7 all CLOSED.** `kb2/hatari_live_validate.py` (new tool) forced maps 2, 3 and 4 in turn (same breakpoint-injection method
+as `kb2/hatari_rd2.py`) and, during real attract-mode play, chained one-shot breakpoints to sample the collision probe's result byte (40 samples/map) and took 5 full-RAM snapshots/map ~4s apart. Findings, in full
+in `kb2/assets/live_validation_2026-09-22.json`:
+- **Gap #3** (monster-descriptor path, type IDs `< 0x75`): the spawn table's "already spawned" bit flipped live on genuine low-type records — map 2 types 1/18/19/20/21 (repeatedly), map 3 type 17, map 4 types 19/20.
+- **Gap #4** (`dispatch_spawn_record`'s trigger-path branch, `b2` bit 7 clear): flipped live on real trigger-type records — map 2 type 122, map 4 types 26 and 3 (the latter's own detail-box latch bit flipped too).
+- **Gap #7** (collision-probe result bits): 120 samples across the 3 maps, every value (`0x00,0x02,0x03,0x06,0x07,0x08,0x0a,0x1c,0x1f`) decomposes exactly into the bits `algo-actors.md` §6 already documents —
+  including a clean live hit of the `0x1c` ladder-top combination. Zero unexplained bits.
+- **Gap #5** (script execution beyond the one map-1 sample): 20 of 21 live actor-table samples had their animation-script pointer sitting exactly on a record boundary `decode_scripts.py` decoded (2 of those
+  only matched once the shared in-program scripts were included). One sample (map 2, actor kind 89, frame 99) matched nothing and is unexplained — noted, not chased further.
+
+One engineering note worth keeping: an early attempt chaining 250 one-shot breakpoints at the *same* address with instant rearm crashed the emulated 68000 (a bus-error fault loop, `PC=$e00d98` in TOS ROM,
+escalating to garbage fault addresses) — twice, at almost the same rearm count both times. Spacing the rearms to every 15th hit instead of every hit fixed it completely (0 crashes across all 3 maps after).
+
+**Both static and live reverse-engineering of Rick Dangerous 2 are now complete.** What remains, low priority, parked, none blocking:
+- **T39** the shared sprite banks' storage location before `RICK2.PRG` unpacks itself (extraction already works regardless; T35 — font glyph usage ≥ `$60` — was already answered 2026-09-20, not this).
+- **T36** the *Copylock*-signature hypothesis for `RICK_05.HNK`'s corruption is evidence-consistent but not provable without the physical original disk (`hnk-system.md` §6).
+- The one unexplained gap-#5 sample above.
+
+### T28 — "Level 5" ✅ **CLOSED 2026-09-22 — settled by the user: the game has 4 maps, full stop; "level 5" is a sequel tease, never a real level, not even in the original boxed release**
+
+Full derivation: `kb2/hnk-system.md` §7. The "COMPLETE ALL 5 LEVELS" message (map 4's second scene) and the matching `game_main` code (`[$17992]:=5`, `[$1239c]` allowed to reach 5) are a **tease for a future game**, not an unlock mechanic — per the user, who has direct knowledge of the original boxed release. The cosmetic scaffolding that makes the tease look real (5th picker name, 5-entry pointer table, 5-row start table) is not evidence of cut content.
+Separately, and consistently: the file loader baked into this program (checked byte-identical across two independent disk images) can address at most `RICK_00.HNK`…`RICK_09.HNK` (the digit-patch code only ever rewrites the *second* '0' of a fixed `RICK_0?.HNK` template) and its own end-sector table has only 8 entries (digits '1'-'8'); the tease's own descriptor (end sectors 21, 389) matches none of them, so if the tease is ever reached in play, the load hangs (`$11fb8`, infinite loop) rather than showing anything — the tease was never going to be playable, not because of a cracking accident.
+The raw-sector bytes at those positions on two other disk images (`disks/RICKDA2/RD2`, `disks/rd2.st`) that decode without erroring are **not a real level**: most likely coincidental bytes, given there was never a level 5 to store. Not used by the port. **Closed — no further action.**
+
+### T30–T33, T37, T38 — small open reads left by `kb2/algo-flow.md` §12 ✅ **all CLOSED 2026-09-22**
+
+- **T30** `$19272`/`$1925a`/`$194ce` — closed. `$19272`: `D0`=column (8-px units, bit 0 = which half of a 16-px hardware word-pair), `D1`=row (8-scanline units); writes both screen buffers. `$1925a`: loops
+  `(word col-or-terminator, word row, long string-ptr)` records, terminator = a negative first word. `$194ce`: 4 arguments select 4 banners at `$35a74` (`graphics.md` §4b) — see T38.
+- **T31** demo-mode input path — closed. `$141cc` returns the recorded byte completely unmodified into the same bit tests used for live input (`[$1a4fb]`); no separate bit mapping exists to derive.
+- **T32** `$18b5c`/`$18c50`/`$188d0`/`$1813e` — closed. The slide blits are the 16-step submap-transition's per-scanline copy, mirror images of each other, confirmed to match `algo-flow.md` §9's already-documented
+  ±8-per-step direction; the exact Atari bitplane shuffle is deliberately not modelled further (out of the user's stated rendering scope — a port reimplements the visual effect from the already-decoded tile
+  maps). `$188d0` builds the 160-byte-pitch background bitmap *and* the sprite-mask bitmap from the same per-tile data `$185a6` uses (`graphics.md` §3b). `$1813e` is the name-entry screen's redraw (grid
+  cursor + name buffer + a second "next letter" cursor under the buffer) — `algo-flow.md` §11.
+- **T33** `$1a5d0`/sound ids — closed. `$1a5d0` writes the YM2149 PSG directly (mute register 7, zero registers 0–6) — a hardware silence, not a request to the music engine. Sound ids 4–8 (per-map
+  level-start music) added to `sound-ref.md`'s table; every other numeric id `algo-flow.md` uses already matched that table.
+- **T37** block-map tail bytes — closed. Proven unused: the window generator's own row-shift arithmetic never consumes more than `w1÷4` block-rows of a submap's declared `w1÷4+6`, leaving 6 rows of margin
+  always spare (`graphics.md` §3a).
+- **T38** `$194ce`'s argument — closed, folded into T30: arguments 0/1/2/3 map to the 4 banners in T30/`graphics.md` §4b (0 = name-entry, 1 = hall-of-fame view, 2 = picker, 3 = level-load, the only one that
+  also shifts the destination down 80 scanlines).
+
+### T40 — RD2 knowledge-base sweep: assumptions, contradictions, staleness ✅ **CLOSED 2026-09-22 — `xrick2-ref.md` corrected**
+
+User asked for a full sweep of `kb2/` for claims not backed by facts, contradictions, and a completeness assessment against the "mechanical port with absolute fidelity" bar. Read every `kb2/*.md` doc end-to-end, cross-checked them against each other, against the extracted JSON/PNG assets on disk, and re-verified the highest-value claims directly against the Ghidra disassembly (not the docs' own word). Result: the extraction pipeline's numbers (submap/trigger/spawn/script counts, live-validation JSON structure) all check out. `xrick2-ref.md` — the file `README.md`/`MEMORY.md` name as "start here" — was never rewritten alongside the 2026-09-19→22 pass that replaced `algo-*.md`/`level-tables.md`/`hnk-system.md`/`graphics.md`, and had drifted into three real (not just stale-hedge) factual errors, now fixed in `xrick2-ref.md` directly:
+
+- **Submap-trigger-table bytes 2–3**: the doc claimed "no game-logic reader found... unused or rendering-only." **Wrong** — disassembled `$14362` directly: byte 2 → D0 (target submap), byte 3 → D1 (target row), both consumed by `$14434`. `level-tables.md` §2 / `algo-flow.md` §9 had this right; `xrick2-ref.md`'s "Map/submap transition mechanics" section didn't.
+- **Object-table oscillation counter offset**: the doc said `0x29`/`0x2a`. **Wrong** — disassembled `$150c0` directly: the counter is `+0x52` (period `+0x54`), matching `algo-objects.md`. The `0x29`/`0x2a` reading was a leftover decompiler-era address on a field the doc otherwise called "confirmed."
+- **`g_collision_result_flags` bits 0x08/0x10/0x40**: the doc guessed "ledge/step detection" and "teleport-to-explicit-position." **Wrong** — `algo-player.md` and `algo-actors.md` (independently transcribed from two different consumer functions, then live-validated 120 samples over maps 2/3/4) agree bit 3/4 = ladder-present/ladder-top, bit 6 = standing on a platform actor.
+
+Also fixed: several `xrick2-ref.md` "Open items" pointers (ActorRecord §, spawn/trigger-grammar §, map/submap-transition §, player-physics §) still told readers that live validation, bulk chain-verification, or `func_0x00016474`'s decode were outstanding — all four were closed by the 2026-09-19→22 pass and `kb2/hatari_live_validate.py`, just never reflected back into this file.
+
+**Residual gaps identified, not fixed (out of scope for a doc-correction pass — see PORTING.md §6 for the first, already tracked there)**:
+- No byte-identity harness exists for RD2 (RD1 has `kb/byte-identity.md`, 22/22 audits) — the single biggest gap before "absolute fidelity" can be claimed for a port.
+- Live validation used attract-mode/demo playback only, never manual play — bomb-throw (`DOWNFIRE`), melee, and death→respawn are statically transcribed but not confirmed firing on real input.
+- The 19 MB raw Hatari captures behind `kb2/assets/live_validation_2026-09-22.json` were deleted after extraction; the "closed" gap #3/#4/#5/#7 claims now rest on that summary JSON only, not on reproducible raw evidence.
+- `xrick2-wk.md` still carries ~82 "decompile" mentions beyond the 4 `SUPERSEDED`-flagged ones from the 2026-09-16 audit; `PLAN.md` T24 step 7 (sweep it explicitly) was never checked off — functionally superseded by the wholesale `algo-*.md` rewrite, but not confirmed item-by-item.
+
 ### T20 — Upgrade the port from SDL2 to SDL3 ✅ **DONE 2026-09-10 (WSL); Windows/vcpkg side edited but unverified**
 
 Full detail: `kb/build.md` (build/run instructions and the one bug found) and

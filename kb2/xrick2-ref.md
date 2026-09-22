@@ -36,6 +36,10 @@ For an agent picking this project up cold:
   spawn/trigger tables, AI, physics, input. Render/blit and sound routines
   are explicitly **out of scope** and not gaps (see [Out of scope by
   design](#out-of-scope-by-design)).
+  **Updated 2026-09-19: rendering is now IN scope** — limited to what an SDL
+  port needs (extract sprite/tile assets and palette, understand how a frame
+  is composed); Atari video-hardware details remain out. Sound stays done.
+  See `PLAN.md` T24 step 5. The "out of scope" wording below predates this.
 - **Read next**: this file for current best-known facts by topic; drop to
   `xrick2-wk.md` for the evidence behind any claim; check `xrick2-gaps.md`
   for what's still open before doing new work on a topic.
@@ -88,6 +92,12 @@ left untouched.
 `echo "hatari-event keypress 57" > /tmp/hatari.fifo` (57 = Space scancode;
 28 = Return, 0x1 = Escape, 15 = Tab, per Hatari's `tools/hconsole/hconsole.py`).
 Confirmed to advance straight into the game intro.
+
+**Update 2026-09-19:** the three files below were absent from the repo until the user
+supplied them; they are present now. Checked: every file on `chaos43_noauto.st` is
+identical to `disks/chaos43/`, `AUTO/MENU44.PRG` is `MENU44.DIS`. **`kb2/hatari_rd2.py`**
+(WSL Hatari 2.5.0, EmuTOS 1.4, `--disk-a`, SPACE at the crack screen, `savebin`) boots it
+and dumps RAM; the dump matches `prg2-ram.bin` (main loop and level image 100%).
 
 **Files**: `disks/chaos43.msa` (original), `disks/chaos43_backup.msa`
 (redundant backup), `disks/chaos43_noauto.st` (use this one to boot),
@@ -175,6 +185,25 @@ the map-1→map-2 HNK load is inferred from static tables only, never
 confirmed live. Full detail: **gaps.md section C, "Loader / HNK
 pipeline"**.
 
+**Update 2026-09-19 (disassembly + live Hatari; details in `PLAN.md` T24/T25):**
+
+- **`$3EFC0` (the odd `RICK_0N.HNK` of each pair) is the attract-mode demo input stream**, not level
+  data: `FUN_00014222` sets `[$3efba]=$3EFC0` when `$3efb6` is set; `read_player_input` (`$141cc`)
+  reads *(count, joystick-state)* byte pairs from it, count 0 = end (`$3efb8=-1`). `RICK_05.HNK`
+  (map 3's) is junk on this disk; a well-formed candidate exists in `disks/RICKDA2/RD2` (unverified,
+  `PLAN.md` T25).
+- **All four maps verified live**: forcing `$1239c` at `$10a36` (`kb2/hatari_rd2.py`) makes `load_map`
+  put `RICK_0(2N)` at `$53400` — 0 differing bytes against our depacked `RICK_04/06/08.bin`.
+  Closes gap #6 (map-1→2 load confirmed live) and gap #22 for the forced path. Poking `$1239c`
+  from outside alone does not stick; cause unknown.
+- **`main_loop_body` was mis-bounded and is replaced (Ghidra edit, 2026-09-19): `game_main` `$10992`–`$10c27`.**
+  Everything below that cites `main_loop_body @ $10a90` refers to the tail of this function. Structure:
+  `$10a18` demo/title sequence → `$10a30` `level_start` (calls `load_map_if_changed`) → **`$10a54`
+  `frame_loop`** (per frame) → map advance at `$10b1a`. The compare-and-load is `$123b0`
+  (`load_map_if_changed`); the old `$12394` "function" sat on `0xFF` data and was deleted. Gap #1 (top-level
+  caller) is answered: the boot code reaches `game_main` by a return-address trick (`PLAN.md` T24).
+  Decompiler-derived claims about the old `main_loop_body` were made on a mis-aligned entry: re-verify.
+
 ---
 
 ## Memory map & key globals
@@ -189,7 +218,7 @@ pipeline"**.
 | `g_object_table` | `$167a2` | 4-slot secondary actor table, same struct | confirmed (see [g_object_table subsystem](#g_object_table-subsystem)) |
 | `g_tile_attribute_map` | `$65200` | tile-collision attribute grid (was misidentified as `$65300` earlier in this project; `$65300` is actually the tile-ID map array — see [Player physics](#player-physics) "Correction 2026-09-16") | confirmed, rename/re-point pending |
 | `g_enemy_spawn_table_ptr` | `$144c4` | current level's spawn table pointer | confirmed |
-| `g_submap_trigger_table_ptr` | — | current level's Y-trigger table pointer | confirmed (name unreliable in `list_globals` — see [Tooling notes](#tooling--methodology-notes)) |
+| `g_submap_trigger_table_ptr` | `$1435c` (2026-09-19: written by `FUN_00014458`, read by `check_submap_exit_triggers`) | current level's Y-trigger table pointer | confirmed (name unreliable in `list_globals` — see [Tooling notes](#tooling--methodology-notes)) |
 | `g_screen_exit_trigger_flag` | `$144c2` | screen-exit-transition-in-progress gate | confirmed; real address only found after `list_globals`/`get_xrefs_to` reported the wrong one (`$14590`) |
 | `_DAT_00014592` | `$14592` | "submap transition in progress" flag, live only during one `scan_enemy_spawn_list()` call | confirmed |
 | `DAT_00016462` | `$16462` | real scroll/camera-X global | confirmed |
@@ -219,10 +248,13 @@ Two **distinct** screen-transition mechanisms exist — do not conflate them:
    position (vs. the spawn table's **X** — see [Spawn/trigger-table
    grammar](#spawn--trigger-table-grammar)). Trigger-record byte0 bits
    select: submap index, screen-exit flag, submap-complete-vs-forced-push
-   outcome. Bytes 2-3 of each trigger record have no game-logic reader
-   found anywhere in the reachable call graph — tentatively "unused or
-   rendering-only" (an absence-of-evidence conclusion, not a positive
-   confirmation — see gaps.md B11/C14).
+   outcome. **Corrected 2026-09-22 (`level-tables.md` §2, `algo-flow.md`
+   §9; re-verified directly against the disassembly of `$14362`):** bytes
+   2 and 3 are read, not unused — byte 2 is the **target submap** (moved
+   to D0), byte 3 the **target row** (`(b3·8 − ((Y+$14) & ~7)) | (scroll
+   & 7)`, moved to D1) — both are passed straight through to `$14434` and
+   on into `FUN_00014458`. The earlier "no reader found" conclusion here
+   was wrong, not just unconfirmed.
    - The "forced push" outcome is `FUN_00014434`: teleports the player's
      X position between `0` and `0xe8` (wrap to the opposite screen
      edge). It's called from the two submap-load routines
@@ -242,17 +274,15 @@ Two **distinct** screen-transition mechanisms exist — do not conflate them:
      that runs the transition (actor repositioning, player-collision/
      death checks, trigger spawns) until complete, then resets the 5
      main actors for the new screen.
-2. **In-screen horizontal camera scroll**: `FUN_00013d58`/`FUN_00013d0a`,
-   called from `update_player_rick` when Rick walks into a screen-edge
-   wall; sets `g_camera_scroll_active`.
+2. ~~**In-screen horizontal camera scroll**: `FUN_00013d58`/`FUN_00013d0a`...~~ **wrong, corrected 2026-09-22** (`level-tables.md` §5): `$13d58` is the laser-shot creation call (fire sound, shot record, ammo
+   decrement); `$13d0a` is the tunnel/`UPFIRE` re-fire latch test (`algo-player.md` §4, §10, §11). There is no horizontal camera scroll in this game — scrolling is vertical only.
 
 **Per-level table format**: each level has an 8-byte header record
 (bg-gfx offset, Y offset, trigger-table offset, spawn-table offset),
 decoded in `FUN_00014458` (called only from the submap-load routines).
 `FUN_00014542` is the level-init "seek past off-screen headers" routine.
 
-Map 5 has no real HNK pair — it's wired to the loader's anti-piracy
-checksum-chain trap, consistent with being an ending/finale pseudo-state.
+**Correction 2026-09-22 (`kb2/hnk-system.md` §7, `PLAN.md` T28, settled by the user):** the two earlier statements here have both been wrong. This project first said "map 5 has no real HNK pair, it is an anti-piracy pseudo-state," then corrected that to "the program is a five-level game, this disk just lacks the fifth pair" — **also wrong**. The truth, per the user (who has direct knowledge of the original boxed release): **the game has 4 maps, always has.** The "level 5" text and the matching loader-table entry are a tease for a future game, not a real or cut level — never functional on any release, original included. `kb2/hnk-system.md` §7 has the full derivation and the byte-level reason the tease's own load path could never have worked anyway.
 Map 4's alternate handler (`$17bf4`) and map 5's special branch in
 `main_loop_body` (`$10bf2`) are both special-cased but undecoded.
 
@@ -282,10 +312,14 @@ code-unit boundary at `$16476` in the Ghidra project blocks placing the
 function there; a mechanical Ghidra fix (clear the code unit, re-
 disassemble), not attempted with the tools available this pass.
 
-**Open items**: trigger-table bytes 2-3 (needs a rendering-consumer
-check); `func_0x00016474`'s actual behavior once the Ghidra housekeeping
-fix is applied. Full detail: **gaps.md section C, "Map/submap
-transition"**.
+**Closed 2026-09-19→22**: the Ghidra housekeeping fix was applied and
+`func_0x00016474` is fully decoded as the tile-window generator
+(`graphics.md` §3a: source pointer `[$1646a]` advanced per scroll step,
+block-rows expanded by `FUN_000165fc`/`FUN_000165a6` into tile rows).
+
+**Open items**: none remaining for this topic. Full detail: **gaps.md
+section C, "Map/submap transition"** (historical; superseded content, see
+that file's own top note).
 
 ---
 
@@ -395,13 +429,16 @@ field-by-field," "Actor-init helpers checked," "Last two player flags
 named," "`FUN_00014862` fully decoded" (~line 3197-3271), "`FUN_000150c0`
 decoded" (~line 3438-3491) sections.
 
-**Open items**: remaining unnamed blobs, live validation of the
-type-`<0x75` descriptor path, live validation of
-`dispatch_spawn_record`'s detail-block path, whether unused trailing
-detail blocks are read by anything, `extraout_A1` register provenance,
-byte `0x54`/LUT semantics. Full detail: **gaps.md section C,
-"ActorRecord/actor system" (6 items)**, plus assumptions **B5-B6, B8,
-B10, B13-B14**.
+**Open items**: remaining unnamed blobs, whether unused trailing
+detail blocks are read by anything, `extraout_A1` register provenance
+(moot — superseded by disassembly-only analysis, see below), byte
+`0x54`/LUT semantics (resolved for the object table's kind-1 oscillator,
+see [`g_object_table` subsystem](#g_object_table-subsystem); actor-table
+usage unconfirmed). **No longer open, closed 2026-09-22**: live
+validation of the type-`<0x75` descriptor path and of
+`dispatch_spawn_record`'s detail-block path — both fired live across
+maps 2/3/4 (`algo-actors.md` §3–§4, `kb2/assets/live_validation_2026-09-22.json`).
+Full detail: **gaps.md section C, "ActorRecord/actor system"** (historical).
 
 ---
 
@@ -467,11 +504,17 @@ its byte0 bit meanings with either spawn-table branch above.
 (~line 2358-2539), "`FUN_00014a12`/`dispatch_spawn_record`" section
 (~line 3287-3361), "`FUN_000146a0` fully decoded" (~line 3106-3196).
 
-**Open items**: live validation of both unvalidated branches; records
-22+ of the sampled spawn-table stream parse ambiguously (including a
-repeating sub-pattern at records 46-53 of uncertain significance); no
-bulk validation beyond one map-1 sample. Full detail: **gaps.md section
-C, "Spawn/trigger-table grammar" (2 items)** plus **B6-B7, B9**.
+**Open items**: none remaining. **Closed 2026-09-22**: the grammar above
+was re-derived from raw disassembly and chain-verified over all 769
+spawn records and 106 trigger records across all 58 submaps of all 4
+maps with zero exceptions (`level-tables.md` §1–§3) — the earlier
+"records 22+ parse ambiguously" / "no bulk validation beyond one map-1
+sample" caveats were true of the pre-2026-09-19 (partly
+decompiler-derived) analysis and no longer apply. Both the monster-path
+and trigger-path branches were also confirmed firing live across maps
+2/3/4 (`algo-actors.md` §3–§4,
+`kb2/assets/live_validation_2026-09-22.json`). Full detail: **gaps.md
+section C, "Spawn/trigger-table grammar"** (historical).
 
 ---
 
@@ -502,8 +545,11 @@ semantics, is confirmed.
 `ActorRecord+0x54` is confirmed (already resolved before the 2026-09-16
 pass, but only cross-referenced back into gaps.md during it): the
 oscillation *period* for this table's type-1 "oscillate between two X
-bounds" movers, read by `FUN_000150c0` from a counter pair at offset
-`0x29`/`0x2a`.
+bounds" movers. **Offset corrected 2026-09-22** (re-verified directly
+against the disassembly of `$150c0`, which the earlier `0x29`/`0x2a`
+reading — a decompiler-era artifact — does not match): the counter is
+`+0x52` (`move.w (0x52,A6),D5w`, compared against `+0x54` and reset to 0
+on wrap), not `0x29`/`0x2a`. `algo-objects.md` has the correct offsets.
 
 **Evidence**: `xrick2-wk.md` "`g_object_table` confirmed," "`FUN_000150c0`
 decoded" sections (~line 3420-3491); "Gap-resolution pass…" and "Second
@@ -581,10 +627,18 @@ and `D4`=the tile ID), and `$65300` (`compute_tile_map_ptr` @ `$1643e`'s
 base) is the **tile-ID map array itself** that gets indexed by world
 position to find which tile ID to look up. `g_tile_attribute_map` should
 refer to `$65200`, not `$65300` — rename pending.
-`g_collision_result_flags` bit meanings are only partially inferred (bit
-`0x20`=died/trapdoor, `0x02`/`0x04`=blocked direction, `0x08`/`0x10`=
-ledge/step detection, `0x40`=teleport-to-explicit-position) — never
-confirmed with a live watchpoint.
+`g_collision_result_flags` bit meanings — **corrected and live-confirmed
+2026-09-22** (`algo-actors.md` §6, `algo-player.md` §3/§10; the two
+sentences below replace the earlier guesses, which mislabeled bits
+3/4/6): bit 0 (`01`) per-map surface property, bit 1 (`02`) solid/blocks
+sideways movement, bit 2 (`04`) floor (feet row), **bit 3 (`08`) = ladder
+tile present** (not "ledge/step detection"), **bit 4 (`10`) = ladder-top
+entry** (not "ledge/step detection"), bit 5 (`20`) kills/destroys,
+**bit 6 (`40`) = standing on a platform actor** (not
+"teleport-to-explicit-position"), bit 7 (`80`) never seen by any
+consumer. 120 live samples (`kb2/hatari_live_validate.py`, maps 2/3/4)
+decompose exactly into bits 0–4 with zero exceptions; bits 5–7 simply
+weren't exercised by that capture window.
 
 **Probe geometry, mostly resolved 2026-09-16**: the per-probe-direction
 offset table is 3 *literally adjacent* tile-map bytes per row (X tap
@@ -606,11 +660,11 @@ decoded" (~line 1026-1161), "Stairs state machine decoded" (~line
 partially resolved: collision probe's exact tap geometry" (2026-09-16)
 sections.
 
-**Open items**: `g_collision_result_flags` bit meanings need a live
-watchpoint to confirm; `$65300`'s exact row-addressing semantics;
-`g_tile_attribute_map`'s address needs correcting to `$65200`. Full
-detail in **gaps.md section C, "Player physics" (3 items)**, plus
-assumptions **B2-B4**.
+**Open items**: `$65300`'s exact row-addressing semantics;
+`g_tile_attribute_map`'s address needs correcting to `$65200`.
+(`g_collision_result_flags` bit meanings are no longer open — see
+above.) Full detail in **gaps.md section C, "Player physics" (3 items)**,
+plus assumptions **B2-B4**.
 
 ---
 
@@ -675,6 +729,18 @@ confirmation of the "POOKY" cheat's on-screen behavior. Full detail:
 
 ## Tooling / methodology notes
 
+> **Convention, restated 2026-09-19 by the user — supersedes any advice below that
+> says otherwise.** Rick Dangerous 2 (like RD1) was written directly in assembly.
+> **Never decompile to C** — not with Ghidra's decompiler (`decompile_function`), not
+> with any other tool, not with one we write. **Disassembling is fine, with Ghidra;
+> never write our own disassembler.** Earlier passes of this document used Ghidra
+> decompiler output; every "decompiled"/"decompile-confirmed" claim here and in
+> `xrick2-wk.md`/`xrick2-gaps.md` is therefore **to be re-verified against the
+> disassembly** (`PLAN.md` T24 step 7). Bullets below that recommend
+> `decompile_function` are superseded: fix the disassembly (clear + disassemble +
+> create function) instead. **Ghidra p-code (`get_function_pcode`) remains allowed** —
+> it is not C — so those bullets stay valid where they say `get_function_pcode`.
+
 - **`list_globals`/`get_xrefs_to` unreliability.** Documented at least 3
   times against real, already-named symbols
   (`g_submap_trigger_table_ptr`, `g_screen_exit_trigger_flag`'s real
@@ -718,6 +784,10 @@ sections cited above (~line 2540-2602, 2925-2958).
 
 ## Out of scope by design
 
+> **Superseded 2026-09-19:** rendering (first bullet, and the effect-request
+> slot `PTR_DAT_000176f4`) is now in scope for the SDL-port purpose — see
+> "Getting oriented" above. The list below is the original exclusion.
+
 Explicitly excluded from this reverse-engineering effort's scope
 (game-logic-only focus) — **not gaps**, do not treat as unfinished work:
 
@@ -738,6 +808,7 @@ items).
 - [xrick2-wk.md](xrick2-wk.md) — full chronological evidence log; append-only,
   never edited except for `SUPERSEDED` annotations at the two contradiction
   points documented in gaps.md section A.
-- [xrick2-gaps.md](xrick2-gaps.md) — consolidated contradictions (A),
-  unverified assumptions (B), and genuine knowledge gaps by subsystem (C),
-  produced by the 2026-09-16 documentation audit.
+- [xrick2-gaps.md](xrick2-gaps.md) — rewritten 2026-09-22: the current, accurate list of what's still open
+  (all small; a handful need a live run), plus a compact map from the 2026-09-16 audit's old sections (A
+  contradictions, B hedged assumptions, C genuine gaps) to where that content now lives (`algo-*.md`,
+  `level-tables.md`, `hnk-system.md`, `graphics.md`).

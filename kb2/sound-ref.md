@@ -250,17 +250,17 @@ Useful for naming subtunes. Note these are **ids**; subtune number = id + 1.
 
 | id | event | | id | event |
 |---|---|---|---|---|
-| 0 | level-start fanfare (only site passing D1=1) | | 23 | spawn/appear |
-| 1 | timed-effect end/impact | | 24 | object collision |
-| 2 | level transition / door | | 25 | hard landing (map 3) |
-| 3 | checkpoint / flag | | 26 | hard landing (map 5) |
+| 0 | level-start fanfare (only site passing D1=1) | | 20, 21 | actor AI triggers |
+| 1 | timed-effect end/impact | | 23 | spawn/appear |
+| 2 | level transition / door | | 24 | object collision |
+| 3 | checkpoint / flag | | 25 | hard landing (map 3) |
+| 4–8 | **per-map level-start music** (id = `[$1239c]+3`, D1=0; `algo-flow.md` §5) — one subtune per map, played once at every level load | | 26 | hard landing (map 5 — dead code, no map 5 exists: `hnk-system.md` §7) |
 | 9 | HUD/counter tick | | 34 | countdown-timer expiry |
 | 10 | **player death** | | 45 | **jump** |
 | 11 | respawn / bounce onscreen | | 48 | wall contact / scroll cue |
-| 16 | scroll/transition complete | | 49 | footstep |
+| 16 | scroll/transition complete; **also the laser-fire sound** — `$13d58` (`algo-player.md` §4) passes this id as an immediate, confirmed 2026-09-22 | | 49 | footstep |
 | 17 | start timed/rolling effect | | 50 | climb/airborne step, falling object |
 | 19 | generic impact / actor destroy | | | |
-| 20, 21 | actor AI triggers | | | |
 
 Three call sites take the id from actor script data rather than an immediate, so
 a few more ids are reachable in-game than are listed here.

@@ -1,0 +1,644 @@
+{
+ "note": "kb2 gaps #3/#4/#5/#7 live validation, 2026-09-22. kb2/hatari_live_validate.py captured this; raw captures (19MB) were deleted after extraction.",
+ "maps": {
+  "map2": {
+   "gap3_gap4_spawn_flips": [
+    {
+     "snap": 0,
+     "offset": "0x187c",
+     "kind": "detail_latch",
+     "submap": 0,
+     "owner": "0x1875",
+     "type": 20,
+     "owner_path": "monster_or_pickup"
+    },
+    {
+     "snap": 0,
+     "offset": "0x1889",
+     "kind": "header",
+     "submap": 0,
+     "type": 20,
+     "path": "monster_path"
+    },
+    {
+     "snap": 0,
+     "offset": "0x1977",
+     "kind": "header",
+     "submap": 1,
+     "type": 125,
+     "path": "pickup"
+    },
+    {
+     "snap": 0,
+     "offset": "0x197b",
+     "kind": "header",
+     "submap": 1,
+     "type": 18,
+     "path": "monster_path"
+    },
+    {
+     "snap": 0,
+     "offset": "0x198b",
+     "kind": "header",
+     "submap": 1,
+     "type": 117,
+     "path": "pickup"
+    },
+    {
+     "snap": 0,
+     "offset": "0x1997",
+     "kind": "header",
+     "submap": 1,
+     "type": 21,
+     "path": "monster_path"
+    },
+    {
+     "snap": 0,
+     "offset": "0x199b",
+     "kind": "header",
+     "submap": 1,
+     "type": 20,
+     "path": "monster_path"
+    },
+    {
+     "snap": 0,
+     "offset": "0x19a3",
+     "kind": "header",
+     "submap": 1,
+     "type": 21,
+     "path": "monster_path"
+    },
+    {
+     "snap": 1,
+     "offset": "0x1967",
+     "kind": "header",
+     "submap": 1,
+     "type": 19,
+     "path": "monster_path"
+    },
+    {
+     "snap": 1,
+     "offset": "0x196f",
+     "kind": "header",
+     "submap": 1,
+     "type": 1,
+     "path": "monster_path"
+    },
+    {
+     "snap": 1,
+     "offset": "0x1982",
+     "kind": "detail_latch",
+     "submap": 1,
+     "owner": "0x197b",
+     "type": 18,
+     "owner_path": "monster_or_pickup"
+    },
+    {
+     "snap": 1,
+     "offset": "0x1983",
+     "kind": "header",
+     "submap": 1,
+     "type": 122,
+     "path": "trigger_path"
+    },
+    {
+     "snap": 1,
+     "offset": "0x198a",
+     "kind": "detail_latch",
+     "submap": 1,
+     "owner": "0x1983",
+     "type": 122,
+     "owner_path": "trigger_path"
+    },
+    {
+     "snap": 2,
+     "offset": "0x1963",
+     "kind": "header",
+     "submap": 1,
+     "type": 117,
+     "path": "pickup"
+    },
+    {
+     "snap": 3,
+     "offset": "0x1875",
+     "kind": "header",
+     "submap": 0,
+     "type": 20,
+     "path": "monster_path"
+    },
+    {
+     "snap": 3,
+     "offset": "0x187d",
+     "kind": "header",
+     "submap": 0,
+     "type": 118,
+     "path": "pickup"
+    },
+    {
+     "snap": 3,
+     "offset": "0x1881",
+     "kind": "header",
+     "submap": 0,
+     "type": 127,
+     "path": "pickup"
+    },
+    {
+     "snap": 3,
+     "offset": "0x1885",
+     "kind": "header",
+     "submap": 0,
+     "type": 119,
+     "path": "pickup"
+    }
+   ],
+   "gap5_script_boundary_matches": [
+    {
+     "snap": 0,
+     "slot": 0,
+     "kind": 217,
+     "frame": 87,
+     "anim_ptr": "0x534fa",
+     "matches_decoded_boundary": true,
+     "matched_script": [
+      "map2",
+      "type43"
+     ]
+    },
+    {
+     "snap": 0,
+     "slot": 1,
+     "kind": 65,
+     "frame": 104,
+     "anim_ptr": "0x535fa",
+     "matches_decoded_boundary": true,
+     "matched_script": [
+      "map2",
+      "type21"
+     ]
+    },
+    {
+     "snap": 0,
+     "slot": 2,
+     "kind": 32,
+     "frame": 192,
+     "anim_ptr": "0x14686",
+     "matches_decoded_boundary": true,
+     "matched_script": [
+      "in_program",
+      "$1466e"
+     ]
+    },
+    {
+     "snap": 0,
+     "slot": 3,
+     "kind": 65,
+     "frame": 105,
+     "anim_ptr": "0x535fc",
+     "matches_decoded_boundary": true,
+     "matched_script": [
+      "map2",
+      "type21"
+     ]
+    },
+    {
+     "snap": 1,
+     "slot": 2,
+     "kind": 165,
+     "frame": 85,
+     "anim_ptr": "0x5351c",
+     "matches_decoded_boundary": true,
+     "matched_script": [
+      "map2",
+      "type25"
+     ]
+    },
+    {
+     "snap": 1,
+     "slot": 3,
+     "kind": 77,
+     "frame": 103,
+     "anim_ptr": "0x53460",
+     "matches_decoded_boundary": true,
+     "matched_script": [
+      "map2",
+      "type1"
+     ]
+    },
+    {
+     "snap": 2,
+     "slot": 2,
+     "kind": 165,
+     "frame": 85,
+     "anim_ptr": "0x5351c",
+     "matches_decoded_boundary": true,
+     "matched_script": [
+      "map2",
+      "type25"
+     ]
+    },
+    {
+     "snap": 2,
+     "slot": 3,
+     "kind": 77,
+     "frame": 103,
+     "anim_ptr": "0x53460",
+     "matches_decoded_boundary": true,
+     "matched_script": [
+      "map2",
+      "type1"
+     ]
+    },
+    {
+     "snap": 3,
+     "slot": 0,
+     "kind": 217,
+     "frame": 96,
+     "anim_ptr": "0x53492",
+     "matches_decoded_boundary": true,
+     "matched_script": [
+      "map2",
+      "type20"
+     ]
+    },
+    {
+     "snap": 3,
+     "slot": 1,
+     "kind": 32,
+     "frame": 64,
+     "anim_ptr": "0x14674",
+     "matches_decoded_boundary": true,
+     "matched_script": [
+      "in_program",
+      "$1466e"
+     ]
+    },
+    {
+     "snap": 4,
+     "slot": 0,
+     "kind": 89,
+     "frame": 99,
+     "anim_ptr": "0x535f4",
+     "matches_decoded_boundary": false,
+     "matched_script": null
+    },
+    {
+     "snap": 4,
+     "slot": 1,
+     "kind": 32,
+     "frame": 192,
+     "anim_ptr": "0x1467a",
+     "matches_decoded_boundary": true,
+     "matched_script": [
+      "in_program",
+      "$1466e"
+     ]
+    }
+   ],
+   "gap7_probe_values": [
+    2,
+    2,
+    7,
+    2,
+    31,
+    2,
+    3,
+    2,
+    3,
+    2,
+    3,
+    2,
+    3,
+    2,
+    3,
+    2,
+    10,
+    2,
+    8,
+    2,
+    8,
+    2,
+    8,
+    2,
+    8,
+    2,
+    2,
+    8,
+    7,
+    2,
+    8,
+    31,
+    2,
+    8,
+    3,
+    2,
+    8,
+    0,
+    0,
+    8
+   ]
+  },
+  "map3": {
+   "gap3_gap4_spawn_flips": [
+    {
+     "snap": 0,
+     "offset": "0x1993",
+     "kind": "header",
+     "submap": 1,
+     "type": 121,
+     "path": "pickup"
+    },
+    {
+     "snap": 0,
+     "offset": "0x199f",
+     "kind": "header",
+     "submap": 1,
+     "type": 123,
+     "path": "pickup"
+    },
+    {
+     "snap": 0,
+     "offset": "0x19a3",
+     "kind": "header",
+     "submap": 1,
+     "type": 17,
+     "path": "monster_path"
+    }
+   ],
+   "gap5_script_boundary_matches": [
+    {
+     "snap": 0,
+     "slot": 0,
+     "kind": 217,
+     "frame": 96,
+     "anim_ptr": "0x536c2",
+     "matches_decoded_boundary": true,
+     "matched_script": [
+      "map3",
+      "type49"
+     ]
+    },
+    {
+     "snap": 1,
+     "slot": 0,
+     "kind": 217,
+     "frame": 96,
+     "anim_ptr": "0x536c2",
+     "matches_decoded_boundary": true,
+     "matched_script": [
+      "map3",
+      "type49"
+     ]
+    },
+    {
+     "snap": 2,
+     "slot": 0,
+     "kind": 217,
+     "frame": 96,
+     "anim_ptr": "0x536c2",
+     "matches_decoded_boundary": true,
+     "matched_script": [
+      "map3",
+      "type49"
+     ]
+    },
+    {
+     "snap": 3,
+     "slot": 0,
+     "kind": 217,
+     "frame": 96,
+     "anim_ptr": "0x536c2",
+     "matches_decoded_boundary": true,
+     "matched_script": [
+      "map3",
+      "type49"
+     ]
+    },
+    {
+     "snap": 4,
+     "slot": 0,
+     "kind": 217,
+     "frame": 96,
+     "anim_ptr": "0x536c2",
+     "matches_decoded_boundary": true,
+     "matched_script": [
+      "map3",
+      "type49"
+     ]
+    }
+   ],
+   "gap7_probe_values": [
+    6,
+    2,
+    10,
+    28,
+    2,
+    2,
+    8,
+    2,
+    2,
+    8,
+    2,
+    2,
+    8,
+    2,
+    2,
+    8,
+    2,
+    2,
+    8,
+    2,
+    10,
+    8,
+    2,
+    10,
+    8,
+    2,
+    2,
+    10,
+    2,
+    2,
+    10,
+    2,
+    2,
+    6,
+    2,
+    2,
+    10,
+    2,
+    10,
+    10
+   ]
+  },
+  "map4": {
+   "gap3_gap4_spawn_flips": [
+    {
+     "snap": 0,
+     "offset": "0x1875",
+     "kind": "header",
+     "submap": 0,
+     "type": 117,
+     "path": "pickup"
+    },
+    {
+     "snap": 0,
+     "offset": "0x1879",
+     "kind": "header",
+     "submap": 0,
+     "type": 117,
+     "path": "pickup"
+    },
+    {
+     "snap": 0,
+     "offset": "0x188c",
+     "kind": "detail_latch",
+     "submap": 0,
+     "owner": "0x1885",
+     "type": 19,
+     "owner_path": "monster_or_pickup"
+    },
+    {
+     "snap": 0,
+     "offset": "0x1894",
+     "kind": "detail_latch",
+     "submap": 0,
+     "owner": "0x188d",
+     "type": 20,
+     "owner_path": "monster_or_pickup"
+    },
+    {
+     "snap": 2,
+     "offset": "0x187d",
+     "kind": "header",
+     "submap": 0,
+     "type": 26,
+     "path": "trigger_path"
+    },
+    {
+     "snap": 2,
+     "offset": "0x189d",
+     "kind": "header",
+     "submap": 0,
+     "type": 3,
+     "path": "trigger_path"
+    },
+    {
+     "snap": 2,
+     "offset": "0x18a4",
+     "kind": "detail_latch",
+     "submap": 0,
+     "owner": "0x189d",
+     "type": 3,
+     "owner_path": "trigger_path"
+    },
+    {
+     "snap": 3,
+     "offset": "0x1885",
+     "kind": "header",
+     "submap": 0,
+     "type": 19,
+     "path": "monster_path"
+    },
+    {
+     "snap": 3,
+     "offset": "0x188d",
+     "kind": "header",
+     "submap": 0,
+     "type": 20,
+     "path": "monster_path"
+    }
+   ],
+   "gap5_script_boundary_matches": [
+    {
+     "snap": 2,
+     "slot": 0,
+     "kind": 81,
+     "frame": 111,
+     "anim_ptr": "0x53ae0",
+     "matches_decoded_boundary": true,
+     "matched_script": [
+      "map4",
+      "type26"
+     ]
+    },
+    {
+     "snap": 2,
+     "slot": 1,
+     "kind": 209,
+     "frame": 214,
+     "anim_ptr": "0x534c2",
+     "matches_decoded_boundary": true,
+     "matched_script": [
+      "map4",
+      "type43"
+     ]
+    },
+    {
+     "snap": 3,
+     "slot": 0,
+     "kind": 201,
+     "frame": 99,
+     "anim_ptr": "0x534c8",
+     "matches_decoded_boundary": true,
+     "matched_script": [
+      "map4",
+      "type67"
+     ]
+    },
+    {
+     "snap": 3,
+     "slot": 1,
+     "kind": 201,
+     "frame": 99,
+     "anim_ptr": "0x534c8",
+     "matches_decoded_boundary": true,
+     "matched_script": [
+      "map4",
+      "type67"
+     ]
+    }
+   ],
+   "gap7_probe_values": [
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    8,
+    2,
+    2,
+    8,
+    2,
+    2,
+    8,
+    2,
+    2,
+    8,
+    2,
+    2,
+    0,
+    2,
+    2,
+    0,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2
+   ]
+  }
+ }
+}
