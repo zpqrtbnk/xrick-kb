@@ -91,7 +91,7 @@ gameplay. It must be made to read 0 in a standalone build (§6).
 | `$1a962` | byte pairs `[TACR,TADR]` indexed by `param*2`. Preset 0 = **`06 05`**. |
 | `$1a96e` | long; pending type-2 stream pointer, set at dispatch. |
 | `$1a972`/`$1a973` | bytes; Timer-A control/data for the pending sound. |
-| `$1a974` | byte; master state. `0`=idle, `1`=type-0 playing, `2`=type-2 armed-pending, `-1`=type-2 streaming (or fully stopped). **`1` in the image — must be cleared at init or every gate rejects.** |
+| `$1a974` | byte; master state. `0`=idle, `1`=type-0 playing, `2`=type-2 armed-pending, `-1`=type-2 streaming (or fully stopped). **`1` in the snapshot (0 in the pristine program, §9) — must be cleared at init or every gate rejects.** |
 | `$1a975` | byte; bits 0-1 round-robin channel cursor, bits 4-6 per-channel busy. Carry-over state by design. |
 | `$1a976` | byte; type-2 loop flag. Dispatcher always sets 0 → one-shot. |
 | `$1a977` | byte; currently-playing id (used for type-2 priority compare). |
@@ -105,7 +105,7 @@ Channel-struct fields confirmed by reading `$1adaa`:
 `[2]` = this channel's PSG mixer mask — **`0x09`/`0x12`/`0x24`** for A/B/C, i.e.
 `bit0|bit3`, `bit1|bit4`, `bit2|bit5` = that channel's tone-disable and
 noise-disable bits. `[0x10]` = long, self-modifying ramp-state pointer (the
-image holds `$1affe`, ramp state 2). `[0x14]` = long, instrument pointer
+snapshot holds `$1affe`, ramp state 2; the pristine program holds 0, §9). `[0x14]` = long, instrument pointer
 (`$1c1c4`/`$1c1ce`). Both are absolute and need relocation.
 
 ## 5. The three playback types
@@ -212,9 +212,9 @@ safety margin.
      the file itself: `init()` calls the engine's own `FUN_0001a978` (`$1a978`),
      which writes vector `$134` and sets bit 5 of IERA (`$fffffa07`) and IMRA
      (`$fffffa13`). The arm block already programs TACR/TADR, so the rate is the
-     game's own 4915.2 Hz with no arithmetic on our side. `$1a978` has no callers
-     in the game because the original called it from boot code outside the sound
-     region — `init()` supplies that one missing host action.
+     game's own 4915.2 Hz with no arithmetic on our side. `$1a978` is called
+     once by the boot code `$10000` (`algo-flow.md` §13; it looked caller-less because that code was
+     undecoded) — `init()` supplies that one host action.
 
    Two approaches were tried and **both fail**, for instructive reasons:
    - *Bursting the streamer 98× inside a 50 Hz `play()`*: the volume registers
@@ -280,3 +280,30 @@ shipped, and one caused a total regression.
 | 93 subtunes (pass 3) / 92 with pass-through `D0` | 92 entries, and subtunes are 1-based, so `id = D0-1`. Every build since pass 1 was off by one, leaving id 0 unreachable and reading past the table for the last subtune. |
 | `$1a978` (Timer-A vector install) must be called (pass 5) | **Pass 5 was right, and my own first build was wrong.** I initially recorded this as "unnecessary and undesirable — a standalone build pumps the streamer from `play()`". That build reduced every subtune to a click. Installing the real Timer-A ISR is exactly right and is what makes type-2 work; pass 5's error was not the install but pumping the streamer from `play()` *as well*, at the wrong rate. Corrected in §6.5. |
 | type-2 is "authentic noise percussion" / "amplitude-modulated hiss is inherent to the technique" (passes 15, 19) | Wrong, and it misdiagnosed the project's own bug as a property of the hardware. With `reg7 = 0x3f` and a true 4915.2 Hz tick the streams are clean digitised samples — confirmed by listening test. |
+
+## 9. Snapshot state vs the game's start state (2026-09-23)
+
+Everything above was read from `prg2-ram.bin`, a snapshot of the game **running** (attract mode, music playing). The
+**pristine** program image is also available: `hnk.depack` of `RICK2.PRG`'s data section (= `FILE.DRS` of `disks/rd2.st`,
+`verify_hnk.py` step 7), which loads so that RAM address = program offset + `$f8b8` (checked: `game_main`, the sound
+region, the graphics banks, the hall-of-fame table all line up at that base). Over `$19e96`–`$31eb0` the two differ in
+**121 bytes / 40 runs**, all engine *state*, not code or tables:
+
+- `$1a974` = 0 (not 1), `$1a976` = 0, `$1aa08` = 0, the type-0 channel structs `$1aa0c..` zeroed, the 3×7-byte area
+  `$1aa70..$1aa87` zeroed, the type-1 channel structs `$1adaa..` zeroed except their constant mixer masks at `+2`
+  (`09/12/24`), and the mixer shadow `$1ada8` = `$ff` (all channels muted).
+- So "`$1a974` is 1 in the image" (§4, §6.3) and the `[0x10]`/`[0x14]` pointer values quoted in §4 describe the
+  **snapshot**. From the pristine state the engine is consistent without any fix-up: the per-tick type-1 flush `$1aedc` →
+  `$1afa4` skips a channel whose mixer bits are all set in the shadow (`(shadow & mask) == mask` → `rts`), which is the
+  case for all three while `$1ada8 = $ff`. The zero ramp/instrument pointers are therefore never followed until `$1adf8`
+  arms a channel.
+- §6.3 (clear `$1a974`) is a requirement of a **snapshot-based standalone build** (the SNDH), not of the game.
+
+**The demo-flag gate is game behaviour.** The dispatcher's two `tst.w ($3efb6).l` tests (§3) mean the real game plays
+**no type-1 and no type-2 sounds while an attract demo runs** (type-0 music is not gated). §6.4's redirect to a zero cell
+is right for a jukebox SNDH and wrong for a port: a port must present the game's real demo flag at `$3efb6`.
+
+**Who installs the Timer-A ISR in the game:** `game_main` (`$10992`) loads the MFP registers and the vectors `$68`,
+`$70`, `$118`, `$134` from the table at `$11606` (vector `$134` = `$1a994`, the streamer; IERA/IMRA from the same table).
+`$1a978` is the boot-time installer (called from `$10000`, `algo-flow.md` §13); the table at `$11606` is saved after it runs.
+The VBL vector `$70` = `$1902e`: `[$19232] += 1` then `TICK` (`$1a866`), nothing else (`algo-render.md` §1).

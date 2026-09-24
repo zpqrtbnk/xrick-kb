@@ -75,6 +75,19 @@ not what to do. The history of what each pass found is in `kb/byte-identity.md`.
 None of these blocks a reimplementation. `kb/` is not known to be missing anything
 structural.
 
+### T42 — RD2: the rd1 host extras still missing ☐ **registered 2026-09-24 — do NOT implement yet (user)**
+
+RD2 (`-rd 2`) runs, with correct sound and keyboard input (user play test, Windows, 2026-09-24).
+The rd1 host features the user wants in RD2 **eventually**, not now:
+- **Cheats (F7/F8/F9)**: rd1 `game_toggleCheat` 1 = trainer (`env_trainer`, lives/bombs/bullets := 6),
+  2 = invincible (`env_invicible`), 3 = highlight (`env_highlight`), shown as `T`/`I`/`H` at y 0 of the left
+  border (`env_paintXtra`). Until then `sysevt.c` ignores F7–F9 under `-rd 2` (they used to reach rd1 state).
+- **Sound mute/volume (F4/F5/F6)**: `sysevt.c` calls rd1's `syssnd_toggleMute`/`syssnd_vol`, which do nothing
+  for RD2's engine (`rd2_snd.c`). Found 2026-09-24, not requested by the user; listed so it is not forgotten.
+
+Already done for RD2 (2026-09-24, host code, `port-rd2.md` §7): the PAUSED box, ESC = quit, E = end the game,
+the map/submap numbers.
+
 ### T41 — One executable, `-rd [1|2]`: split the port tree into common/rd1/rd2 ⭐ **step 1 DONE 2026-09-22 — reorg only, no RD2 code yet**
 
 Goal: a single `xrick` binary that plays either game, selected at runtime by `-rd 1` /
@@ -136,6 +149,21 @@ data-pipeline sub-steps (P1a–j), headers (P2), an 8-module engine port (P3), a
 (P7–P10) — tracked with a status column in that file, the way `review-plan.md` tracks
 T1. The one open decision (ship the reconstructed map-3 demo stream, T25) was resolved
 by the user the same day: ship it, flagged reconstructed (`port-rd2.md` §4).
+
+**2026-09-23: P1 (data) and P2 (headers) done, P3a skeleton written — then P3 ABORTED.** The
+readiness verdict was wrong: many routines the transcribed `kb2/algo-*.md` code calls (collision
+probe `$15fba` and variants, every box/point hit test, spawn-scan control flow, fades, title depack,
+scene runner internals) are only named or summarised in `kb2/`. Full list and what is missing for each:
+`port-rd2.md` §5. Unblocking needs Ghidra (MCP was disconnected) to transcribe them into `kb2/` first.
+
+**2026-09-23 (later): all gaps closed, porting still paused (user: do not resume until agreed).** With Ghidra back, every
+routine in `port-rd2.md` §5 was disassembled and transcribed, followed by a complete call-site sweep (389 `jsr`/`bsr`
+sites) that found and closed further summarised callees. New docs: `kb2/algo-collision.md`, `kb2/algo-spawn.md`,
+`kb2/algo-render.md`, `kb2/algo-flow.md` §13, `kb2/sound-ref.md` §9. Corrections folded into `algo-actors.md`,
+`algo-player.md`, `graphics.md`, `sound-ref.md`. Title image extracted (`kb2/assets/gfx/title.png`). The main new
+finding is that the **pristine program image** (depacked `RICK2.PRG`, RAM = offset + `$f8b8`) differs from the
+`prg2-ram.bin` snapshot in engine/runtime state, and several "in the image" statements were snapshot artifacts.
+Port-side consequences awaiting the user: `port-rd2.md` §6. **2026-09-24: user decided** (`port-rd2.md` §7): map 5 = literal original (unlock + hang), which supersedes T28's "no unlock code" for the port; non-sound data from the pristine program image; the port adopts a RAM-model design.
 
 ### T24 — Complete the Rick Dangerous 2 reverse ✅ **DONE — registered 2026-09-19, static AND live reverse complete by 2026-09-22 — see T27 checkpoint, `kb2/PORTING.md` (rewritten 2026-09-22)**
 
@@ -322,7 +350,7 @@ Formats and extraction are in `kb2/graphics.md` (§7 is now a closed checklist, 
 4. Font done. Draw order and sprite entry point done 2026-09-20. ~~Which HUD slot draws which icon row~~ **closed 2026-09-22**: ammo=bolt(`$0a`) col 13, bombs=bullet(`$0b`) col 21, lives=Rick's-head(`$0c`)
    col 30, all on HUD row 0 with the score — read from `update_hud_text_slots` plus a live record dump. ~~Title/hall-of-fame/intro images~~ **closed 2026-09-22**: `FUN_000194ce`'s 4 arguments select 4 banners
    at `$35a74` ("CONGRATULATIONS!"/"HALL OF FAME"/"SELECT LEVEL"/"LOADING..."), decoded and extracted to PNG (`graphics.md` §4b, `kb2/extract_gfx.py`). ~~The two blitters' internals~~ done 2026-09-20 already.
-5. Where `RICK2.PRG` stores the shared sprite banks before it unpacks itself — still genuinely open, but low priority: the banks are already extracted correctly straight from live RAM regardless.
+5. ~~Where `RICK2.PRG` stores the shared sprite banks before it unpacks itself~~ **closed 2026-09-23 (T39)**: they are stored **unpacked** in the program image itself (`hnk.depack` of `RICK2.PRG`'s data section), at RAM − `$f8b8` (`$37274` → program `$279bc`, `$3a844` → `$2af8c`), byte-identical to live RAM; the same holds for the font, banners, title image and palette.
 
 ### T27 — Static reverse of RD2: what is done and what is left ✅ **CLOSED 2026-09-22 — static AND live validation both complete**
 
@@ -361,7 +389,7 @@ One engineering note worth keeping: an early attempt chaining 250 one-shot break
 escalating to garbage fault addresses) — twice, at almost the same rearm count both times. Spacing the rearms to every 15th hit instead of every hit fixed it completely (0 crashes across all 3 maps after).
 
 **Both static and live reverse-engineering of Rick Dangerous 2 are now complete.** What remains, low priority, parked, none blocking:
-- **T39** the shared sprite banks' storage location before `RICK2.PRG` unpacks itself (extraction already works regardless; T35 — font glyph usage ≥ `$60` — was already answered 2026-09-20, not this).
+- ~~**T39** the shared sprite banks' storage location before `RICK2.PRG` unpacks itself~~ **CLOSED 2026-09-23**: stored unpacked in the depacked program image at RAM − `$f8b8` (see T26 item 5).
 - **T36** the *Copylock*-signature hypothesis for `RICK_05.HNK`'s corruption is evidence-consistent but not provable without the physical original disk (`hnk-system.md` §6).
 - The one unexplained gap-#5 sample above.
 
@@ -613,6 +641,9 @@ Two things the implementation found that the plan had wrong, both fixed:
   `sysarg_fail`'s usage text is 1108 characters before expansion. `xrick -h` was already
   overrunning the frame and getting away with it; the two added help lines made it crash
   silently. Now `vsnprintf` into 4096, and `fputs` rather than `printf(s)`.
+
+**2026-09-24:** the demo core is shared with RD2 (`src/demo.c`, `include/demo.h`, adapter
+`src/rd2/rd2_demo.c`) — see `kb/demo.md` §7 and `port-rd2.md` §7.
 
 ### T1 — Align the xrick port with the ST reverse engineering ⭐ **in progress**
 

@@ -479,3 +479,35 @@ Two games, two reverse projects, one repo. **Do not mix their addresses** — RD
   xrick2-prg.lock` was removed; `.lock~` is held by the running Ghidra and goes when it closes.
 - **`RICK_05` / HNK state is UNSURE** (user, 2026-09-19): expect another cleanup phase around the
   HNK files before the level data can be trusted (`PLAN.md` T25, T24 step 3).
+- **2026-09-23 — RD2 gap closure (porting paused by the user until agreed).** Lessons worth keeping:
+  - **A readiness check must enumerate callees, not read headers.** The 2026-09-22 "ready" verdict for the RD2 port was
+    wrong: the collision probe, every hit test and many render/flow routines were only named or summarised in `kb2/`.
+    Method that settles it: list every `jsr`/`bsr.w`/`bsr.b` target (`search_instructions` with the exact mnemonics;
+    plain `bsr` matches nothing) and check each against the docs.
+  - **`prg2-ram.bin` is a snapshot of the running game, not its start state.** The pristine program is `hnk.depack` of
+    `RICK2.PRG`'s data section (= `FILE.DRS`), loaded so that RAM = offset + `$f8b8`. Graphics, font, banners, title and
+    palette are identical, but the sound engine differs in 121 bytes of state, and the MFP table `$11606`, HUD counts,
+    screen-pointer parity and PRNG were snapshot values. Several "in the image" statements in `kb2/` were snapshot artifacts.
+  - **Ghidra leaves real code undecoded** (the boot code `$10000`–`$1010c`, parts of the scene runner). Use
+    `disassemble_bytes(..., restrict_to_execute_memory=false)`, read raw bytes where it skips 2 bytes, and use
+    `search_byte_patterns` on an absolute operand (validated on a known reference) — xrefs and `search_instructions`
+    both missed a write at `$181c0`.
+  - New docs: `kb2/algo-collision.md`, `kb2/algo-spawn.md`, `kb2/algo-render.md`, `kb2/algo-flow.md` §13,
+    `kb2/sound-ref.md` §9. T39 closed. Port-side consequences: `port-rd2.md` §6.
+- **2026-09-24 — RD2 port resumed on the RAM model** (`port-rd2.md` §7): emulated 1 MB big-endian RAM, pristine program
+  at `$f8b8`, routines transliterated at their original addresses; map 5 literal (unlock row 5, red-border hang).
+  - **"No caller" needs a byte scan of Ghidra's gaps.** `$144d6` was declared dead, yet `bsr.w $144d6` sits at `$123be`
+    in bytes Ghidra skipped; PC-relative calls escape `search_byte_patterns` on the absolute target too. Method: take
+    `find_code_gaps`, decode `61xx`/`6100 dddd`/`4eb9`/`4ef9`/`4eba`/`4efa` at every even address in each gap, resolve targets.
+  - **Frame-exact verification against the original (P8)**: `kb2/hatari_rd2_trace.py` (Hatari, one-shot breakpoint chain
+    at `$10a54`; re-arming at the current PC fires at once, so chain through `$10a5c`) vs the port's `RD2_TRACE` hook.
+    Same RAM windows incl. both screens → byte-compare per frame. Map-1 attract demo: 2000 frames identical.
+  - **Git Bash heredocs collapse `\n` in inline Python** (twice produced raw newlines inside C strings): edit such
+    text with the Edit/Write tools instead.
+  - **Status 2026-09-24**: RD2 is playable (`xrick -rd 2`, WSL and Windows); the user confirmed sound and keyboard
+    by playing. **Verification and troubleshooting phase** now. RD2 carries rd1's host extras (PAUSED box, ESC =
+    quit, E = end game, M/S numbers) as fb overlays and control handling, never in emulated RAM; cheats and
+    F4–F6 are `PLAN.md` T42 (later).
+  - **RAM-exact is not "works"** (2026-09-24): traces and `RD2_SHOT` read `fb`/RAM and ran `-nosound`, so a black window
+    (host gamma 0) and a sound engine uploaded as zeros (init-order bug) both slipped through. Check the real window
+    (Windows: `PrintWindow`, flag 2) and the audio (`SDL_AUDIO_DRIVER=disk`, `SDL_AUDIO_DISK_OUTPUT_FILE`, S16) too.

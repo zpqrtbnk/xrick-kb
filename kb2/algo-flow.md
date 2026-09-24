@@ -262,3 +262,57 @@ declared `rows`, for all 58 submaps: margin is 6 everywhere). The tail bytes pas
 **Map 5's data** (level image, demo stream, scenes 0–2) was never a real level — the finale scripts (`$17bf4`/`$17bda`) exist for a "level 5" that is a sequel tease, never playable, per the user; `hnk-system.md` §7, `PLAN.md` T28 (closed).
 
 _Ghidra names (program `prg2-ram.bin`, renamed 2026-09-20): `$15bc0` = `update_actor_group` (it was `handle_screen_edge_and_respawn` — that name was wrong: nothing in it handles screen edges or respawns), `$15b3c` = `init_actor_group`._
+
+## 13. Boot, initial state, loader, input (2026-09-23)
+
+Read in Ghidra; the boot code `$10000`–`$1010c` disassembles with `restrict_to_execute_memory = false` (it had never
+been decoded, which is why `$1a978` and the MFP-table writes looked caller-less). `$10000` = `40c0` `move.w SR,D0`.
+
+**Boot (`$10000`)**: if not in supervisor mode, `Super(0)` (GEMDOS `$20`). Then, in order:
+`$18f26` (Physbase → `[$115e2]`; save the TOS palette to `$115e6`, MFP registers and vectors to `$11606`, SP to `[$1161e]`
+— for the exit path) · `SP = $11e4a` · `$18fbe` (clear IERA/IERB/IMRA/IMRB, clear VR bit 3, **zero `$53400`–`$7ffff`**:
+level image, tile window, bitmaps and both screens) · `$18ffa` (`rts`) · `$18ffc` (XBIOS `Setscreen($78000, $78000, 0)`) ·
+`$1901a` (vector `$70 := $1902e`, `[$18ed8] := 2`) · `$1a4fe` (vector `$118 := $1a546`, MFP IERB/IMRB bit 6 on, IKBD
+commands `$12` then `$14`: mouse off, joystick event reporting) · `$19046` (`SR := $2300`) · `$1904c` (`rts`) · `$1a978`
+(vector `$134 := $1a994`, IERA/IMRA bit 5 on) · `$19106` (install the palette `$18ee6`) · `[$1239c] := 1` ·
+`jsr $123ca` (the map loader **past** its "LOADING..." banner call: map 1 is loaded silently) · mask interrupts, save
+the MFP registers and the 4 vectors into `$11606` (now holding the game's own configuration), unmask · the
+return-address trick → `$1010c`: `D0 = D1 = 0`, `bra game_main`. So `game_main`'s "restore" at `$10992` re-installs the
+game's own setup; the table is all zeros in the pristine program.
+
+**Initial values that matter** (pristine program image, RAM = program offset + `$f8b8`, see `sound-ref.md` §9):
+`[$18eda]` = `$78000` (displayed), `[$18ede]` = `$70000` (draw), `[$18ed8]` = 2, `[$19232]` = 0, `[$1239c]` = 0,
+`[$1239e]` = `$ffff`, `[$17992]` = 4, `[$1798e]` = 0, `[$17990]` = 0, PRNG `[$18562]`/`[$18566]` = 0 (reseeded by
+`$18516` at every submap load), HUD slot counts 0 (layout bytes: columns `$0d/$15/$1e`, icons `$0a/$0b/$0c`, `$ff` terminators).
+`algo-actors.md` §5's "count 6/5/5" and `graphics.md` §1's `$18eda = $70000` were one snapshot's runtime values.
+
+**Map loader `load_map_if_changed` (`$123b0`)**: `if [$1239c] == [$1239e]: bsr $144d6 ; return` (the `bsr.w` at `$123be` —
+Ghidra had skipped those bytes, corrected 2026-09-24: an unchanged map is **not** reloaded, but `$144d6` clears the spawned bit of
+the spawn records of its first N submaps, `algo-spawn.md` §9); banner `$194ce(3)`; `$1a5d0`
+(silence); `[$1239e] = [$1239c]`; `i = min([$1239c] - 1, 4)`; descriptor `$12dd4 + 4i` → demo file into `$3efc0`,
+level file into `$65300` (FAT loader `$11e76`, `hnk-system.md`); `$1795c` depacks `$65300` → `$53400` (the tree coder,
+`= hnk.depack_tree`); save MFP state into `$11606`; then an obfuscated tail (computed return addresses through `$124c6`/
+`$12d36`/`$12d4c`, traced step by step) whose only game-visible effects are `[$1a4fb] := 0` and re-applying the MFP
+table it just saved. Because the level image is only re-depacked when the map changes, the spawn table's runtime bits
+survive deaths on the same map (deaths do not pass through `$123b0`; `algo-spawn.md` §9).
+**Map 5** (picker row 5): descriptor `$12e08` → demo file words `(0013, 0002)`, sum `$15`, matches none of the 8 sums tested by
+`$11f86` (`$d,$59,$f,$a3,$11,$ec,$13,$13a`), so the first file load ends in `$11fb8`: `move.w #$700,$ffff8240 ; bra $11fb8` — red
+border, forever, with interrupts enabled (VBL and Timer A keep running). Visible before it: the LOADING banner and `$1a5d0`;
+`[$1239e] = 5`. Tables read in the pristine image, identical to the snapshot (2026-09-24).
+
+**Title screen (`$1793a`)**: fade out; depack the image at `$31eb0` with `$1795c` **straight into the displayed screen**
+`[$18eda]` (32000 bytes, a raw ST screen; the bit stream ends exactly at `$35a74`); fade in. Extracted:
+`assets/gfx/title.png`.
+
+**Input (`$1a546`, ACIA vector `$118`)**: IKBD bytes. After a `$fe` header the next byte goes to `[$1a4fa]` (joystick 0);
+after a `$ff` header the next byte goes to **`[$1a4fb]` = joystick 1, used as the game's input byte** (bit 0 up, 1 down,
+2 left, 3 right, 7 fire). Any other byte is stored raw in **`[$1a4fc]`** (the last keyboard byte, make **or** break code
+`|$80`). So `game_main`'s `key == $1f`/`1`/`$19` tests and `$17cd8`'s `$39` test see a key only while its make code is
+the latest byte. `read_player_input` (`$141cc`): not demo → `D0 = [$1a4fb]`; demo → the `(count, state)` stream at
+`[$3efba]`, with count 0 ending it (`[$3efb8] := -1`, `D0 = 0`, the pointer stays on the 0 so later calls return 0).
+`$14222` (re-arm, demo only): end flag 0, pointer `$3efc0`, count/state 0.
+
+**Scenes, rendering, spawning**: the scene runner and its opcodes are in `algo-render.md` §10, and every render routine
+called from §2 is in `algo-render.md`. The spawn machinery is in `algo-spawn.md` and the collision tests in
+`algo-collision.md`. The hall-of-fame initial table at `$17d0e` (8 × 30 bytes, scores 8000…1000) and its display list at
+`$17dfe` are byte-identical in the pristine program and the snapshot.

@@ -395,3 +395,28 @@ Settled on 2026-09-08; the sections above are written to match.
 One point derived from D1 rather than decided: on game over the demo ends too, so the
 hall-of-fame name entry uses the real keyboard (§3.6). Say so if you would rather it
 loop back to the attract screen.
+
+## 7. Shared with RD2 (2026-09-24)
+
+`src/demo.c` / `include/demo.h` are now game-agnostic (moved out of `rd1/`). A game hands the
+core a `demoset_t`: its script array, the number of segments and how to write a recording back.
+`demo_enterSegment` replaced `demo_enterSubmap`; `demo_cycle` (RD1, drives `control_status`) is
+unchanged in behaviour, and `demo_play` / `demo_record` expose the same clock to other adapters.
+
+| | RD1 (`src/rd1/game.c`) | RD2 (`src/rd2/rd2_demo.c`) |
+|---|---|---|
+| segment | submap, reset on entry and on death | map 1..4, reset at level start `$10a4e` only |
+| tick | `CTRL_ACTION` pass | game_main frame head `$10a54` |
+| playback writes | `control_status` | joystick byte `[$1a4fb]` |
+| recording reads | `control_status` | `[$1a4fb]` (what `$141cc` sees) |
+| generated file | `src/rd1/dat_demo.c` | `src/rd2/dat_rd2_script.c` + `<file>.map<N>.joy` |
+
+RD2 plays/records only real games (`[$3efb6] == 0`); the game's own attract demo keeps its
+`(count, state)` stream. RD2 `-demo` starts from a game begun by hand (title, picker); the run's end
+(`END_OF_RUN`, or ESC to the title) hands the keyboard back. The `.joy` file (one joystick byte per
+frame from level start) is the `RD2_JOYSEQ` / `kb2/hatari_rd2_trace.py` input.
+
+Checked 2026-09-24 (WSL): RD2 recording driven through the host joystick path (`RD2_INPUT`), 881
+frames of map 1; `-demo` playback of it rebuilt as `dat_rd2_script.c` = byte-identical RAM trace
+for all 880 compared frames; the `.joy` under Hatari vs the port (forced-map route) = identical for
+881 frames. RD1: builds, `-demo` ran 90 s without error — no RD1 trace comparison was made.

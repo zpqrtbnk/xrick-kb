@@ -209,7 +209,7 @@ Tables (RAM `$12e42`, `$12e4c`, `$12e56`): `01 02 03 04 05 01 02 03 04 05` / `05
 ```
 x &= ~1                                                    # bclr #0,[1695d]
 D6 = 0 ; if D0 & 1: D6 = -2 elif D0 & 2: D6 = +2
-[16966] = D6 ; y_new = y + D6 ; [15f12] = D6 ; [15f10] = y_new ; [15f0e] = x ; D7 = $15fba()
+[16966] = D6 ; y_new = y + D6 ; [15f12] = D6 ; [15f10] = y_new ; [15f0e] = x ; D7 = $15fba()   # [15f16] is NOT written here: inherited (algo-collision.md §11)
 goto A                                                     # same flag handling as §3
 ```
 
@@ -275,18 +275,18 @@ FALLING (kind 1):
    elif D7 & 4:                     goto LAND
    elif D7 & 2:  if vy >= 0: LAND else CEIL
    else:         long[16b18] = D1 ; goto HORIZ
-CEIL:  y = (y | 7) + 1 ; fraction = 0 ; store
+CEIL:  y = (y | 7) + 1 ; fraction = 0 ; store ; then continue exactly as LAND does after its store (the D7 & $20 / D7 & 1 tests below) — both jump to $13fca
 LAND:  y = (y - 1) & ~7 ; fraction = 0 ; store                                              # $13fba
    if D7 & $20: BOOM
    if D7 & 1:  map 3: if vy >= $200: vy = -vy + $60 ; goto HORIZ   else vy = $100
                map 5: vy = -$87f                                    # dead code: there is no map 5, hnk-system.md §7
                else:  vy = $100                                     # (no D7&1: vy = $100 as well: $1401a)
-HORIZ: D6 = [16b36] ; D5 = 8
+HORIZ: D6 = [16b36] ; D5 = 8                       # map 1 surface: D6 := 0 and that 0 is stored back into [16b36] (dx lost for good)
    if D7 & 1: map 1 -> D6 = 0 ; map 2 -> jump to the position update at once (`$14076`: no deceleration, no store of D6, no platform dx) ; map 4 -> D5 = $10
    deceleration: D6 moves toward 0 by D5, never crossing 0
    D6 += [12f06] << 8 (platform dx)
    x_new = (long[16b14] + (D6 << 8)) >> 16 ; if x_new > $e8: x_new = $e8, [16b36] = 0 ; if x_new < 0: x_new = 0, [16b36] = 0
-   probe $16278 at (x_new, y) ; if D7 & 2: x_new snapped (D6 < 0 ? (x|7)+1 : (x-1) & ~7), fraction 0
+   [15f10] = y ; [15f12] = -1 ; [15f0e] = x_new ; [15f16] = -1 ; probe $16278 ; if D7 & 2: x_new snapped (D6 < 0 ? (x|7)+1 : (x-1) & ~7), fraction 0
    store x ; if D7 & $20: BOOM
 BOOM ($1410e): play_sound($13) ; [16b5e] = 0 ; kind = 2 ; [16b34] = 0 ; anim pointer = $12ed6 ; y -= 5 ; [12f00] = 0 ; fall into EXPLODE
 EXPLODE (kind 2):
@@ -297,3 +297,9 @@ EXPLODE (kind 2):
 Read from `$13e98`–`$141ca`; the two `D7 & 1` branches on maps 3 and 5 are the same surface-property bit as for Rick and objects. Only the `[$12efe]`
 flag and `[$12f02]/[$12f04]` are consumed elsewhere (`algo-objects.md` CONTACTS, `algo-actors.md` §4 point 2: bomb kills objects/actors inside its box); the deceleration
 values (D5) come from the code as listed, not from a table.
+
+## 12. Instruction-level companions (2026-09-23)
+
+`probe()` and every box/point test used above: `algo-collision.md` (§11 lists which probe inputs each call site
+here writes; the ladder path does not write `[$15f16]`). §11 (the bomb) was re-read on 2026-09-23 over `$13e98`–`$141ca`
+and matches, with the three clarifications folded in above.

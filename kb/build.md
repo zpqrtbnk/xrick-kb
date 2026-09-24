@@ -193,6 +193,15 @@ dropdown and isn't affected by this).
 Win32/x86 no longer exists as a target (T21) — the project now declares only
 `Debug|x64` and `Release|x64`.
 
+**2026-09-24 (RD1/RD2 split):** the project's file lists had not followed the split into
+`include|src/rd1|rd2`. They now mirror the Makefile: every `*.c` in `src`, `src\rd1`, `src\rd2`
+except the three `dat_*PC.c` (67 files, same as `make`), plus the audio engine; include paths
+`include;include\rd1;include\rd2;src;src\rd1;src\rd2` (the Makefile's `INC`). `PLATFORM_ST` comes
+from `config.h`'s default. `.filters` regenerated (rd1/rd2/audio_engine sub-folders). Checked:
+Release x64 builds with 3 warnings, all in shared files outside rd1/rd2 (`sysarg.c` C4045, `sysvid.c` 2× C4101);
+`xrick.exe -rd 2` RAM trace (`RD2_TRACE`, 600 frames of the attract demo) byte-identical to the WSL build.
+When files are added to or removed from `src`/`include`, update the `.vcxproj` too.
+
 A post-build step copies `SDL3.dll` from `vcpkg_installed\x64-windows\bin\` next to
 the built exe automatically (vcpkg's own auto-deploy didn't engage with this
 project's style of integration, so this is done explicitly in `xrick.vcxproj`); T22

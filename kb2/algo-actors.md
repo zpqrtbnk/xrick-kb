@@ -9,7 +9,7 @@ Addresses are RAM addresses. Actor records are 88 bytes (`ActorRecord`); `A6` = 
 | off | use (as read in the code) |
 |---|---|
 | `+0` word | slot state: **0 = free, > 0 = in use, < 0 = end-of-table sentinel** (`$14970` free-slot scan: `bmi` end, `beq` found). `FUN_00014862` (types ≥ `$75`) writes `b0 & 3` as a *word* here, so it lands in byte `+1` (`F`) |
-| `+1` byte `F` | behaviour flags: bit 1 = frozen/flipped (`eori #2`), bits 2–5 (`& $3c`) = **mode** (`$20/$28/$2c` = static objects), bits 2–4 (`& $1c`) = **hit reaction class**, bit 6 = hurts Rick on contact, bit 7 = extra check against the shot object (`$15776`), bit 0 = set at construction |
+| `+1` byte `F` | behaviour flags: bit 1 = frozen/flipped (`eori #2`), bits 2–5 (`& $3c`) = **mode** (`$20/$28/$2c` = static objects), bits 2–4 (`& $1c`) = **hit reaction class**, bit 6 = hurts Rick on contact, bit 7 = the actor detonates a **falling bomb** it touches (`$15776` tests the bomb record `$16b12`, not the laser shot — corrected 2026-09-23, `algo-spawn.md` §7), bit 0 = set at construction |
 | `+2` / `+6` word | x / y (screen-space y: world y − `scroll & ~7`) |
 | `+$e` word | current sprite frame id (`$fe` = none) |
 | `+$12` word | ≠ 0 = draw with the **masked blitter** `$1952c` (sprite pixels hidden where the tile mask bitmap `$65800` is 0 — `graphics.md` §4; set to −1 from spawn byte 3 bit 7); `+$14` word = second-draw-pass flag (`$170f2`) |
@@ -145,11 +145,11 @@ The record's **detail blocks** (`b3 & 3` of them, 4 bytes each: `d0 d1 d2 d3`) a
 | field | meaning |
 |---|---|
 | `d0` | box x in pixels (raw) |
-| `d1` | box y tile: y = `d1·8 − (scroll & ~7)`; a box above the screen is clipped, and skipped if entirely above |
+| `d1` | box y tile: y = `d1·8 − (scroll & ~7)`; a box above the screen is clipped (`h += y`, `y = 0`) and skipped only if `h` becomes **negative** (`h = 0` is still tested) — `algo-spawn.md` §5 |
 | `d2 & 0x0f` / `d2 >> 4` | width / height in 8-px units minus 1 (`((n)+1)·8`) |
 | `d3` bits 0–5 | which tests apply (below); any hit fires the block |
 | `d3` bit 6 | repeatable — the block is not latched |
-| `d3` bit 7 | runtime **latched** flag (set on first fire unless bit 6; a latched block does not fire again; cleared when no test hits) |
+| `d3` bit 7 | runtime **latched** flag (set on first fire unless bit 6; a latched block does not fire again; cleared when no test hits; a latched block that hits again is ignored **without** being cleared, and the scan moves on to the next block; the sound `$17` is tied to mask bit 3, whichever test fired — `algo-spawn.md` §5) |
 
 Tests (each returns carry = hit): bit 0 = `check_box_vs_player` (Rick's box: x `[Rx+4, Rx+$14)`, y `[Ry, Ry+$15)` standing or
 `[Ry+5, Ry+$15)` crouching, and never while `[$12e2a] ≠ 0`); bit 1 = shot point `([$12efa],[$12efc])` in the box, only while
@@ -167,7 +167,7 @@ type `$7c` (`$157f4`) stops it, adds the bonus to the score, plays sound 1 and m
 
 ## 5. HUD counters (static)
 
-Three 14-byte text-slot records at `$176f2`, `$17700`, `$1770e` (initial values read from the RAM image): pending flag `+0`,
+Three 14-byte text-slot records at `$176f2`, `$17700`, `$1770e` (values read from the RAM **snapshot** — the pristine program has count 0 in all three, set by `$1771c`/`$17760` before first use; `algo-flow.md` §13): pending flag `+0`,
 count `+2`, column `+4`, glyph `+5`, then the glyph buffer. Slot A: count 6, column 13, glyph `$0a` (lightning bolt); slot B:
 count 5, column 21, glyph `$0b`; slot C: count 5, column 30, glyph `$0c` (Rick's head). `FUN_00017760` resets A and B to 6 at
 every level start; pickups of mode `$28` / `$2c` set them to 6. Score pickup mode `$20` = 500 points. Roles read in
@@ -191,7 +191,7 @@ is looked up in the 256-byte **attribute table at `$65200`** (image `0x11e00`; p
   is solid: if bit 6 is also set its box (`+2,+6,+26,+28`) is tested against the probe box (16 wide at `x+4`, height `[$161cc]` = 21);
   overlap sets flag bit 1, and if this actor is the highest so far (`actor.y <= [$15f18]`) and the probe's feet (`y + $14`) are not
   below `actor.y + vy + 8`, also flag bit 6 with `[$15f18] = actor.y` and platform (dx, dy) = (0, 0). With bit 6 clear the actor is a
-  one-way platform only while `[$15f12] >= 0`: a 16 × 1 strip at the probe's feet overlapping it sets flag bit 6, `[$15f18] = actor.y`
+  one-way platform only while `[$15f12] >= 0`: a 16 × 1 strip at the probe's feet overlapping the actor's box **narrowed to height = (high byte of `[$15f12]`) + 8** (not the actor's own `+28`) sets flag bit 6, `[$15f18] = actor.y`
   and the platform (dx, dy) = the actor's last movement (`+3a`, `+3c`).
 - **Reaction of the object code** (`FUN_000150c0`): flag bit 5 destroys the object, bit 6 = landed on ground/platform, bits 2 and 1 =
   slopes/walls that reset its vertical speed.
@@ -206,3 +206,10 @@ one-shot breakpoints on this routine's single `rts` at `$161c8`, spread across m
 (`kb2/assets/live_validation_2026-09-22.json`). Every one of these is a combination of bits 0–4 only — e.g. `0x1c` = bits 2+3+4 (floor + ladder-present + ladder-top, the exact combination `algo-player.md` §10
 predicted for a ladder-top entry) and `0x1f` adds bit 0+1 on top (an adjacent solid/surface-property column OR'd in, per the unaligned-probe rule above). No sample ever set bit 5, 6 or 7 in this particular
 capture window (not a contradiction — just situations this 28-second-per-map sample didn't happen to hit), and none ever showed a bit outside the documented 0–4 set.
+
+## 7. Instruction-level companions (2026-09-23)
+
+The collision probe, every box/point test and its comparison strictness: `algo-collision.md` (note: the crouching
+edge of `check_box_vs_player` is **inclusive**, `algo-collision.md` §8 — §4 above gives half-open ranges that are
+imprecise on that one edge). Spawn scan, constructors, free-slot/despawn, `dispatch_spawn_record`, script steppers:
+`algo-spawn.md`. `update_actor_ai` (§3) was re-read against the disassembly on 2026-09-23 and matches on every branch.

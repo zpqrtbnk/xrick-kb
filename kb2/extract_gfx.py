@@ -152,6 +152,23 @@ def main():
     for arg, name in BANNERS[2].items():
         banner(ram, arg, pal1).save(os.path.join(GFX, "banner_%s.png" % name))
     print("banners written")
+    # title screen: $1793a depacks the tree-coded image at $31eb0 with $1795c (== hnk.depack_tree, checked
+    # 2026-09-23: 32000 bytes, bit stream ends exactly at $35a74 where the banners start) straight into the
+    # displayed screen, so it is a raw ST low-res screen (160 bytes/line, 4 word-interleaved planes)
+    sys.path.insert(0, HERE)
+    import hnk
+    title = hnk.depack_tree(ram[0x31eb0:0x35a74])
+    assert len(title) == 32000, len(title)
+    im = Image.new("RGB", (320, 200))
+    px = im.load()
+    for y in range(200):
+        for gx in range(20):
+            b = y * 160 + gx * 8
+            ws = [(title[b + 2 * p] << 8) | title[b + 2 * p + 1] for p in range(4)]
+            for bit in range(16):
+                px[gx * 16 + bit, y] = pal1[sum(((ws[p] >> (15 - bit)) & 1) << p for p in range(4))]
+    im.save(os.path.join(GFX, "title.png"))
+    print("title screen written")
     # cut-scene background images: glyph-id matrices (kb2/decode_scenes.py) drawn with the font, in the game palette
     # (no scene opcode changes the palette; `$18d00` copies 8x8 font glyphs)
     scenes_path = os.path.join(LEVELS, "scenes.json")

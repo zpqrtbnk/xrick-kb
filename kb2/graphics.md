@@ -12,7 +12,7 @@ outputs in `kb2/assets/gfx/`.
 - **320 × 200, 16 colours, 4 bitplanes interleaved by word** (ST low-res: per 16 pixels, 4 words =
   plane 0..3, MSB = leftmost pixel; 160 bytes per line). Decoding the live screen buffer this way
   reproduces Hatari's own screenshot (`kb2/assets/gfx/ref_screen_map1..4.png`, viewed).
-- **Two buffers, `$70000` and `$78000`** (pointers at `$18eda` = `$70000`, `$18ede` = `$78000`, read live);
+- **Two buffers, `$70000` and `$78000`** (pointers at `$18eda` = `$70000`, `$18ede` = `$78000`, read live — one frame's parity: they swap every frame; the pristine start is `$18eda` = `$78000` displayed, `$18ede` = `$70000` draw, `algo-flow.md` §13);
   Hatari `info video` reported base `0x70000` at capture time; both buffers held the same picture in every
   capture. **Swap/draw-target logic**: `$19234` toggles bit 7 of the middle byte of both pointers and writes the
   new base to the video-base registers, once per frame after `$19216` (`algo-flow.md` §2) — a plain double buffer flip.
@@ -114,7 +114,7 @@ Three levels of indirection, all inside the level image (`RICK_0(2N).bin`, image
   `FUN_000164de` (down) / `FUN_0001653e` (up), read 2026-09-20: each shifts the 40-row × 32-byte tile window at `$65300` by one row (39 rows of 32 bytes copied) and expands the one new row
   (bottom row at `$657e0` for down, top row at `$65300` for up) from the block map with `$165a6`, using the row-in-block counter `[$16472]` (0–3) and the block-map pointer `[$1646e]` (±8 per 4 rows).
   The callers `$16718` / `$166ae` first clamp the new scroll `[$16462] + [$1662c]` to `[$16466]` (= 0, minimum) / `[$16468]` (= w1·8, maximum); when the 8-px boundary is crossed
-  they call `$17694` / `$17644` (shift the animated-tile slots' window pointers, §3b), the window shift, `$1884c` / `$1888e` — read 2026-09-22, both trivial wrappers that pick a row of the tile window (`$65400`
+  they call `$17694` / `$17644` (shift the animated-tile slots' window pointers, §3b), the window shift, `$1884c` / `$1888e` (**correction 2026-09-23: this pairing is swapped — `$16718` (down) calls `$1888e` and `$166ae` (up) calls `$1884c`**, `algo-render.md` §7) — read 2026-09-22, both trivial wrappers that pick a row of the tile window (`$65400`
   for `$1884c`, `$65400+0x320` for `$1888e` — the "new" row after a down/up shift) and a destination row of the **128-byte-pitch** bitmap/mask (`$68000`/`$65800`) computed from the current pixel scroll
   `[$1662e]`, then call the same row-renderer `$185a6` used everywhere else — i.e. only the one freshly-scrolled-in row is re-rendered into the screen-facing bitmap per shift, not the whole 24-row view,
   `$16786` (`[$1662e] := ([$1662e] + [$1662c]) & $ff`, the pixel scroll row of the 256-line circular bitmap), `$171a4` with D0 = −8 / +8 (adds it to the y word `+6` of **every record of the 17-record chain**)
@@ -149,7 +149,7 @@ Three levels of indirection, all inside the level image (`RICK_0(2N).bin`, image
   `kb2/prg2-ram.bin` matches four fresh captures byte for byte over `$37274`–`$3efb6`.
 - Draw loop: actor/object records are **88 bytes** (`lea $58,A6`); `$170d4` draws those with `+0x14 == 0` and
   `$170f2` the ones with `+0x14 != 0` (clearing it). Screen position = **(x + 32, y − $38)** with x = word `+2`,
-  y = word `+6`, then y minus the scroll fine offset; sprites are clipped to x ∈ [0, `$120`), y ∈ (−13, `$c8`)
+  y = word `+6`, then y minus the scroll fine offset **`[$16462] & 7`** (read in both blitters 2026-09-23); the entry rejects x ∉ [0, `$120`) and y ∉ (−13, `$c8`), and **pixels are only ever written in screen x ∈ [32, 288) and lines [8, 200)** — every edge path of both blitters was read (`algo-render.md` §3)
   (`$17116`, `$19eb4`–`$19edc`). Frame id 254 (`$fe`) is not drawn; ids ≥ `$c0` / ≥ `$80` / ≥ `$40` / < `$40` select the banks `$5fe00` / `$3a844` / `$5aa00` / `$37274` (id mod 64 inside the bank, 336 B per frame).
   A word at `+0x12 ≠ 0` selects the **masked** blitter `$1952c`, else the plain blitter `$19e96` (read 2026-09-20; both have separate code paths for `x & 15 = 0` / `≠ 0` and for the left and right screen edges; per pixel row they read
   4 longwords = 4 planes of 32 px). Plain: `screen := (screen & ~opaque) | sprite`, where *opaque* = OR of the four planes (colour 0 is transparent). Masked: the same with `sprite & mask` and
@@ -240,3 +240,10 @@ hull/starfield, map 2 ice cave, map 3 jungle rock, map 4 orange cave. Palette sh
 6. ~~Sprite mirror variant~~ `+0x12` = masked blitter, not a mirror (§4); actor-table draw call site = `$170b6` walks all 17 records (§5).
 7. Where `RICK2.PRG` keeps the shared banks before unpacking — genuinely still open, but low priority and not needed (`PLAN.md` T39): the banks are fully and correctly extracted directly from live RAM
    regardless of where the packed source sits inside the program image (§4).
+
+## 8. Instruction-level companion (2026-09-23)
+
+`algo-render.md` transcribes the code this file describes: frame pacing and flip, fades, both sprite blitters in full,
+text/banners, HUD/score, window generation, scroll shifts, row renderer, animated tiles, the submap slide, the scene runner.
+The title screen (`$1793a`/`$1795c`, image at `$31eb0`, tree-coded like the level images) is now extracted:
+`assets/gfx/title.png` (`extract_gfx.py`).
