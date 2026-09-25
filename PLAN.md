@@ -75,7 +75,7 @@ not what to do. The history of what each pass found is in `kb/byte-identity.md`.
 None of these blocks a reimplementation. `kb/` is not known to be missing anything
 structural.
 
-### T43 — Full-game RD1 attract demo, found by a solver driven by an LLM ☐ **PLAN 2026-09-25 — D1–D6 decided; F1 fixed, phases 1–5 DONE 2026-09-25; Q8 open**
+### T43 — Full-game RD1 attract demo, found by a solver driven by an LLM ☐ **PLAN 2026-09-25 — D1–D6 decided; F1 fixed, phases 1–5 DONE, F6/F7 fixed 2026-09-25**
 
 **Goal:** `-demo` plays RD1 from submap 0x00 to the end of the game (all 0x2F submaps) with
 no death. Priority: **reach every exit in a natural, efficient way**. Score (kills, bonuses) is
@@ -155,7 +155,7 @@ tagged **[master]** or **[solver]**.
    ✅ **DONE 2026-09-25**, port commit `2c51de6`: 4960-byte snapshot; 5600 restores over
    47 submaps × 3 seeds, 0 mismatches; about 40k steps/s with a hash per step, save 0.3 µs,
    restore 0.8 µs. Fades skipped headless (their counters are `fb.c` statics). Found two
-   port crashes, F6 and F7 → Q8. `kb/demo-solver.md` §8, §10.
+   port crashes, F6 and F7 → fixed on master `cf9b4f1`. `kb/demo-solver.md` §8, §10.
 5. **[solver] Observation.** Structured dump: submap tiles classified (solid/ladder/deadly/exit),
    Rick (pos, state), entities (type, pos, alive, what triggers them), counters (lives,
    bullets, bombs, score, tick). Sourced from the code + `kb/entities.md`/`algo-*.md`.
@@ -179,11 +179,9 @@ tagged **[master]** or **[solver]**.
    loop (`game.c:403-435` currently resets to map 0 and goes to game over). Check: two
    consecutive attract loops are identical.
 
-**Open questions (user):** (Q7, F1: fix it, done.)
-- **Q8 — F6 / F7, port crashes reachable in normal play** (`kb/demo-solver.md` §10,
-  reproducers in `kb/demo-solver/`). They end a solver run. Fix them on `master` first:
-  check the original in Ghidra, fix, add a regression replay. Or only catch them in
-  `xrick-core`, treating that branch as a dead end.
+**Open questions (user):** none. (Q7, F1: fix it, done. Q8, F6/F7: fix on `master` first.
+✅ **FIXED 2026-09-25, master `cf9b4f1`**, merged into `solver` (`e2cfd92`) plus the snapshot
+update (`7efa950`). Causes and checks: `kb/demo-solver.md` §10. Follow-ups F8, F9 not done.)
 
 ### T42 — RD2: the rd1 host extras still missing ☐ **registered 2026-09-24 — do NOT implement yet (user)**
 

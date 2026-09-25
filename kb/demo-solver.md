@@ -54,6 +54,7 @@ Limits:
 | `env_changeSubmap` | env.c | 1 | — | write-only: written at `env.c:69`, `maps.c:162`, never read |
 | `e_rick_state` | e_rick.c | 1 | yes (STOP bit cleared) | `ent_reset` clears `E_RICK_STSTOP` |
 | `e_rick_atExit` `e_rick_stop_x` `e_rick_stop_y` | e_rick.c | 1/2/2 | yes | |
+| `e_rick_exitDir` | e_rick.c | 1 | yes | the edge rick left by; `map_chain` matches it (since F7, master `cf9b4f1`) |
 | e_rick statics `scrawl trigger offsx ylow offsy seq tumble_seq` | e_rick.c:41-51 | 1–2 each | yes | |
 | e_rick statics `save_crawl save_x save_y` | e_rick.c:54-55 | 1/2/2 | yes | death checkpoint (`e_rick_save`) |
 | `save_map_row` | game.c:116 | 1 | yes | death checkpoint |
@@ -208,19 +209,48 @@ exit's window [16, 18], and the trace enters submap 2 at step 943.
 ## 10. Port defects found by the fuzz (reachable in normal play)
 
 Reproducers in `kb/demo-solver/` (one `CONTROL_*` byte per step, 0xFF = new game in the
-same process): `xrick-core -submap <n> -inputs <file>`. Both happen with no snapshot
-involved, so they are in the game logic that ships on `master`. **Cause not established:
-the Ghidra MCP was down, so the original's behaviour has not been checked.**
+same process): `xrick-core -submap <n> -inputs <file>`. Both happened with no snapshot
+involved, so they were in the game logic that ships on `master`.
+✅ **Both FIXED 2026-09-25, master `cf9b4f1`**, causes read in Ghidra (ST `atari_ram.bin`,
+PC `ibmpc_cs.bin`).
 
 - **F6 — segfault.** `f6_submap40.in` (submap 0x27). ASan: out-of-bounds read of `map_map`
   in `u_envtest` (`util.c:151`), called from `e_them_t2_action2` (`e_them.c:698`). UBSan
-  also flags `sprites.c:228` (index 32 of a `U8[32]`). Last traced step: Rick dying, a
-  type-0x0F enemy (type 2) in slot 9 at x=34 walking left.
+  also flagged `sprites.c:228` (index 32 of a `U8[32]`, not investigated).
+  **Cause:** `x` in `e_them_t2_action2` became `S16` (R3.1), so `x < 0xe8` let a type-2
+  enemy walk to x < 0. At x = −6 the probe's column `(x+4) >> 3` as U16 is 0x1FFF.
+  - PC: the x move has a left bound (0x2AD3 `add al,[si+2] / jc`, 0x2AE8 `cmp al,0xe8 /
+    jnc`), which the port lost. Restored.
+  - ST: no bound (0x4D76C); the probe (0x4DA40) reads `0x4A17E + col + row*32` with no
+    check. Columns 0x1FFF–0x2001 land at `0x4C17D + row*32 + 0..2`, inside
+    `player_controller` (0x4C046–0x4C7E3). The only self-modifying code is at 0x45636, so
+    the bytes are constant. `util.c` `st_offgrid` holds them: 48 rows × 3, from
+    `atari_ram.bin`, rows 0x00 and 0x2F re-read in Ghidra. `render_sprites` despawns at
+    X < −8 (0x4B098) or > 0xF0 (0x4B0A6) via 0x4AC3E (type := 0, placement untouched).
+    Now done in `ent_action` for type-2 `e_them`. Result on the reproducer: the enemy walks
+    2, 0, −2, −4, the −6 probe comes back blocked, and it turns back.
 - **F7 — `sys_panic("(map_chain) can not find connector")`.** `f7_submap12.in`,
-  `f7_submap42.in`, `f7_submap5.in`. In all three the last step has Rick at x=2 (left
-  edge), climbing or jumping (`e_rick_state` 0x04 / 0x0C), with RIGHT held. Unverified
-  hypothesis: in the jump/climb branch of `e_rick.c` (around 589-603) left/right moves do
-  not update `game_dir`, while `map_chain` picks the connector by `game_dir`.
+  `f7_submap42.in`, `f7_submap5.in`: Rick at x=2 after leaving by the right edge while
+  climbing or jumping (`e_rick_state` 0x04 / 0x0C).
+  **Cause:** `map_chain` matched `game_dir` (Rick's facing), which the climbing moves never
+  update. Both originals match the edge Rick left by:
+  - PC `[0x7D77]`: written only by the exit stubs (0x19B4 = 0 left, 0x19C4 = 1 right; the
+    port had them commented out as `6dbd`), read only by the search (0x0D99). The search
+    loop (0x0E31) has no sentinel test.
+  - ST: side from X (0x49A3E–0x49A50). The sentinel (0x49A56) goes to 0x49B28:
+    reposition, same room again (0x499C2).
+  Fix: `e_rick_exitDir`, set at the four exits. ST: no match → same submap again. PC: the
+  panic stays, since the original has no defined behaviour there. The three reproducers
+  now leave through a real connector: 0x0A→0x0B, 0x28→0x29, 0x03→0x04.
 
-For the solver, both end the process. They must be fixed on `master`, or caught in
-`xrick-core`, before the phase 6 search.
+Checks after the fix: all four reproducers play to the end; 47 submaps × 3 seeds × 40
+rounds = 5640 restores and 5 all-submap runs, with 0 crashes and 0 mismatches; built-in demo
+trace byte-identical to before; SDL build warnings unchanged (230); PC build compiles.
+
+**Follow-ups, not done:**
+- **F8** — the ST's central X despawn (< −8, > 0xF0) is applied to type-2 `e_them` only.
+  Other kinds keep the port's own bounds, e.g. scripted traps restore `xsave` (`e_them.c`
+  ~897) where the ST would despawn off-screen. The ST's type-2 move also has no right bound;
+  the port keeps the PC's 0xE8. Unexamined.
+- **F9** (solver tool only) — `-trace` with an `-inputs` file that starts new games reopens
+  the trace without closing it, so the file gets NUL bytes.
