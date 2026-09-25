@@ -75,6 +75,101 @@ not what to do. The history of what each pass found is in `kb/byte-identity.md`.
 None of these blocks a reimplementation. `kb/` is not known to be missing anything
 structural.
 
+### T43 — Full-game RD1 attract demo, found by a solver driven by an LLM ☐ **PLAN 2026-09-25 — D1–D6 decided; F1 fixed, phases 1–3 DONE 2026-09-25**
+
+**Goal:** `-demo` plays RD1 from submap 0x00 to the end of the game (all 0x2F submaps) with
+no death. Priority: **reach every exit in a natural, efficient way**. Score (kills, bonuses) is
+low priority. Scripts end up in `src/rd1/dat_demo.c` through the existing `-record` format
+(T18, `kb/demo.md`). **RD1 only**; RD2 is out of scope.
+
+**Decisions (user, 2026-09-25):**
+- **D1 — self-contained submaps (Q1).** In demo mode, the random generator is reset to one
+  fixed value at the start of each submap segment (entry and restart after death), just as
+  the event clock is.
+- **D5 — seed value (Q5).** The generator's own start values: ST `st_rnd_a`/`st_rnd_b` :=
+  `0x121901F9`/`0x160566F9`, PC `e_them_rndseed`/`e_them_rndnbr` := `0`/`0` — each demo
+  submap behaves as on a fresh boot.
+- **D6 — keep the chaining (Q6).** Only the random generator is reset. Bullets/bombs, score
+  and other carried state flow from one submap to the next as in normal play, so submaps are
+  solved in order and validated as one chain (phases 9–10).
+- **D2 — solver redoes everything (Q2).** The 4 human scripts (0x00–0x03) are erased.
+- **D3 — objective, in order (Q3):** no death (hard) > exit reached (hard) > natural and
+  efficient (few ticks, few input toggles, no jitter) > score (low).
+- **D4 — RD1 only (Q4).**
+
+**Approach (hybrid):** a headless, deterministic game core with snapshot/restore. A C solver
+searches the input sequences. An MCP server exposes core + solver. An LLM agent chooses
+per-submap sub-goals and handles failures. No screen scraping.
+
+**Facts this plan rests on (checked 2026-09-25):**
+- Demo clock = `CTRL_ACTION` passes, reset on submap entry and on death (`src/demo.c:131`,
+  `src/rd1/game.c:444/693/891`).
+- **Random generator depends on the platform build** (`src/rd1/e_them.c`). The default is
+  `PLATFORM_ST` (`include/config.h:38-39`):
+  - ST: `st_rnd_a`/`st_rnd_b` (`e_them.c:42-43`, statics initialised to `0x121901F9`/
+    `0x160566F9`), advanced only when an enemy asks for a random turn (`e_them.c:669-674`).
+  - PC: `e_them_rndseed` (`e_them.c:34`, `++` every logic step at `game.c:533`) +
+    `e_them_rndnbr` (`e_them.c:39`), used only under `#ifndef PLATFORM_ST` (`e_them.c:406`).
+  - No other `rnd`/`rand` source in `src/rd1/*.c`, `src/*.c`, `include/rd1` (grep).
+  - None is ever reset, so D1 is a port change for demo mode only.
+- Still carried from one submap to the next, even with D1: bullets/bombs (set to 6/6 only
+  at a new map `game.c:652-653`, in `restart()` after a death, and by ammo boxes
+  `e_box.c:165-167`) and score. Rick's entry position and entity state on entry: **not yet
+  checked**.
+- `game_save()` (`src/rd1/game.c:908`) saves only Rick + `map_frow`. It is a death checkpoint,
+  not a snapshot.
+- Among `src/rd1/*.c`, only `syssnd.c` includes SDL. Game logic looks separable from the host.
+  Not yet proven for headers and link-time dependencies.
+
+**Phases** (each ends with a check; one gate before scaling):
+1. **State audit.** List every mutable variable the RD1 game logic touches: globals, file
+   `static`s, function `static` locals (e.g. `e_them.c:411-431`). Mark which ones carry across
+   a submap entry. Output: `kb/demo-solver.md` state table. Check: cross-reference with
+   Ghidra/`kb/memory_map.md` so nothing is missed.
+   ✅ **DONE 2026-09-25** — `nm` over a fresh `-O0 -DPLATFORM_ST` WSL build: 230 writable
+   symbols classified L/K/H/D. The snapshot is about 5 KB of class L. Cross-checked against
+   `kb/data-structures.md` and `atari_ram.bin`, not Ghidra (MCP down). Findings F1–F4 in
+   `kb/demo-solver.md` §7. **F1: the ST port lacks the original's per-frame
+   `update_prng` (`bsr` at `0x4DD3A`) → Q7.** Q7 answered by the user: fix it.
+   ✅ **F1 FIXED 2026-09-25**, port commit `7b601ba` (`e_them_rndstep()` also once per
+   `CTRL_ACTION`). Consequence F5: the 4 human scripts no longer play through (D2 replaces them).
+2. **Seed reset (D1).** At every `demo_enterSegment` call site, in `-demo`/`-record` only,
+   reset the active platform's generator. Check: the same submap played twice from the same
+   entry state gives identical traces.
+   ✅ **DONE 2026-09-25**, port commit `7be9851`: `demoset_t.enter` hook → `e_them_rndreset()`,
+   plus `-trace <file>`. Check run with the phase 3 core: `-demo` with the generator
+   scrambled before the game gives a byte-identical trace over 1947 steps, 5 restarts included.
+3. **Headless core.** Build target `xrick-core` (WSL): game logic without video/sound/timing,
+   API `init(submap, entry state)`, `step(ctrlmask)` = one logic tick. Check: a script
+   recorded in the SDL build replays tick-exact headless (Rick position trace).
+   ✅ **DONE 2026-09-25** — `make core`; API `game_hlStart/hlStep/hlSteps`. The game starts
+   from a new game (`init(submap, entry state)` comes with the phase 4 snapshots). Check: the
+   SDL build and `xrick-core`, both `-demo -trace`, give byte-identical traces over the whole
+   built-in demo: 1947 steps, 1955 lines (port commit `0ede083`). About 350 000 steps/s. Details: `kb/demo-solver.md` §8.
+4. **Snapshot / restore / hash** over the phase 1 state table. Check: random-input fuzz,
+   snapshot at t, run to t+n, restore, re-run, hashes equal at every tick. Measure steps/s.
+5. **Observation.** Structured dump: submap tiles classified (solid/ladder/deadly/exit),
+   Rick (pos, state), entities (type, pos, alive, what triggers them), counters (lives,
+   bullets, bombs, score, tick). Sourced from the code + `kb/entities.md`/`algo-*.md`.
+6. **Solver (C, in-process).** Macro-actions = control mask held k ticks. Beam search with
+   state-hash dedup. Heuristic = distance field to the current sub-goal. Cost per D3.
+   Output = `demoevt_t` list. Post-pass: merge/remove redundant toggles, reject jitter
+   (left-right flicker, needless jumps) so the play looks human.
+7. **MCP server.** Tools: `load(submap, entry state)`, `observe`, `step`, `snapshot/restore`,
+   `solve(goals, constraints, budget)`, `replay(script)`, `commit(submap, script)`,
+   `export()`. The agent never sees pixels.
+8. **Pilot gate: submaps 0x00–0x03.** Agent + solver produce scripts; the user watches them.
+   Record solver time and LLM calls per submap. **Go/no-go with the user before scaling.**
+9. **Full run.** Submaps in order, commit each. If submap N cannot be solved from its entry
+   state (ammo), go back to N-1 with a constraint added ("arrive with ≥ k bombs").
+   Limit how far back this can go.
+10. **Integration.** Erase the human scripts (D2), export to `dat_demo.c`, play the full
+   game in the SDL build (Windows + WSL), watched by the user. Handle end of game → attract
+   loop (`game.c:403-435` currently resets to map 0 and goes to game over). Check: two
+   consecutive attract loops are identical.
+
+**Open questions (user):** none. (Q7, F1: fix it, done.)
+
 ### T42 — RD2: the rd1 host extras still missing ☐ **registered 2026-09-24 — do NOT implement yet (user)**
 
 RD2 (`-rd 2`) runs, with correct sound and keyboard input (user play test, Windows, 2026-09-24).
