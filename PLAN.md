@@ -75,7 +75,7 @@ not what to do. The history of what each pass found is in `kb/byte-identity.md`.
 None of these blocks a reimplementation. `kb/` is not known to be missing anything
 structural.
 
-### T43 — Full-game RD1 attract demo, found by a solver driven by an LLM ☐ **PLAN 2026-09-25 — D1–D6 decided; F1 fixed, phases 1–3 DONE 2026-09-25**
+### T43 — Full-game RD1 attract demo, found by a solver driven by an LLM ☐ **PLAN 2026-09-25 — D1–D6 decided; F1 fixed, phases 1–5 DONE 2026-09-25; Q8 open**
 
 **Goal:** `-demo` plays RD1 from submap 0x00 to the end of the game (all 0x2F submaps) with
 no death. Priority: **reach every exit in a natural, efficient way**. Score (kills, bonuses) is
@@ -121,8 +121,12 @@ per-submap sub-goals and handles failures. No screen scraping.
 - Among `src/rd1/*.c`, only `syssnd.c` includes SDL. Game logic looks separable from the host.
   Not yet proven for headers and link-time dependencies.
 
+**Branches (user, 2026-09-25):** port repo `master` = the version for end users; `solver` =
+master + tooling that is never shipped and never merged back (MEMORY.md §11). Each step is
+tagged **[master]** or **[solver]**.
+
 **Phases** (each ends with a check; one gate before scaling):
-1. **State audit.** List every mutable variable the RD1 game logic touches: globals, file
+1. **[docs] State audit.** List every mutable variable the RD1 game logic touches: globals, file
    `static`s, function `static` locals (e.g. `e_them.c:411-431`). Mark which ones carry across
    a submap entry. Output: `kb/demo-solver.md` state table. Check: cross-reference with
    Ghidra/`kb/memory_map.md` so nothing is missed.
@@ -131,44 +135,55 @@ per-submap sub-goals and handles failures. No screen scraping.
    `kb/data-structures.md` and `atari_ram.bin`, not Ghidra (MCP down). Findings F1–F4 in
    `kb/demo-solver.md` §7. **F1: the ST port lacks the original's per-frame
    `update_prng` (`bsr` at `0x4DD3A`) → Q7.** Q7 answered by the user: fix it.
-   ✅ **F1 FIXED 2026-09-25**, port commit `7b601ba` (`e_them_rndstep()` also once per
+   ✅ **[master] F1 FIXED 2026-09-25**, port commit `7b601ba` (`e_them_rndstep()` also once per
    `CTRL_ACTION`). Consequence F5: the 4 human scripts no longer play through (D2 replaces them).
-2. **Seed reset (D1).** At every `demo_enterSegment` call site, in `-demo`/`-record` only,
+2. **[master] Seed reset (D1).** At every `demo_enterSegment` call site, in `-demo`/`-record` only,
    reset the active platform's generator. Check: the same submap played twice from the same
    entry state gives identical traces.
    ✅ **DONE 2026-09-25**, port commit `7be9851`: `demoset_t.enter` hook → `e_them_rndreset()`,
    plus `-trace <file>`. Check run with the phase 3 core: `-demo` with the generator
    scrambled before the game gives a byte-identical trace over 1947 steps, 5 restarts included.
-3. **Headless core.** Build target `xrick-core` (WSL): game logic without video/sound/timing,
+3. **[solver] Headless core.** Build target `xrick-core` (WSL): game logic without video/sound/timing,
    API `init(submap, entry state)`, `step(ctrlmask)` = one logic tick. Check: a script
    recorded in the SDL build replays tick-exact headless (Rick position trace).
    ✅ **DONE 2026-09-25** — `make core`; API `game_hlStart/hlStep/hlSteps`. The game starts
    from a new game (`init(submap, entry state)` comes with the phase 4 snapshots). Check: the
    SDL build and `xrick-core`, both `-demo -trace`, give byte-identical traces over the whole
    built-in demo: 1947 steps, 1955 lines (port commit `0ede083`). About 350 000 steps/s. Details: `kb/demo-solver.md` §8.
-4. **Snapshot / restore / hash** over the phase 1 state table. Check: random-input fuzz,
+4. **[solver] Snapshot / restore / hash** over the phase 1 state table. Check: random-input fuzz,
    snapshot at t, run to t+n, restore, re-run, hashes equal at every tick. Measure steps/s.
-5. **Observation.** Structured dump: submap tiles classified (solid/ladder/deadly/exit),
+   ✅ **DONE 2026-09-25**, port commit `2c51de6`: 4960-byte snapshot; 5600 restores over
+   47 submaps × 3 seeds, 0 mismatches; about 40k steps/s with a hash per step, save 0.3 µs,
+   restore 0.8 µs. Fades skipped headless (their counters are `fb.c` statics). Found two
+   port crashes, F6 and F7 → Q8. `kb/demo-solver.md` §8, §10.
+5. **[solver] Observation.** Structured dump: submap tiles classified (solid/ladder/deadly/exit),
    Rick (pos, state), entities (type, pos, alive, what triggers them), counters (lives,
    bullets, bombs, score, tick). Sourced from the code + `kb/entities.md`/`algo-*.md`.
-6. **Solver (C, in-process).** Macro-actions = control mask held k ticks. Beam search with
+   ✅ **DONE 2026-09-25**, port commit `e4f8db9`: `xrick-core ... -dump` → JSON (counters,
+   Rick, entities + trigger boxes, marks, exits with row windows, tile classes). Checked
+   against the demo (mark → y, exit window → actual exit step). `kb/demo-solver.md` §9.
+6. **[solver] Solver (C, in-process).** Macro-actions = control mask held k ticks. Beam search with
    state-hash dedup. Heuristic = distance field to the current sub-goal. Cost per D3.
    Output = `demoevt_t` list. Post-pass: merge/remove redundant toggles, reject jitter
    (left-right flicker, needless jumps) so the play looks human.
-7. **MCP server.** Tools: `load(submap, entry state)`, `observe`, `step`, `snapshot/restore`,
+7. **[solver] MCP server.** Tools: `load(submap, entry state)`, `observe`, `step`, `snapshot/restore`,
    `solve(goals, constraints, budget)`, `replay(script)`, `commit(submap, script)`,
    `export()`. The agent never sees pixels.
-8. **Pilot gate: submaps 0x00–0x03.** Agent + solver produce scripts; the user watches them.
+8. **[solver] Pilot gate: submaps 0x00–0x03.** Agent + solver produce scripts; the user watches them.
    Record solver time and LLM calls per submap. **Go/no-go with the user before scaling.**
-9. **Full run.** Submaps in order, commit each. If submap N cannot be solved from its entry
+9. **[solver] Full run.** Submaps in order, commit each. If submap N cannot be solved from its entry
    state (ammo), go back to N-1 with a constraint added ("arrive with ≥ k bombs").
    Limit how far back this can go.
-10. **Integration.** Erase the human scripts (D2), export to `dat_demo.c`, play the full
+10. **[master] Integration.** Erase the human scripts (D2), export to `dat_demo.c`, play the full
    game in the SDL build (Windows + WSL), watched by the user. Handle end of game → attract
    loop (`game.c:403-435` currently resets to map 0 and goes to game over). Check: two
    consecutive attract loops are identical.
 
-**Open questions (user):** none. (Q7, F1: fix it, done.)
+**Open questions (user):** (Q7, F1: fix it, done.)
+- **Q8 — F6 / F7, port crashes reachable in normal play** (`kb/demo-solver.md` §10,
+  reproducers in `kb/demo-solver/`). They end a solver run. Fix them on `master` first:
+  check the original in Ghidra, fix, add a regression replay. Or only catch them in
+  `xrick-core`, treating that branch as a dead end.
 
 ### T42 — RD2: the rd1 host extras still missing ☐ **registered 2026-09-24 — do NOT implement yet (user)**
 

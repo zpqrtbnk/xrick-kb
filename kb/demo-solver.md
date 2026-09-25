@@ -162,3 +162,65 @@ Checks run 2026-09-25 (ST build):
   unscrambled run over all 1947 steps, including 5 restarts after deaths. Without `-demo`
   the scrambled generator is kept, as it is in normal play.
 - **Speed.** 100 000 steps in 0.29 s (Rick idle in submap 0x00), about 350 000 steps/s.
+
+**Snapshot / restore / hash (T43 phase 4, solver only, commit `2c51de6`).**
+`src/headless/hl_state.[ch]`: `hl_stateSave/Load` copy the class L regions of §3
+(4960 bytes; `xrick-core -list` prints them), `hl_stateHash` is FNV-1a 64 over them plus
+the class K tables. File statics come from `game_hlRegions`, `e_rick_hlRegions` and
+`e_them_hlRegions`, all `#ifdef HEADLESS`.
+- **Fades are skipped headless** (`game.c`, `#ifdef HEADLESS`). The `fb_fadeIn/Out`
+  counters are function statics in `fb.c`, which the snapshot cannot hold. A fade left
+  half-done in one timeline changed the frame on which the next one ended, so
+  `game_state` differed at a step boundary: 0x18 `GAMEOVER` against 0x09
+  `FADEOUT__GAMEOVER`. That was the only region that differed. Fades only set the gamma. A
+  game over now stays in `FADEOUT__GAMEOVER`.
+- **Check (`xrick-core -fuzz`)**, per round: snapshot S; random inputs I (64 steps, hash
+  each step); other inputs J (64 steps, deaths and game overs included); restore S; hash
+  must equal S's; replay I; every hash must match. 47 submaps × 3 seeds × 40 rounds =
+  **5600 restores, 0 mismatches.** The fuzz reaches every submap 0x00–0x2E. Only failures:
+  F6 and F7, both reproduced without any restore.
+- **Speed:** about 40 000 steps/s with a hash every step; save 0.3 µs, restore 0.8 µs.
+- `-log <file>` writes the inputs a plain game plays to the end of a round, with byte
+  0xFF = new game in the same process. `-inputs <file>` replays one.
+
+## 9. State dump (T43 phase 5, solver only, commit `e4f8db9`)
+
+`xrick-core ... -dump` prints one JSON object on stdout (`src/headless/hl_dump.c`):
+
+| Key | Content |
+|---|---|
+| `step`, `status` | logic steps since the game started; `running` / `game_over` / `game_completed` |
+| `map`, `submap`, `frow` | `env_map`, `env_submap`, `map_frow` (submap tile row at `map_map` row 0) |
+| `lives bombs bullets score` | `env_*` |
+| `timer` | escape timer: `e_sbonus_counting/counter/bonus` |
+| `rick` | x, y, w, h, `dir`, decoded `e_rick_state`, `at_exit` |
+| `entities` | live slots except Rick: `n`, `kind` (from `n & 0x7f`, as `ent_action` dispatches it), `lethal` (`n & 0x80`), box, sprite, mark, decoded flags, `trigger` box `[x0,y0,x1,y1)` (`u_trigbox`) when a TRIG flag is set |
+| `marks` | this submap's placements: submap tile `row`, `x`, kind, `done` (`MAP_MARK_NACT`) |
+| `exits` | `map_chain`'s connectors: `side`, `rows` = the `map_map` tile rows where `y >> 3` must lie (they move with `frow`), `to` = submap or `next_map` |
+| `tiles` | `map_map` rows 0x00–0x27, one class character per tile (`tiles_legend`); screen = rows 0x08–0x1F |
+
+Coordinates are pixels in `map_map` space; tile = (x >> 3, y >> 3). The exit test is
+`x < 0` (left) or `x >= 0xE8` (right) with `dir == game_dir`.
+Checked on the built-in demo: each entity's y from its mark matches (mark 8: row 45,
+frow 16 → y 235); at step 942 Rick (row 17, facing right, x 230) is inside the right
+exit's window [16, 18], and the trace enters submap 2 at step 943.
+
+## 10. Port defects found by the fuzz (reachable in normal play)
+
+Reproducers in `kb/demo-solver/` (one `CONTROL_*` byte per step, 0xFF = new game in the
+same process): `xrick-core -submap <n> -inputs <file>`. Both happen with no snapshot
+involved, so they are in the game logic that ships on `master`. **Cause not established:
+the Ghidra MCP was down, so the original's behaviour has not been checked.**
+
+- **F6 — segfault.** `f6_submap40.in` (submap 0x27). ASan: out-of-bounds read of `map_map`
+  in `u_envtest` (`util.c:151`), called from `e_them_t2_action2` (`e_them.c:698`). UBSan
+  also flags `sprites.c:228` (index 32 of a `U8[32]`). Last traced step: Rick dying, a
+  type-0x0F enemy (type 2) in slot 9 at x=34 walking left.
+- **F7 — `sys_panic("(map_chain) can not find connector")`.** `f7_submap12.in`,
+  `f7_submap42.in`, `f7_submap5.in`. In all three the last step has Rick at x=2 (left
+  edge), climbing or jumping (`e_rick_state` 0x04 / 0x0C), with RIGHT held. Unverified
+  hypothesis: in the jump/climb branch of `e_rick.c` (around 589-603) left/right moves do
+  not update `game_dir`, while `map_chain` picks the connector by `game_dir`.
+
+For the solver, both end the process. They must be fixed on `master`, or caught in
+`xrick-core`, before the phase 6 search.

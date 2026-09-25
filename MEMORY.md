@@ -511,3 +511,19 @@ Two games, two reverse projects, one repo. **Do not mix their addresses** — RD
   - **RAM-exact is not "works"** (2026-09-24): traces and `RD2_SHOT` read `fb`/RAM and ran `-nosound`, so a black window
     (host gamma 0) and a sound engine uploaded as zeros (init-order bug) both slipped through. Check the real window
     (Windows: `PrintWindow`, flag 2) and the audio (`SDL_AUDIO_DRIVER=disk`, `SDL_AUDIO_DISK_OUTPUT_FILE`, S16) too.
+
+## 11. Demo solver (T43) — two branches, two audiences (registered 2026-09-25, user)
+
+The port repo (`xrick/xrick/`) has two branches. **Keep every change on the right one.**
+
+- **`master` = the version for end users.** Only work that matters to a player goes
+  here: fidelity fixes (T43 F1, `7b601ba`), the demo-mode per-submap reseed (phase 2,
+  `7be9851`), and at the end the generated `src/rd1/dat_demo.c`. `-trace` also landed
+  here, in `7be9851`; the user has not yet said whether it stays.
+- **`solver` = master + tooling that is NEVER shipped:** the headless core `xrick-core`
+  (`make core`, `src/headless/`, `-DHEADLESS`), snapshot/restore/hash, state dump,
+  solver, MCP server. Never merged into master. Solver-only code lives in
+  `src/headless/` or behind `#ifdef HEADLESS`, so master's sources stay clean.
+- Rule of thumb: would a player notice it or need it? → master (commit there, then
+  rebase or merge `solver` onto it). Otherwise → solver.
+- Each T43 step in `PLAN.md` is tagged **[master]** or **[solver]**.
