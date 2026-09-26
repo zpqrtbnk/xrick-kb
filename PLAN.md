@@ -75,7 +75,7 @@ not what to do. The history of what each pass found is in `kb/byte-identity.md`.
 None of these blocks a reimplementation. `kb/` is not known to be missing anything
 structural.
 
-### T43 — Full-game RD1 attract demo, found by a solver driven by an LLM ☐ **PLAN 2026-09-25 — D1–D6 decided; F1 fixed, phases 1–5 DONE, F6/F7 fixed 2026-09-25**
+### T43 — Full-game RD1 attract demo, found by a solver driven by an LLM ☐ **PLAN 2026-09-25 — D1–D6 decided; F1 fixed, phases 1–5 DONE, F6/F7 fixed 2026-09-25; phase 6 in progress (0x00–0x03 solved) 2026-09-26**
 
 **Goal:** `-demo` plays RD1 from submap 0x00 to the end of the game (all 0x2F submaps) with
 no death. Priority: **reach every exit in a natural, efficient way**. Score (kills, bonuses) is
@@ -166,6 +166,11 @@ tagged **[master]** or **[solver]**.
    state-hash dedup. Heuristic = distance field to the current sub-goal. Cost per D3.
    Output = `demoevt_t` list. Post-pass: merge/remove redundant toggles, reject jitter
    (left-right flicker, needless jumps) so the play looks human.
+   🟡 **IN PROGRESS 2026-09-26**, port commit `bb999b1`: `xrick-core -chain <n>` solves
+   submaps 0x00–0x03 (the pilot scope) in one run, with no map-specific hints: 1633 steps,
+   6 lives, 3.5 min. Checked by a fresh `-reseed -inputs` replay. Design and what each
+   part fixed: `kb/demo-solver.md` §11. Open: the other submaps (0x04+ being tried), the
+   `demoevt_t` export (goes with phase 10), a quantified "natural look".
 7. **[solver] MCP server.** Tools: `load(submap, entry state)`, `observe`, `step`, `snapshot/restore`,
    `solve(goals, constraints, budget)`, `replay(script)`, `commit(submap, script)`,
    `export()`. The agent never sees pixels.

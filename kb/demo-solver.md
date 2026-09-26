@@ -254,3 +254,66 @@ trace byte-identical to before; SDL build warnings unchanged (230); PC build com
   the port keeps the PC's 0xE8. Unexamined.
 - **F9** (solver tool only) — `-trace` with an `-inputs` file that starts new games reopens
   the trace without closing it, so the file gets NUL bytes.
+
+## 11. Solver (T43 phase 6, solver only, commit `bb999b1`)
+
+`src/headless/hl_solve.[ch]`; CLI `xrick-core -solve | -chain <n>` with `-beam` (128),
+`-maxsteps` (3000), `-to`, `-out <file>` (one control mask per step, replayed by
+`xrick-core -reseed -inputs`), `-save`/`-load` (snapshot files, same build only),
+`-stuck <file>` (the best state of a failed search), `-noclosures`, `-v` (up to 3).
+
+**Setting.** The generator is reseeded at every segment entry (`game_hlReseed`), as a
+demo plays (D1). A submap starts at its tick 0 (`game_hlSettle` after a new game, or the
+step after an exit). Every `game_hlStep` is exactly one `CTRL_ACTION`: headless
+fade-in now ends the frame, so a new map's tick 0 is its own step.
+
+**Goal.** `hl_solveTarget`: the connector to the highest submap above this one, else
+the next map. Not "next map first": submap 0x00 has a next-map connector on its left
+edge at Rick's start rows. Pruned: Rick zombie/dead, fewer lives, game over, any other
+submap.
+
+**Search** (what worked, in the order it was needed):
+- *Time-synchronous beam.* States go into buckets by step count. Each bucket keeps its
+  `beam` best, at most 4 per Rick tile (a plain beam collapsed onto one spot). Waiting and
+  56-step dynamite programs only compete with states of the same age. A plain beam ranked
+  by steps + distance always dropped them, and could not wait for a bomb or a trap.
+- *Programs.* One mask held 2/4/8 steps (FIRE+DOWN excluded). Dynamite: drop, run
+  left/right 12 or 24 steps, stand until 56 steps (fuse 34 + explosion 20, lethal 7).
+  Skipped while a bomb ticks or none are left.
+- *Distance.* Dijkstra backwards from the exit rows, over:
+  - the submap's block rows plus one `map_map` height (0x28 rows): `map_expand` reads past
+    the submap's own blocks, and submap 0x01 is left along rows beyond its 0x6c own rows;
+  - Rick's footprint, anchor `((x+4)>>3, y>>3)`, 2 wide × 3 tall, or 2 tall where he
+    crawls (the 0x03 tunnel);
+  - one-way floors crossed upwards only, except at ladder tops;
+  - a climb up costing 3 without a ladder.
+- *Ranking.* f = 4 × distance + 2 × control changes − 8 × placements done
+  (`MAP_MARK_NACT`) − 32 × traps defused (spawned lethal, no longer lethal) + 64 while a
+  wall entity stands (slot 0, `ENT_FLG_STOPRICK`).
+- *Death map (closures).* After a failed search, tiles with ≥ 32 deaths and ≥ 4 deaths
+  per surviving visit are closed and the search restarts, at most 8 times. The earlier
+  50% rule also closed an enemy's beat on 0x01's only way on. Undone if no visited tile
+  can reach the exit any more.
+- *Stuck* = no distance gain for 400 steps.
+- *Polish:* short input runs take a neighbour's mask while the replay still reaches the
+  exit.
+
+**Pilot result (submaps 0x00–0x03, one run, 3.5 min):**
+
+| Submap | Steps | Input runs | Search | Notes |
+|---|---|---|---|---|
+| 0x00 | 287 | 7 | 18 s | |
+| 0x01 | 440 | 22 | 97 s | closure of the trap shaft needed; human demo took 640 steps |
+| 0x02 | 138 | 5 | 15 s | |
+| 0x03 | 768 | 32 | 77 s | two dynamite puzzles: stone head (wall), two corridor traps |
+
+1633 steps, 6 lives kept, score 5637. `xrick-core -reseed -inputs` of the output, in a
+fresh process, enters 0x01/0x02/0x03/0x04 at steps 287/727/865/1633. Not yet played
+through the SDL build's demo engine (phase 10 export).
+
+**What the solver is not told:** nothing map-specific. Two things were found by
+experiment from `-stuck` snapshots, on submap 0x03:
+- Rick cannot fire while crawling, so the stone head must be bombed standing, from the
+  right.
+- The corridor traps each need their own bomb, and lose `ENT_LETHAL` instead of
+  disappearing.
