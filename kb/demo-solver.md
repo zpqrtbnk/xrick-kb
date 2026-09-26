@@ -321,3 +321,40 @@ experiment from `-stuck` snapshots, on submap 0x03:
 **Beyond the pilot (same build, from 0x04's start snapshot, 2026-09-26):** 0x04 → 488
 steps (16 runs, 57 s) and 0x05 → 316 steps (12 runs, 50 s) solved. **0x06 not found**
 after 507 s (every restart used). Not examined yet.
+
+### 11.1 Session 2026-09-26 (port commits `ff47a40` … `501fdaa`)
+
+**End to end, pilot:** `xrick-core -reseed -inputs <solution> -record <file>` makes the demo
+engine write `dat_demo.c` (record mode reseeds on segment entry, as the solver assumes).
+The SDL build with that file, `xrick -demo -trace`, gives a byte-identical trace to the
+headless replay over all of 0x00–0x03: 1637 lines, submaps entered at steps 287 / 727 /
+865 / 1633. Files: `kb/demo-solver/pilot_dat_demo.c`, `pilot_inputs.bin`.
+
+**Solver changes, each forced by a submap:**
+- *Jumps in the field* (0x06): states (anchor, k), k = rows risen since standing or on a
+  ladder, at most 4 (offsy −0x580, +0x80 a step: 33 px). 3 made 0x06 unreachable.
+- *Walls in the field* (0x03, 0x06): one field per subset of standing wall placements
+  (`ENT_FLG_STOPRICK`). Entering a standing wall costs 16 tiles, once. A wall stands while
+  out of view (ONCE traps respawn — ST too, `scripted_trap_update` PATH_END) or while in
+  slot 0 at its spawn point. Replaced a slot-0 penalty that kept the beam away from walls.
+- *Dynamite programs* start with 2 idle steps: Rick cannot fire the step after crawling
+  (`scrawl`). They end at 36 steps (before the blast; 0x07) or 58 (after it; 0x03).
+- *0x07's exit wall slides* along its row at 8 px/step when blown. Found from a `-stuck`
+  state: retreat 18–24 steps, jump at step 36–39. Bomb-in-play states get a quarter of the
+  beam and are ranked among themselves by clearance from the bomb.
+- *Retries escalate:* first the dead end (3×3 around the stuck tile) is closed, deadly
+  tiles from the second failure on.
+- *Tried and dropped:* drop-and-escape programs; a value per bomb held (both broke 0x06
+  / 0x07).
+- `-distance`, `-record`, `-save` after `-inputs`, jitter count (runs < 4 steps).
+
+**Results.** From start snapshots: 0x03 610, 0x06 947, 0x07 712 steps. One chain from a
+new game: 0x00–0x05 in 2268 steps, then 0x06 fails with **0 bombs** left (0x03's solution
+used more dynamite than before).
+
+**Chain backtracking** (`hl_solveMinBombs`, commits `175dc03`, `501fdaa`): when submap s
+fails, s−1 is re-solved keeping more bombs.
+- First version reset later requirements and cycled (0x03–0x06 four times, over an hour).
+  Fixed; the fixed version has not been re-run.
+- Open: a failed search costs 2–25 min, so backtracking is slow. Whether 0x04/0x05 can
+  pass a bomb through is unknown: 0x04 failed keeping 1 in 450 s.

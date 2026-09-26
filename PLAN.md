@@ -169,7 +169,7 @@ tagged **[master]** or **[solver]**.
    🟡 **IN PROGRESS 2026-09-26**, port commit `bb999b1`: `xrick-core -chain <n>` solves
    submaps 0x00–0x03 (the pilot scope) in one run, with no map-specific hints: 1633 steps,
    6 lives, 3.5 min. Checked by a fresh `-reseed -inputs` replay. Design and what each
-   part fixed: `kb/demo-solver.md` §11. 0x04 and 0x05 also solve; 0x06 does not yet. Open: 0x06 and on, the
+   part fixed: `kb/demo-solver.md` §11. 0x04–0x07 solve from their start snapshots; one chain from a new game reaches 0x06 with no bomb left (backtracking on bombs added, §11.1). Open: bomb budgeting across submaps, 0x08 and on, the
    `demoevt_t` export (goes with phase 10), a quantified "natural look".
 7. **[solver] MCP server.** Tools: `load(submap, entry state)`, `observe`, `step`, `snapshot/restore`,
    `solve(goals, constraints, budget)`, `replay(script)`, `commit(submap, script)`,
