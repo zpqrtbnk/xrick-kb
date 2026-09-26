@@ -358,3 +358,31 @@ fails, s−1 is re-solved keeping more bombs.
   Fixed; the fixed version has not been re-run.
 - Open: a failed search costs 2–25 min, so backtracking is slow. Whether 0x04/0x05 can
   pass a bomb through is unknown: 0x04 failed keeping 1 in 450 s.
+
+## 12. MCP server (T43 phase 7, solver only, port commit `d5dcdce`)
+
+`src/headless/mcp_server.py`: MCP over stdio (newline JSON-RPC, no dependencies), started
+by Claude Code through `.mcp.json` (`wsl -e python3 …/mcp_server.py`). Each call runs
+`xrick-core` (`make core` first) on snapshot files in `xrick/xrick/xrick/build.mcp/`
+(ignored by git). Env: `XRICK_CORE`, `XRICK_MCP_WORK`.
+
+**States.** Every tool works on a state: a snapshot at a step boundary, with its parent
+and the inputs that led there. The timeline of a state (all inputs from the new game)
+is what `export` turns into `dat_demo.c`.
+
+| Tool | What it does |
+|---|---|
+| `new_game` | new game settled at the first submap's tick 0 (`-chain 0 -save`); optional `submap` (not exportable) |
+| `observe` | the `-dump` JSON plus the solver's `distance` line; `full=false` drops tiles and marks |
+| `step` | play `[[controls, steps], …]` (`"RIGHT"`, `"UP\|LEFT"`, `"FIRE\|DOWN"`, `"NONE"`) → new state |
+| `solve` | the solver to the forward exit, or to `waypoint` `[row, col]`; hints `min_bombs`, `forbid` `[[r0,c0,r1,c1],…]`, `beam`, `max_steps`, `no_closures` → new state |
+| `list_states` | id, parent, steps, note |
+| `export` | the timeline → `dat_demo.c` via the demo recorder (`-reseed -inputs … -record`) |
+
+**Coordinates** for waypoints and forbid are anchors in submap tiles: row = `(y>>3)+frow`,
+col = `(x+4)>>3`, the same as `rick.anchor` in the dump. A tile row `i` of the dump's
+`tiles` is submap row `frow + i`.
+
+**Checked** (scripted session): new game → 20 steps right → `solve` to 0x01 (267 steps)
+→ `export` gives a `dat_demo.c` reaching 0x01 at step 287. Also launched from Windows
+(`wsl -e python3 …`). Claude Code picks up the new server after a restart or `/mcp`.

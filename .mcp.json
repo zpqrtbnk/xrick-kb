@@ -3,6 +3,10 @@
     "ghidra": {
       "command": "${HOME}/bin/uv",
       "args": ["run", "--directory", "${REVERSE}/ghidra/ghidra-mcp", "bridge-mcp-ghidra"]
+    },
+    "xrick": {
+      "command": "wsl",
+      "args": ["-e", "python3", "/mnt/d/d/reverse/xrick/xrick/xrick/src/headless/mcp_server.py"]
     }
   }
 }

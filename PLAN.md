@@ -171,7 +171,8 @@ tagged **[master]** or **[solver]**.
    6 lives, 3.5 min. Checked by a fresh `-reseed -inputs` replay. Design and what each
    part fixed: `kb/demo-solver.md` §11. 0x04–0x07 solve from their start snapshots; one chain from a new game reaches 0x06 with no bomb left (backtracking on bombs added, §11.1). Open: bomb budgeting across submaps, 0x08 and on, the
    `demoevt_t` export (goes with phase 10), a quantified "natural look".
-7. **[solver] MCP server.** Tools: `load(submap, entry state)`, `observe`, `step`, `snapshot/restore`,
+7. **[solver] MCP server.** ✅ **DONE 2026-09-26**, port commit `d5dcdce`, `.mcp.json` entry `xrick`
+   (`kb/demo-solver.md` §12). Planned tools: `load(submap, entry state)`, `observe`, `step`, `snapshot/restore`,
    `solve(goals, constraints, budget)`, `replay(script)`, `commit(submap, script)`,
    `export()`. The agent never sees pixels.
 8. **[solver] Pilot gate: submaps 0x00–0x03.** Agent + solver produce scripts; the user watches them.
