@@ -317,3 +317,7 @@ experiment from `-stuck` snapshots, on submap 0x03:
   right.
 - The corridor traps each need their own bomb, and lose `ENT_LETHAL` instead of
   disappearing.
+
+**Beyond the pilot (same build, from 0x04's start snapshot, 2026-09-26):** 0x04 → 488
+steps (16 runs, 57 s) and 0x05 → 316 steps (12 runs, 50 s) solved. **0x06 not found**
+after 507 s (every restart used). Not examined yet.
