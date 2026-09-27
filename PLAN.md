@@ -186,7 +186,9 @@ tagged **[master]** or **[solver]**.
    crouch, `kb/demo-solver.md` F10; map-1 export unchanged after it). 0x0A–0x11 then solved (F11 re-arm fix on master `4ad51b5`). **F12** (the ST moves x and y in
    one probe, master `9dd478d`) invalidates part of it: legs of 0x02, 0x03, 0x06, 0x07, 0x09,
    0x0A, 0x0B, 0x10, 0x11 no longer replay; the chain must be re-solved from 0x02
-   (`kb/demo-solver.md` F12). Paused before 0x12 at the user's request.
+   (`kb/demo-solver.md` F12). Re-solved with the new MCP `repair` tool (plus `trace`,
+   `validate`, trap scripts in `observe`, port `f8486bb`/`6f69bf1`): chain s204, 0x00–0x11,
+   12268 steps, ends at 0x12 with lives 6, bombs 5, bullets 5; validate 78/78. Paused before 0x12.
 10. **[master] Integration.** Erase the human scripts (D2), export to `dat_demo.c`, play the full
    game in the SDL build (Windows + WSL), watched by the user. Handle end of game → attract
    loop (`game.c:403-435` currently resets to map 0 and goes to game over). Check: two

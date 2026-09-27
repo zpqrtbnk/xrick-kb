@@ -303,6 +303,16 @@ trace byte-identical to before; SDL build warnings unchanged (230); PC build com
   the bullet crate), 0x11 (s116→s117). A full replay from a new game dies in 0x02 and is
   game over by 0x03. So the chain must be re-solved from 0x02; the legs still valid can be
   reused only if their entry state (position, lives, bombs, bullets) is reproduced.
+  **Re-solved 2026-09-27 with MCP `repair`** (old chain s4 … s117): new chain ends at **s204**,
+  0x12 tick 0, lives 6, bombs 5, bullets 5 — the old end exactly, score +50, 12268 steps (was
+  11842). Legs: most replayed as they were (0x04, 0x05, 0x08, 0x0C–0x0F whole, and the hand
+  sequences of 0x09/0x0B/0x10/0x11); re-solved from part of the old leg: 0x02, 0x03, 0x06, 0x07,
+  several 0x09 legs, 0x0A exit, 0x0B approach, two 0x10 crate legs, 0x11 exit. One leg by hand:
+  0x09 ladder top — the old run had shot the enemy_2 of the pillar room, the re-solve had not,
+  and it followed Rick up the ladder; shot at s148 (s150), then solved to the ladder top (s151).
+  A first run showed `repair` letting re-solved legs spend ammo (a bomb in 0x09, then 0x0A
+  short); fixed (`6f69bf1`): same or more bombs/bullets, min_bombs = the old end's. Checked:
+  `validate` legs and timeline, 78/78.
 
 ## 11. Solver (T43 phase 6, solver only, commit `bb999b1`)
 
