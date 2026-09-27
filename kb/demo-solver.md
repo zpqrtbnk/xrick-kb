@@ -436,6 +436,24 @@ col = `(x+4)>>3`, the same as `rick.anchor` in the dump. A tile row `i` of the d
 → `export` gives a `dat_demo.c` reaching 0x01 at step 287. Also launched from Windows
 (`wsl -e python3 …`). Claude Code picks up the new server after a restart or `/mcp`.
 
+**Added 2026-09-27 (port commit `f8486bb`)** — after F12 broke half the timeline:
+- `trace(state, inputs, every, max_lines, save)`: one line per step (or every n, doubled until
+  ≤ max_lines): counters, rick `[x, y, state, anchor row, anchor col]`, entities
+  `[slot, kind, x, y, lethal]`. Backed by `xrick-core -inputs … -steplog <file> [-every n]`.
+- `validate(state, mode)`: `legs` replays each leg from its parent's stored snapshot and compares
+  its end (submap, lives, bombs, bullets, rick x/y) with the stored one; `timeline` replays from
+  the new game and stops at the first difference.
+- `repair(old, from, onto, backoff, max_legs, beam, timeout)`: ports the legs after `from` up to
+  `old` onto `onto`. A leg that still does its job (same submap and lives; inside a submap, rick
+  within one tile of the old end) is kept; otherwise re-solved to the same goal (the next submap
+  with `min_bombs` = the old end's bombs, or the old end tile as a waypoint), first from `backoff`
+  (30) steps before its first life loss, then from the leg's start; a solver leg reuses its hints.
+- `observe`: every scripted trap carries `script` — `steps` `[frames, dx, dy]` from
+  `ent_entdata[].sni`, `awake`, and `at` `[step, frames into it]` when awake.
+- `solve` stores its hints (`waypoint`, `min_bombs`, …) in the state's metadata, for `repair`.
+Checked: `validate` reproduces the F12 map-1 result; `repair` of s3→s4 kept 46 of 138 steps and
+re-solved the rest to the old end (0x03, lives 6, bombs 6, bullets 5, x 2 y 133).
+
 ## 13. Ammo: restock points and ammo-only obstacles (phase 9)
 
 A map exit refills bombs and bullets to 6 (`game.c`, end of submap chain). Crates refill
