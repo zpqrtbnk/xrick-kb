@@ -268,6 +268,16 @@ trace byte-identical to before; SDL build warnings unchanged (230); PC build com
   crouch-then-UP from s25 now jumps; ST and PC warning counts unchanged (230/231); the
   map-1 export (s18, 4701 steps) is byte-identical after the fix. The solver finds it
   unaided (DOWN|LEFT then UP|LEFT are both in its mask set).
+- **F11 — the ST re-arms the gun every frame unless UP+FIRE are held; the port did not.**
+  Found 2026-09-27 on 0x0E (a second shot was needed: bridge trigger + falling enemy).
+  ST `0x4C094–0x4C0A6`: `andi.b #0x81 / cmp.b #0x81 / beq / clr.b shoot_debounce (0x4BF15)`,
+  every frame after the death check. All refs to 0x4BF15: 4BF4E (reset_player_state),
+  4C0A6, 4C4DC/4C4E8 (FIRE+UP test/set), 4C8FA (pose). PC trigger 0x7D86: only 0x175C read,
+  0x1766 set, 0x17C3 clear (FIRE without UP) = the port. ✅ **Fixed 2026-09-27, master
+  `4ad51b5`** (`PLATFORM_ST` only), merged into `solver`. Not done: the reset_player_state
+  clear (only matters with UP+FIRE held through a respawn). Impact on the timeline: map 1
+  (s18) replays identically; from 0x0A on a held FIRE+UP fired one more bullet, so
+  0x0A–0x0D were re-solved (s44 refreshed from replay; new chain s72 → …).
 
 ## 11. Solver (T43 phase 6, solver only, commit `bb999b1`)
 
@@ -400,3 +410,46 @@ col = `(x+4)>>3`, the same as `rick.anchor` in the dump. A tile row `i` of the d
 **Checked** (scripted session): new game → 20 steps right → `solve` to 0x01 (267 steps)
 → `export` gives a `dat_demo.c` reaching 0x01 at step 287. Also launched from Windows
 (`wsl -e python3 …`). Claude Code picks up the new server after a restart or `/mcp`.
+
+## 13. Ammo: restock points and ammo-only obstacles (phase 9)
+
+A map exit refills bombs and bullets to 6 (`game.c`, end of submap chain). Crates refill
+their kind to 6. Maps (from the `next_map` exits): 1 = 0x00–0x08, 2 = 0x09–0x13,
+3 = 0x14–0x25, 4 = 0x26–0x2E. Generated 2026-09-27 from `xrick-core -submap n -dump` marks
+(`kind` crate_*; traps whose only trigger is bomb / bullet). "Bomb-only" does not mean
+on the route: 0x09 (106) and 0x0B (134) were; the others are not checked yet.
+
+| submap | crates (row) | bomb-only traps | bullet-only traps |
+|---|---|---|---|
+| 0x03 | bullets r25 | 35 36 37 | |
+| 0x04 | bombs r69 | 51 | |
+| 0x06 | bombs r33, bullets r53 | 58 | |
+| 0x07 | bullets r45 | 72 | |
+| 0x08 | | 98 99 | |
+| 0x09 | | 106 | |
+| 0x0B | | 134 | |
+| 0x0D | bullets r41 | | |
+| 0x0E | bombs r81 | | 166 169 174 |
+| 0x0F | bullets r25 | 184 187 | |
+| 0x10 | bullets r53, bombs r81 | 193 | |
+| 0x12 | bombs r27 | | |
+| 0x13 | | 229 231 | |
+| 0x14 | | 246 247 | |
+| 0x15 | bombs r37, bullets r37 | | |
+| 0x17 | | 273–277 | |
+| 0x1A | bullets r65, bombs r73 | | |
+| 0x1C | bombs r85 | 317 318 320 | |
+| 0x1E | | 336 337 | |
+| 0x20 | bullets r43, bullets r81 | | |
+| 0x22 | bullets r85 | | |
+| 0x23 | bombs r57 | | |
+| 0x25 | bullets r21 | | |
+| 0x29 | bullets r26, bombs r38 | | |
+| 0x2A | | 468 | |
+| 0x2D | bombs r109 | | |
+| 0x2E | | 516–521 | |
+
+Submaps not listed have neither. Use: plan per map which crates to take (waypoint to the
+crate, `min_bombs` on the legs that must not spend), since the solver only values bullets
+weakly (BULLET_VALUE 2) and bombs not at all. Crate pockets can be traps (0x0D: an enemy
+patrols the room above; kill it first).
