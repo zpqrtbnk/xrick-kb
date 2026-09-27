@@ -192,6 +192,10 @@ tagged **[master]** or **[solver]**.
    **Map 2 done 2026-09-27:** 0x12 by the solver alone (the drop past the spikes needed F12),
    0x13 with two bomb walls by hand (231: escape down the ladder; 229: crawl left). Chain s212,
    map 3 (0x14) tick 0, lives 6, bombs 6, bullets 6, 13804 steps; validate timeline 86/86.
+   **Map 3 in progress:** 0x14 solver alone; 0x15/0x16 castle loop steered with `solve(to=…)`
+   (kb §14); 0x17 by stages plus three hand bomb sequences (traps 273/274 from the gap, then
+   back up to the room floor; wall 277 with an escape up the ladder from the sliding trap 275).
+   Chain s231: 0x18 tick 0, lives 6, bombs 1, bullets 1, 15752 steps.
 10. **[master] Integration.** Erase the human scripts (D2), export to `dat_demo.c`, play the full
    game in the SDL build (Windows + WSL), watched by the user. Handle end of game → attract
    loop (`game.c:403-435` currently resets to map 0 and goes to game over). Check: two
