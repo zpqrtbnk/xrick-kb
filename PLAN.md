@@ -196,6 +196,11 @@ tagged **[master]** or **[solver]**.
    (kb §14); 0x17 by stages plus three hand bomb sequences (traps 273/274 from the gap, then
    back up to the room floor; wall 277 with an escape up the ladder from the sliding trap 275).
    Chain s231: 0x18 tick 0, lives 6, bombs 1, bullets 1, 15752 steps.
+   **Map 3 done 2026-09-28:** 0x18–0x25; by hand in 0x1A (crates), 0x1E (stick under trap 335,
+   enemies of the lower room, wall 337 bombed from x=148: the blast centre shifts 4 px left),
+   0x20 (crate), 0x22 (crouch-jump over the sliding trap 376 at the ladder top), 0x24 (pit and
+   spike jumps, bounce-pad super jump, shot on the platform). Chain s261: map 4 (0x26) tick 0,
+   lives 6, bombs 6, bullets 6, 21914 steps; validate timeline 132/132.
 10. **[master] Integration.** Erase the human scripts (D2), export to `dat_demo.c`, play the full
    game in the SDL build (Windows + WSL), watched by the user. Handle end of game → attract
    loop (`game.c:403-435` currently resets to map 0 and goes to game over). Check: two
