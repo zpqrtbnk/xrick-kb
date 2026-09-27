@@ -254,6 +254,20 @@ trace byte-identical to before; SDL build warnings unchanged (230); PC build com
   the port keeps the PC's 0xE8. Unexamined.
 - **F9** (solver tool only) — `-trace` with an `-inputs` file that starts new games reopens
   the trace without closing it, so the file gets NUL bytes.
+- **F10 — the ST jumps off a ladder top from a crouch; the port climbs.** Found 2026-09-27
+  on submap 0x09: the first stair step above the ladder top (row 72, cols 25-26) is 16 px up,
+  the ladder-exit hop peaks 13 px (port −0x300), so the port cannot pass. ST `0x4C2FE`:
+  ladder bit set → `0x4C318 tst.b crouching (0x4BF14); bne 0x4C370` → on_ground →
+  `0x4C38C` ACTION: crouching = DOWN|ceiling, then UP → `move.w #-0x580` (full jump).
+  So DOWN+LEFT/RIGHT (crouch; plain DOWN grabs the ladder) then UP jumps. The PC has no
+  such path: stand-up at `0x1596–0x15A3` precedes `0x1808 test dh,8 / test cl,2` → climb,
+  exactly as the port (`e_rick.c` firing_not). Checked: ST attrs of the ladder top here
+  are `0x82` (fc/fd), same as the port; port test from state s25 (DOWN|LEFT ×2, UP|LEFT)
+  → climb. ✅ **Fixed 2026-09-27, master `69894f3`** (`PLATFORM_ST` only: UP climbs only if
+  `!scrawl`, last frame's crawl = the ST's crouching flag), merged into `solver`. Checked:
+  crouch-then-UP from s25 now jumps; ST and PC warning counts unchanged (230/231); the
+  map-1 export (s18, 4701 steps) is byte-identical after the fix. The solver finds it
+  unaided (DOWN|LEFT then UP|LEFT are both in its mask set).
 
 ## 11. Solver (T43 phase 6, solver only, commit `bb999b1`)
 

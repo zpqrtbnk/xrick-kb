@@ -180,6 +180,10 @@ tagged **[master]** or **[solver]**.
 9. **[solver] Full run.** Submaps in order, commit each. If submap N cannot be solved from its entry
    state (ammo), go back to N-1 with a constraint added ("arrive with ≥ k bombs").
    Limit how far back this can go.
+   🟡 **IN PROGRESS 2026-09-27** via the MCP (waypoints, `min_bombs`, manual steps).
+   Map 1 (0x00–0x08) done, 4701 steps, 6 lives; SDL replay byte-identical to headless.
+   0x09 done (needed **F10**, fixed on master `69894f3`: the ST jumps off a ladder from a
+   crouch, `kb/demo-solver.md` F10; map-1 export unchanged after it). 0x0A in progress.
 10. **[master] Integration.** Erase the human scripts (D2), export to `dat_demo.c`, play the full
    game in the SDL build (Windows + WSL), watched by the user. Handle end of game → attract
    loop (`game.c:403-435` currently resets to map 0 and goes to game over). Check: two
@@ -187,7 +191,7 @@ tagged **[master]** or **[solver]**.
 
 **Open questions (user):** none. (Q7, F1: fix it, done. Q8, F6/F7: fix on `master` first.
 ✅ **FIXED 2026-09-25, master `cf9b4f1`**, merged into `solver` (`e2cfd92`) plus the snapshot
-update (`7efa950`). Causes and checks: `kb/demo-solver.md` §10. Follow-ups F8, F9 not done.)
+update (`7efa950`). Causes and checks: `kb/demo-solver.md` §10. Follow-ups F8, F9 not done. F10, ST ladder jump from a crouch: fixed on master `69894f3` 2026-09-27, user go.)
 
 ### T42 — RD2: the rd1 host extras still missing ☐ **registered 2026-09-24 — do NOT implement yet (user)**
 
