@@ -188,7 +188,10 @@ tagged **[master]** or **[solver]**.
    0x0A, 0x0B, 0x10, 0x11 no longer replay; the chain must be re-solved from 0x02
    (`kb/demo-solver.md` F12). Re-solved with the new MCP `repair` tool (plus `trace`,
    `validate`, trap scripts in `observe`, port `f8486bb`/`6f69bf1`): chain s204, 0x00–0x11,
-   12268 steps, ends at 0x12 with lives 6, bombs 5, bullets 5; validate 78/78. Paused before 0x12.
+   12268 steps, ends at 0x12 with lives 6, bombs 5, bullets 5; validate 78/78.
+   **Map 2 done 2026-09-27:** 0x12 by the solver alone (the drop past the spikes needed F12),
+   0x13 with two bomb walls by hand (231: escape down the ladder; 229: crawl left). Chain s212,
+   map 3 (0x14) tick 0, lives 6, bombs 6, bullets 6, 13804 steps; validate timeline 86/86.
 10. **[master] Integration.** Erase the human scripts (D2), export to `dat_demo.c`, play the full
    game in the SDL build (Windows + WSL), watched by the user. Handle end of game → attract
    loop (`game.c:403-435` currently resets to map 0 and goes to game over). Check: two
