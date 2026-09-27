@@ -278,6 +278,31 @@ trace byte-identical to before; SDL build warnings unchanged (230); PC build com
   clear (only matters with UP+FIRE held through a respawn). Impact on the timeline: map 1
   (s18) replays identically; from 0x0A on a held FIRE+UP fired one more bullet, so
   0x0A–0x0D were re-solved (s44 refreshed from replay; new chain s72 → …).
+- **F12 — the ST moves Rick diagonally in ONE probe; the port moves Y, then X.** Found
+  2026-09-27 on 0x12: under the one-way platform (row 30, cols 8–23) the only way down is to
+  drop off the left end and steer right past the spike tiles (row 35, cols 4–7). In the port
+  Rick dies at x=58 (needs 60): the frame that reaches row 35 applies Y at the old X, finds
+  lethal, zombies, and only then would X move. ST `player_controller` (disassembly read):
+  `0x4C0F6–0x4C124` new X in D2 (±2), `0x4C12A move D2,D6 / move D3,D7 / bsr 0x4CD70` probes
+  **new X and new Y together**; free → `0x4C134–0x4C142` store both, gravity, LADDER_CHECK;
+  blocked → `0x4C168` retry Y alone at the old X. Lethal is then read from the flags of the
+  probe that succeeded. The port (`e_rick.c` e_rick_action2) does the vertical envtest at
+  (old x, new y) with its own lethal/zombie, then the horizontal envtest at (new x, y).
+  ✅ **Fixed 2026-09-27, master `9dd478d`** (`PLATFORM_ST` only; the PC's separate probes
+  0x1596/0x15AB then 0x166D/0x1673 are what the port had), merged into `solver` (`a650de1`).
+  Warnings unchanged (ST 230, PC 231). Checked: the 0x12 drop now lands (x=60 on the row-35
+  frame, y 203 on the floor). A second visible effect, also the ST's: while rising, the
+  diagonal probe uses the rising mask (no WAYUP), so Rick now moves sideways through one-way
+  tiles on the way up, where the old separate horizontal probe was blocked by them
+  (0x02: x 132 held for 3 frames before, 134/136/138 now).
+  **Validation of the solved timeline (s1 → s117, 0x00–0x11), each saved leg replayed under
+  F12 from its parent's stored snapshot, compared with its stored result:**
+  still valid 0x00, 0x01, 0x04, 0x05, 0x08, 0x0C, 0x0D, 0x0E, 0x0F; broken 0x02 (s3→s4,
+  life lost), 0x03 (s4→s7), 0x06 (s10→s11), 0x07 (s11→s12), 0x09 (s18→s19, s20→s21,
+  s21→s23, s36→s37), 0x0A (s72→s73), 0x0B (s73→s74), 0x10 (s106→s108 x+2, s109→s110 misses
+  the bullet crate), 0x11 (s116→s117). A full replay from a new game dies in 0x02 and is
+  game over by 0x03. So the chain must be re-solved from 0x02; the legs still valid can be
+  reused only if their entry state (position, lives, bombs, bullets) is reproduced.
 
 ## 11. Solver (T43 phase 6, solver only, commit `bb999b1`)
 

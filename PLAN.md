@@ -183,7 +183,10 @@ tagged **[master]** or **[solver]**.
    🟡 **IN PROGRESS 2026-09-27** via the MCP (waypoints, `min_bombs`, manual steps).
    Map 1 (0x00–0x08) done, 4701 steps, 6 lives; SDL replay byte-identical to headless.
    0x09 done (needed **F10**, fixed on master `69894f3`: the ST jumps off a ladder from a
-   crouch, `kb/demo-solver.md` F10; map-1 export unchanged after it). 0x0A in progress.
+   crouch, `kb/demo-solver.md` F10; map-1 export unchanged after it). 0x0A–0x11 then solved (F11 re-arm fix on master `4ad51b5`). **F12** (the ST moves x and y in
+   one probe, master `9dd478d`) invalidates part of it: legs of 0x02, 0x03, 0x06, 0x07, 0x09,
+   0x0A, 0x0B, 0x10, 0x11 no longer replay; the chain must be re-solved from 0x02
+   (`kb/demo-solver.md` F12). Paused before 0x12 at the user's request.
 10. **[master] Integration.** Erase the human scripts (D2), export to `dat_demo.c`, play the full
    game in the SDL build (Windows + WSL), watched by the user. Handle end of game → attract
    loop (`game.c:403-435` currently resets to map 0 and goes to game over). Check: two
@@ -191,7 +194,7 @@ tagged **[master]** or **[solver]**.
 
 **Open questions (user):** none. (Q7, F1: fix it, done. Q8, F6/F7: fix on `master` first.
 ✅ **FIXED 2026-09-25, master `cf9b4f1`**, merged into `solver` (`e2cfd92`) plus the snapshot
-update (`7efa950`). Causes and checks: `kb/demo-solver.md` §10. Follow-ups F8, F9 not done. F10, ST ladder jump from a crouch: fixed on master `69894f3` 2026-09-27, user go.)
+update (`7efa950`). Causes and checks: `kb/demo-solver.md` §10. Follow-ups F8, F9 not done. F10, ST ladder jump from a crouch: fixed on master `69894f3` 2026-09-27, user go. F11 gun re-arm `4ad51b5`, F12 one-probe diagonal move `9dd478d`, both 2026-09-27, user go.)
 
 ### T42 — RD2: the rd1 host extras still missing ☐ **registered 2026-09-24 — do NOT implement yet (user)**
 
