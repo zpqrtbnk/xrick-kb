@@ -506,3 +506,25 @@ Submaps not listed have neither. Use: plan per map which crates to take (waypoin
 crate, `min_bombs` on the legs that must not spend), since the solver only values bullets
 weakly (BULLET_VALUE 2) and bombs not at all. Crate pockets can be traps (0x0D: an enemy
 patrols the room above; kill it first).
+
+## 14. Map 3 castle: the exit wiring (phase 9)
+
+`map_connect` read from the port's `dat_maps.c` (probe program, 2026-09-27; dir 1 = LEFT,
+0 = RIGHT; "out" = the connector's rowout, "in" = rowin in the target). Rooms 0x15 and 0x16
+are identical: an upper corridor (rows 20–27) and a lower one (rows 32–39), not connected
+inside the room. The forward route through them:
+
+| from | exit | to |
+|---|---|---|
+| 0x14 | right, row 64 | 0x15 row 24 (upper) |
+| 0x15 upper | left → 0x14 · right → 0x16 row 24 (upper) | |
+| 0x15 lower | left → 0x16 row 24 (upper) · right → 0x16 row 32 (lower) | |
+| 0x16 upper | left → 0x15 row 24 (upper) · **right → 0x15 row 32 (lower)** | |
+| 0x16 lower | left → 0x15 row 32 · **right → 0x17 row 32** | |
+
+So: 0x15 upper → R → 0x16 upper → R → 0x15 lower → R → 0x16 lower → R → 0x17. The solver's
+default target (the highest forward submap) cannot see this; steer it with `solve(to=…)` plus a
+waypoint at the corridor end on the wanted side (`forbid` does not stop an exit through the
+forbidden edge). Further loops ahead: 0x19 (L row 24 → 0x18, R row 24 → 0x18 row 32, R row 32 →
+0x1A), 0x1A (R row 80 → 0x19), 0x1B (both row-24 exits → 0x1B itself), 0x1C (R row 80 → 0x19),
+0x1D (R row 24 → itself), 0x1E (R row 24 → 0x17). Full table: rerun the probe over 0x14–0x26.
