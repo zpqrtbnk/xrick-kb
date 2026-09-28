@@ -201,6 +201,14 @@ tagged **[master]** or **[solver]**.
    0x20 (crate), 0x22 (crouch-jump over the sliding trap 376 at the ladder top), 0x24 (pit and
    spike jumps, bounce-pad super jump, shot on the platform). Chain s261: map 4 (0x26) tick 0,
    lives 6, bombs 6, bullets 6, 21914 steps; validate timeline 132/132.
+   **F13 2026-09-28** (ST trap wake probe x+0x0B, master `78fc15d`): found on 0x27, where
+   trap 436 on the only ladder was unpassable with +0x0C. Chain repaired with `repair`
+   (s125 → s406, validate timeline 139/139); by hand: 0x0B trap 135 now woken by the last
+   bullet from the tunnel's left end (crawling Rick would wake it inside his own box),
+   so 0x0D enemy 155 killed with a bomb instead (s308), bombs 1 until the 0x0E bomb crate.
+   **Map 4 (in progress):** 0x26 solver; 0x27 by hand: crawl under trap 437, jump from x=180
+   onto the ladder at x=188 so trap 438 never wakes, climb past trap 436 at x=188 (s408),
+   then solver (s409); 0x28 solver (s410); 0x29 bullet crate (s411).
 10. **[master] Integration.** Erase the human scripts (D2), export to `dat_demo.c`, play the full
    game in the SDL build (Windows + WSL), watched by the user. Handle end of game → attract
    loop (`game.c:403-435` currently resets to map 0 and goes to game over). Check: two

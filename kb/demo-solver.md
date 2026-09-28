@@ -313,6 +313,21 @@ trace byte-identical to before; SDL build warnings unchanged (230); PC build com
   A first run showed `repair` letting re-solved legs spend ammo (a bomb in 0x09, then 0x0A
   short); fixed (`6f69bf1`): same or more bombs/bullets, min_bombs = the old end's. Checked:
   `validate` legs and timeline, 78/78.
+- **F13 — the ST wakes scripted traps at Rick x+0x0B; the port used 0x0C.** Found 2026-09-28
+  on 0x27: trap 436 (type 0x40, invisible, lethal once awake, 3×248 frames still) sits on the
+  only ladder up (cols 25–26, rows 89–107), trigger box x 200–224 (ST: inclusive). Rick
+  climbs there only at x ≥ 188 (climb flag read at tile (x+4)/8+1); with +0x0C the box
+  fires at x=188, so every climb woke the trap inside Rick's box. ST: both calls of
+  `trigger_box_contains_point` (0x4D986) with the player use `nPosX + 0x0B`, `nPosY + 0x0A`:
+  `0x4BEE4` (trigger_zone_update) and `0x4D19A` (scripted_trap_update). `RICK_PROBE_DX`
+  (ents.h, ST 0x0B / PC 0x0C, citing 0x4D19A) existed but was used only in `e_sbonus.c`;
+  `e_them_t3_action2` kept the literal. ✅ **Fixed 2026-09-28, master `78fc15d`**, merged into
+  `solver` (`775d1a0`). Warnings unchanged (ST 230, PC 231). `validate` timeline of s263:
+  first broken leg s125 (0x05); repaired with `repair` plus hand legs in 0x0B/0x0D (PLAN.md
+  phase 9), new chain s406 = old s263, validate timeline 139/139. Checked on 0x27: Rick
+  climbs at x=188 past trap 436 without waking it. Side effect: trap 438 (ladder foot, box
+  x 192–224) wakes at x ≥ 181 and overlaps Rick from x=182, so it can no longer be woken
+  safely from x=180; jumped over instead.
 
 ## 11. Solver (T43 phase 6, solver only, commit `bb999b1`)
 
