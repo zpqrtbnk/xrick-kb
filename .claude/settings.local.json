@@ -1,0 +1,5 @@
+ {
+    "permissions": {
+      "allow": ["mcp__xrick", "mcp__ghidra", "Bash(wsl:*)", "Bash(git:*)"]
+    }
+  }

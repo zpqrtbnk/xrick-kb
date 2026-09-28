@@ -6,7 +6,7 @@
     },
     "xrick": {
       "command": "wsl",
-      "args": ["-e", "python3", "/mnt/d/d/reverse/xrick/xrick/xrick/src/headless/mcp_server.py"]
+      "args": ["-e", "python3", "${REVERSE}/xrick/xrick/xrick/src/headless/mcp_server.py"]
     }
   }
 }
