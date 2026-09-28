@@ -215,7 +215,8 @@ tagged **[master]** or **[solver]**.
    platform (last bullet), bomb enemy 509 from x=156 (left of its turn at 176), solver to
    exit; 0x2E: solver (one bomb wakes all six traps 516–521). **Game completed: chain s422,
    25242 steps, validate timeline 154/154, lives 6 throughout (no zombie frame in a
-   per-step replay), score 722056.** Exported `build.mcp/s422_dat_demo.c` (not yet on master).
+   per-step replay), score 722056.** Exported `build.mcp/s422_dat_demo.c` (now
+   `build/mcp/`), on master since `c9c35ed`.
 10. **[master] Integration.** Erase the human scripts (D2), export to `dat_demo.c`, play the full
    game in the SDL build (Windows + WSL), watched by the user. Handle end of game → attract
    loop (`game.c:403-435` currently resets to map 0 and goes to game over). Check: two

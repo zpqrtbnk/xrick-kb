@@ -145,7 +145,8 @@ normal play. RD1 passes `e_them_rndreset()`: ST `0x121901F9/0x160566F9`, PC `0/0
 `<step>` counts `CTRL_ACTION` passes since the game started. `<ctrl>` is the
 `CONTROL_*` mask that step used.
 
-**`xrick-core`** (T43 phase 3, `make core`, WSL). The RD1 game logic compiled unchanged with
+**`xrick-core`** (T43 phase 3, `make core`, WSL; built into `build/core/` since `solver`
+`9cd3269`). The RD1 game logic compiled unchanged with
 `-DHEADLESS`, linked with `src/headless/hl_sys.c` (host stubs: no video, sound, input or
 timing) and `src/headless/xrick_core.c` (CLI). API in `include/rd1/game.h`:
 `game_hlStart()`, `game_hlStep(ctrl)` → `GAME_HL_STEP / OVER / END`, `game_hlSteps()`.
@@ -437,8 +438,11 @@ fails, s−1 is re-solved keeping more bombs.
 
 `src/headless/mcp_server.py`: MCP over stdio (newline JSON-RPC, no dependencies), started
 by Claude Code through `.mcp.json` (`wsl -e python3 …/mcp_server.py`). Each call runs
-`xrick-core` (`make core` first) on snapshot files in `xrick/xrick/xrick/build.mcp/`
-(ignored by git). Env: `XRICK_CORE`, `XRICK_MCP_WORK`.
+`xrick-core` (`make core` first) on snapshot files in `xrick/xrick/build/mcp/`
+(ignored by git). Env: `XRICK_CORE`, `XRICK_MCP_WORK`. *(Paths since `solver` `9cd3269`,
+2026-09-28: all build output lives under the port repo's `build/` — the core is
+`build/core/xrick-core` with its objects in `build/core/obj/`, the states are in
+`build/mcp/`; before, `xrick/xrick-core`, `xrick/build.core/`, `xrick/build.mcp/`.)*
 
 **States.** Every tool works on a state: a snapshot at a step boundary, with its parent
 and the inputs that led there. The timeline of a state (all inputs from the new game)
