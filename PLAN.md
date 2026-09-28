@@ -206,9 +206,14 @@ tagged **[master]** or **[solver]**.
    (s125 → s406, validate timeline 139/139); by hand: 0x0B trap 135 now woken by the last
    bullet from the tunnel's left end (crawling Rick would wake it inside his own box),
    so 0x0D enemy 155 killed with a bomb instead (s308), bombs 1 until the 0x0E bomb crate.
-   **Map 4 (in progress):** 0x26 solver; 0x27 by hand: crawl under trap 437, jump from x=180
-   onto the ladder at x=188 so trap 438 never wakes, climb past trap 436 at x=188 (s408),
-   then solver (s409); 0x28 solver (s410); 0x29 bullet crate (s411).
+   **Map 4 done 2026-09-28:** 0x26 solver; 0x27 by hand: crawl under trap 437, jump from
+   x=180 onto the ladder at x=188 so trap 438 never wakes, climb past trap 436 at x=188
+   (s408), then solver; 0x28 solver; 0x29 bullet crate then solver; 0x2A–0x2C solver;
+   0x2D: bomb crate, stay crawled under dart 511, shoot enemy 510 on landing on the row-104
+   platform (last bullet), bomb enemy 509 from x=156 (left of its turn at 176), solver to
+   exit; 0x2E: solver (one bomb wakes all six traps 516–521). **Game completed: chain s422,
+   25242 steps, validate timeline 154/154, lives 6 throughout (no zombie frame in a
+   per-step replay), score 722056.** Exported `build.mcp/s422_dat_demo.c` (not yet on master).
 10. **[master] Integration.** Erase the human scripts (D2), export to `dat_demo.c`, play the full
    game in the SDL build (Windows + WSL), watched by the user. Handle end of game → attract
    loop (`game.c:403-435` currently resets to map 0 and goes to game over). Check: two
