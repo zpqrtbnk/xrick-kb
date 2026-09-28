@@ -90,15 +90,20 @@ make warn            # syntax-only pass over the game logic, no link (see Makefi
 make clean
 ```
 
-Output: `xrick/xrick/xrick` (an ELF binary, always named `xrick` regardless of
-`PLATFORM`; `make clean` before switching `PLATFORM` if you want to avoid relinking
-confusion, since object files aren't tagged by platform either).
+Output (since master `d8b3ca2`, 2026-09-28): **`xrick/build/wsl/xrick`** (an ELF binary,
+always named `xrick` regardless of `PLATFORM`), objects in `xrick/build/wsl/obj/`, the
+`make warn` log in `xrick/build/wsl/warn.log` — the repo's `build/`, git-ignored, where all
+build output lives (`build/win`, `build/web` from `build.sh`; on `solver` also
+`build/core` and `build/mcp`). Before, objects sat next to the sources and the binary was
+`xrick/xrick/xrick`. `make clean` removes `build/wsl` (on `solver` also `build/core`,
+never `build/mcp`); do it before switching `PLATFORM`, since the objects aren't tagged
+by platform.
 
 ### Run
 
 ```sh
-cd xrick/xrick
-./xrick
+cd xrick
+build/wsl/xrick
 ```
 
 **T22: no `-data <path>` argument any more, and none is needed.** Every asset —
@@ -111,7 +116,7 @@ anywhere in the tree outside their own definitions — only `data_setpath`/
 open/close a handle that was never read from. `xrick/data/` on disk turned out to
 hold only the pre-T19 era's WAV files, nothing the running game still needs; `data.c`,
 `data.h`, `unzip.c` and `unzip.h` are deleted outright, and `game_run`/`main` no
-longer take or thread through a path at all. `./xrick -h` lists the rest of the CLI
+longer take or thread through a path at all. `build/wsl/xrick -h` lists the rest of the CLI
 (`-demo`, `-submap`, `-nosound`, `-vol`, etc.).
 
 Under WSL specifically: audio goes out through WSLg's PulseAudio → RDP audio-channel
