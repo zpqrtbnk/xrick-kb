@@ -152,7 +152,8 @@ for collision outcomes and is a prime comparison target.
   `-s USE_SDL=2 -D NOZLIB -O2`, links to `xrick.js` + `xrick.wasm`, and preloads
   `data/` into the virtual FS at `/data`. Paths inside the script are hard-coded to the
   original author's machine (`/d/d/EmSdk`, `/d/d/Rick Dangerous/wip/xrick-vs19`) and
-  would need editing to run here.
+  would need editing to run here. *(2019 tree, as analysed. The current web build is a
+  rewrite on branch `wasm`: `kb/build.md` §4, `wasm.md`.)*
 - Compile-time switches, all in `config.h`: `GFXST`/`GFXPC`, `ENABLE_LOG`,
   `ENABLE_JOYSTICK` (off), `ENABLE_SOUND` (on), `ENABLE_CHEATS` (on), `ENABLE_FOCUS`
   (off), `ENABLE_DEVTOOLS` (off), `DEBUG` (on — enables `DEBUG_ENTS`, `DEBUG_MAPS`,

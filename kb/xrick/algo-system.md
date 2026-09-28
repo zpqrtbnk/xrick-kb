@@ -152,7 +152,8 @@ WAV" gap, `pm-baty.md` G8 (c), since the engine already contains every track).
 path uses the bundled `unzip.c`; `data_file_seek/tell/size` are **unimplemented for
 ZIP** and return -1 (or leave `s` uninitialised, in `data_file_size`). The default path
 is `"data.zip"` (`xrick.c:119`); `-data <path>` overrides it. The emscripten build
-preloads the loose `data/` directory instead.
+preloads the loose `data/` directory instead. *(2019 tree. Today every asset is compiled
+in (T22) and the web build (`kb/build.md` §4) preloads nothing.)*
 
 ## Video — `sysvid.c`
 

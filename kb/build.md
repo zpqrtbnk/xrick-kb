@@ -252,9 +252,39 @@ them out). Building `PLATFORM_PC` natively on Windows would need a
 `PreprocessorDefinitions` addition to `xrick.vcxproj`; not done, since nothing in the
 T19 audio work needed it.
 
-## 4. Not covered here
+## 4. Web (emscripten) — branch `wasm`, RD1 only
 
-`xrick/README.md` mentions emscripten build adjustments ("so it can build with
-emscripten"). Neither build path above touches that, and it was not exercised or
-verified as part of this document — treat any emscripten build claim as unverified
-until someone actually runs it.
+Analysis, plan and status: `../wasm.md`. On branch **`wasm`** (forked from `master`
+`c9c35ed`, not merged yet), phase W1 = RD1 in the browser; `-rd 2` is refused on the
+web until phase W2.
+
+**Toolchain.** emsdk in `D:\d\EmSdk` (emscripten 6.0.10), driven from **Git Bash** (user
+decision 2026-09-28; the emsdk is Windows-native). The script sets it up itself; by hand:
+`export EMSDK_PYTHON=/d/d/EmSdk/python/3.13.3_64bit/python.exe` (plain `python` is the
+Windows Store alias here) and `source ./emsdk_env.sh` in the current shell, not
+through a pipe.
+
+**Build** (from the repo root, Git Bash):
+
+```bash
+build/emsdk/build.sh          # incremental, into build.web/ (git-ignored)
+build/emsdk/build.sh clean    # from scratch -- needed after a header change
+build/emsdk/build.sh gz       # also gzip copies in build.web/gz/
+```
+
+Same sources and flags as the `Makefile` (PC data tables left out, `-fcommon`,
+`-DPLATFORM_ST`, the warning set), SDL3 from emscripten's port (`-sUSE_SDL=3`), linked
+with `em++` (`-sINVOKE_RUN=0 -sEXIT_RUNTIME=1`, `callMain`/`FS`/`_fflush` exported).
+Output: `index.html`, `player.js`, `xrick.js` (~190 KB), `xrick.wasm` (~2.1 MB;
+~0.8 MB gzipped). 168 clang warnings at `wasm` W1.5a — the web baseline, not comparable
+with gcc's 230.
+
+**Run.** Serve `build.web/` over http with `.wasm` as `application/wasm` (e.g.
+`emrun build.web/index.html`), click the page to start (that also unlocks sound).
+URL options: `?demo`, `?speed=N`, `?zoom=N`, `?keys=L-R-U-D-F`, `?nosound`, `?trace`
+(adds a "download trace" button). `startInDemo` at the top of `player.js` makes the
+page start in demo mode (off by default).
+
+**Checked** (headless Chrome driven over the DevTools protocol): the demo's `-trace` is
+byte-identical to the native SDL build's over 37013 lines; `?rd=2` refusal and Esc
+("game ended") shown on the page; audio context running at 48000 Hz.
