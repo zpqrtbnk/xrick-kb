@@ -16,6 +16,14 @@ verified — built and run on both platforms, including a real native Windows ru
 user permission for this session (this project's standing rule is otherwise to always
 build/verify in WSL; see `MEMORY.md`'s `build-in-wsl` note).
 
+**2026-09-28: `./build.sh` at the top of the port repo (Git Bash) builds the Windows
+desktop version (MSBuild, §2) and the web version (emscripten, §4) every time** (user
+request). It first checks that it can find MSBuild (`vswhere`, or `MSBUILD`), SDL3 in
+`xrick/vcpkg_installed/x64-windows`, and emsdk (`EMSDK_DIR`, default `/d/d/EmSdk`), and
+stops with a message if one is missing. `./build.sh clean` rebuilds both,
+`./build.sh gz` adds gzip copies of the web files. The WSL `Makefile` (§1) is
+unchanged and separate.
+
 Both build systems were verified working as of 2026-09-10 before any of T20/T21/T22
 too (T19's audio-latency investigation, see `kb/audio-sndh.md`). Exact tool versions
 below are what was actually used, not guaranteed minimums; if you're on
@@ -252,26 +260,28 @@ them out). Building `PLATFORM_PC` natively on Windows would need a
 `PreprocessorDefinitions` addition to `xrick.vcxproj`; not done, since nothing in the
 T19 audio work needed it.
 
-## 4. Web (emscripten) — branch `wasm`, RD1 only
+## 4. Web (emscripten), RD1 only — on `master`
 
-Analysis, plan and status: `../wasm.md`. On branch **`wasm`** (forked from `master`
-`c9c35ed`, not merged yet), phase W1 = RD1 in the browser; `-rd 2` is refused on the
-web until phase W2.
+Analysis, plan and status: `../wasm.md`. Developed on branch `wasm`, merged into
+`master` 2026-09-28 (the branch is deleted). Phase W1 = RD1 in the browser; `-rd 2` is
+refused on the web until phase W2.
 
 **Toolchain.** emsdk in `D:\d\EmSdk` (emscripten 6.0.10), driven from **Git Bash** (user
-decision 2026-09-28; the emsdk is Windows-native). **`build-wasm.sh` registers the
-emsdk environment itself, first thing** — a plain Git Bash needs nothing sourced
-beforehand. It sets `EMSDK_PYTHON` to emsdk's bundled python (plain `python` is the
-Windows Store alias here) and sources `emsdk_env.sh` in its own shell; if `emcc` is still
-missing it prints emsdk's output and stops. `EMSDK_DIR` overrides the location.
+decision 2026-09-28; the emsdk is Windows-native). **`build.sh` registers the emsdk
+environment itself** — a plain Git Bash needs nothing sourced beforehand. It first
+checks that `EMSDK_DIR` (default `/d/d/EmSdk`) exists and holds `emsdk_env.sh` and
+`upstream/emscripten/emcc`, sets `EMSDK_PYTHON` to emsdk's bundled python (plain `python`
+is the Windows Store alias here) and sources `emsdk_env.sh` in its own shell; if `emcc` is
+still missing it prints emsdk's output and stops.
 
-**Build** (from the top of the port repo — `build-wasm.sh` sits next to `build/` and
-`demo.sh`; the page files stay in `build/emsdk/`):
+**Build** — the web build is the second half of `./build.sh` (after the desktop build),
+at the top of the port repo next to `build/` and `demo.sh`; the page files stay in
+`build/emsdk/`:
 
 ```bash
-./build-wasm.sh          # incremental, into build.web/ (git-ignored)
-./build-wasm.sh clean    # from scratch -- needed after a header change
-./build-wasm.sh gz       # also gzip copies in build.web/gz/
+./build.sh          # desktop + web, incremental; web into build.web/ (git-ignored)
+./build.sh clean    # both from scratch -- needed for the web after a header change
+./build.sh gz       # also gzip copies of the web files in build.web/gz/
 ```
 
 Same sources and flags as the `Makefile` (PC data tables left out, `-fcommon`,
