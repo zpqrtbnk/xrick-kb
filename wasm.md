@@ -213,7 +213,7 @@ before the next.
 - `-data` stays gone; it is dropped from the page instead (W1.5).
 
 **W1.5 Page.**
-- A new minimal `index.html` + `player.js` in `build/emsdk/` (in this repo), with no
+- A new minimal `index.html` + `player.js` in `build/emsdk/` (in this repo; moved to `xrick/emsdk/` on 2026-09-28), with no
   jQuery and no external host. The player does **not** start in demo mode by default. A
   player setting (a constant at the top of `player.js`, e.g. `startInDemo = false`)
   switches it on; `?demo` in the URL overrides it for one visit:
@@ -249,7 +249,7 @@ before the next.
 
 **Decisions (user, 2026-09-28):**
 - Toolchain: the Windows emsdk via Git Bash (§0).
-- The web page lives in this repo, in `build/emsdk/`.
+- The web page lives in this repo, in `build/emsdk/` -- later `xrick/emsdk/` (user: `build/` is output only, fully git-ignored).
 - No demo at start, but a player option to start in demo mode (W1.5).
 
 ## 7. Phase W2 — RD2 (after W1)
@@ -270,7 +270,7 @@ Then `build-wasm.sh` became **`./build.sh`**, which builds the Windows desktop v
 (MSBuild) **and** the web version every time, after checking that it finds MSBuild,
 SDL3 (vcpkg) and emsdk (master `d0ed44f`, `kb/build.md` intro and §4). Outputs since
 master `964807d`: web in **`build/web/`**, desktop in **`build/win/`** (the web page
-sources stay in `build/emsdk/` and are checked up front).
+sources are checked up front). Since master `461f61a` the page sources live in **`xrick/emsdk/`** with the other sources and `build/` is output only, fully git-ignored.
 
 | step | commit | result |
 |---|---|---|
