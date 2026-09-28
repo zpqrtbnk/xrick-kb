@@ -28,6 +28,11 @@ machine with a **software sleep** to a target period:
   (`game.c:203`), so timing is browser-dependent.
 - The frame produced by cycle *n* is presented at the top of cycle *n+1*
   (`game.c:238`) — one frame of latency by construction.
+- *(Port, since master `89d0e1a`, 2026-09-28: the software sleep really holds one
+  frame per period now (it used to run at about half), and `GAME_PERIOD` is 40 ms on
+  the ST = the original's gameplay rate measured in Hatari: one main-loop iteration
+  per 2 VBLs, 25 steps/s (`../hatari.md` 2026-09-28). Still no VBlank model — only the
+  average gameplay rate matches.)*
 
 **Consequence:** any per-frame quantity (gravity steps, bomb fuse 45 frames, sbonus tick
 30 frames, latency 0x14 frames, walk-cycle period) is expressed in *game cycles*, and a

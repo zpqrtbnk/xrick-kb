@@ -309,13 +309,17 @@ half its nominal value today: `GAME_PERIOD` 75 → ~37.5 ms, `SCROLL_PERIOD` 24 
 `IMAIN_PERIOD` and the game-over screen 50 → ~25, and the fades (`period/2`). Only the
 gameplay rate was measured on the ST.
 
-**Proposal (to confirm):**
-1. **On `master`**: fix the native timer so each frame lasts exactly `game_period`,
-   measured after the sleep (the same accumulator as the web's `web_frame`). Set
-   `GAME_PERIOD` to **40** (the ST rate). Halve the other periods (`SCROLL_PERIOD` 12,
-   `IMAIN_PERIOD` 25, game-over 25) so they keep the pace they have today (not
-   measured on the ST).
-2. **On `wasm`**: nothing more in the code. The web loop already runs one step per
-   `game_period`, so it follows `master` once merged.
-3. Checks: native and web both measured at 25 steps/s in gameplay; demo traces
-   unchanged (the logic is tick-based).
+**Done (user go, 2026-09-28): master `89d0e1a`**, merged into `wasm` (`05e43f3`, plus
+the `web_frame` comment `806fc8f`):
+1. The native timer schedules one frame per `game_period` (the next frame is due one
+   period after the previous one was due; a late frame restarts the schedule).
+   `GAME_PERIOD` is **40** on the ST, 38 on PC (unmeasured: the pace it had).
+   `SCROLL_PERIOD` 12, `IMAIN_PERIOD` 25 and game over 25, halved to keep their pace.
+2. Native checks: demo at default speed 23.9 logic steps/s in the `-trace` (scroll
+   frames and room redraws excluded, like the ST's 24.0 when walking);
+   `-demo -speed 2 -trace` byte-identical to the previous native trace over 37013
+   lines; warnings ST 229 / PC 230.
+3. Web: the rebuild and the browser re-measurement of the rate are **pending**. The
+   session's permission check stopped answering for the build command. To do: `build.sh
+   clean gz`, then headless Chrome `?demo&trace` (expect ~24 steps/s) and
+   `?demo&speed=2&trace` (expect byte-identical to native).

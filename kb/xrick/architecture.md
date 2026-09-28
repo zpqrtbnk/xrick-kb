@@ -85,6 +85,13 @@ temporarily replaced during scrolling (24 ms, `scroller.h:1179`), the intro scre
 (50 ms) and fades. **There is no VBlank, no interrupt, and no fixed 50 Hz tick** — the
 original's timing model is not reproduced. See `divergences.md`.
 
+*(Since master `89d0e1a`, 2026-09-28: the timer in step 1 took `tm` before the sleep, so
+frames alternated between a full sleep and none and ran at about half the period
+(~26 steps/s at 75 ms). It now schedules one frame per `game_period`; `GAME_PERIOD` is
+**40** on the ST — the original's measured 25 gameplay steps/s (`../hatari.md`
+2026-09-28) — and 38 on PC; scroll 12, intro 25, game over 25 (halved, same pace as
+before). The web loop is rewritten on branch `wasm` (`../build.md` §4).)*
+
 ## The game state machine — `game_cycle()` (`game.c:278`)
 
 A `while(1)` over `switch (game_state)`; `break` continues within the same frame,

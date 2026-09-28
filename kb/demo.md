@@ -92,8 +92,10 @@ already uses for `map_submaps[env_submap]` (`src/maps.c:76` etc.), it makes
 `demo_enterSubmap` an O(1) lookup instead of a search, and it needs no terminator
 entry. Submaps with no demo are `{ 0, NULL }`.
 
-`U16 tick` is sufficient: at `GAME_PERIOD 75` (`include/game.h:27`) one tick is ~75 ms,
-so 65535 ticks ≈ 82 minutes per submap.
+`U16 tick` is sufficient: at `GAME_PERIOD 40` (ST, `include/rd1/game.h`, master
+`89d0e1a`; 75 before) one tick is 40 ms, so 65535 ticks ≈ 44 minutes per submap visit —
+in the full-game demo the latest event of any take is at tick 1504 (checked in
+`dat_demo.c`).
 
 Data lives in `xrick/src/dat_demo.c`, matching the existing `dat_*.c` convention
 (`src/dat_ents.c`, `src/dat_maps.c`, …):

@@ -16,7 +16,8 @@ more, done. **Port branding, not part of the original.**
 
 ### `screen_introMain` — title and hall of fame (`scr_imain.c:37`)
 
-Alternates two pages with fades between them, at `IMAIN_PERIOD` = 50 ms:
+Alternates two pages with fades between them, at `IMAIN_PERIOD` = 50 ms *(25 in the
+port since master `89d0e1a`, with the frame timer fixed — same pace)*:
 
 - **seq 1–8**: the Rick Dangerous title. `GFXST` paints `pic_splash` full-screen;
   `GFXPC` composes it from tile strings (`screen_imainrdt`, `screen_imaincdc`) with

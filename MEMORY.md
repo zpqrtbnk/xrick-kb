@@ -345,8 +345,10 @@ Facts worth not rediscovering:
   number is cited evidence (`kb/audio-sndh.md` §7), not guessed. Still true: this is the
   port *importing* `kb/`'s own extraction, not a second independent reading, so it
   does not cross-validate `algo-music.md` the way other port-vs-ST comparisons do.
-- **It also has no timing model** — a 75 ms software-slept state machine, no VBlank, no
-  interrupts. Per-frame *counts* are comparable; durations are not.
+- **It also has no timing model** — a software-slept state machine, no VBlank, no
+  interrupts. Per-frame *counts* are comparable; durations are not. Since master
+  `89d0e1a` (2026-09-28) its gameplay period is 40 ms = the ST's measured 25 steps/s
+  (the old 75 ms timer actually ran at about half period); `kb/hatari.md` 2026-09-28.
 - **Licence is unsettled.** Source headers say "All rights reserved" and point at a
   README that carries no terms. Use the port as a reference for understanding only; do
   not copy its code into this project's output without settling this.

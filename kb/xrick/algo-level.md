@@ -116,7 +116,8 @@ returns `TRUE` when a rectangle is entirely outside the visible band.
 
 Triggered by `game_cycle`'s `CTRL_SCROLL` state: `ent_ents[1].y >= 0xCC` scrolls up,
 `<= 0x60` scrolls down. Each is an 8-step sequence, one step per frame, at
-`SCROLL_PERIOD` = 24 ms instead of the normal 75.
+`SCROLL_PERIOD` = 24 ms instead of the normal 75. *(Port since master `89d0e1a`: 12
+and 40, with the frame timer fixed — same scroll pace as before.)*
 
 `scroll_up` (`scroller.c:34`), one step:
 
