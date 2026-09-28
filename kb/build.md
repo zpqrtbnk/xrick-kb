@@ -259,17 +259,19 @@ Analysis, plan and status: `../wasm.md`. On branch **`wasm`** (forked from `mast
 web until phase W2.
 
 **Toolchain.** emsdk in `D:\d\EmSdk` (emscripten 6.0.10), driven from **Git Bash** (user
-decision 2026-09-28; the emsdk is Windows-native). The script sets it up itself; by hand:
-`export EMSDK_PYTHON=/d/d/EmSdk/python/3.13.3_64bit/python.exe` (plain `python` is the
-Windows Store alias here) and `source ./emsdk_env.sh` in the current shell, not
-through a pipe.
+decision 2026-09-28; the emsdk is Windows-native). **`build-wasm.sh` registers the
+emsdk environment itself, first thing** — a plain Git Bash needs nothing sourced
+beforehand. It sets `EMSDK_PYTHON` to emsdk's bundled python (plain `python` is the
+Windows Store alias here) and sources `emsdk_env.sh` in its own shell; if `emcc` is still
+missing it prints emsdk's output and stops. `EMSDK_DIR` overrides the location.
 
-**Build** (from the repo root, Git Bash):
+**Build** (from the top of the port repo — `build-wasm.sh` sits next to `build/` and
+`demo.sh`; the page files stay in `build/emsdk/`):
 
 ```bash
-build/emsdk/build.sh          # incremental, into build.web/ (git-ignored)
-build/emsdk/build.sh clean    # from scratch -- needed after a header change
-build/emsdk/build.sh gz       # also gzip copies in build.web/gz/
+./build-wasm.sh          # incremental, into build.web/ (git-ignored)
+./build-wasm.sh clean    # from scratch -- needed after a header change
+./build-wasm.sh gz       # also gzip copies in build.web/gz/
 ```
 
 Same sources and flags as the `Makefile` (PC data tables left out, `-fcommon`,
@@ -286,5 +288,7 @@ URL options: `?demo`, `?speed=N`, `?zoom=N`, `?keys=L-R-U-D-F`, `?nosound`, `?tr
 page start in demo mode (off by default).
 
 **Checked** (headless Chrome driven over the DevTools protocol): the demo's `-trace` is
-byte-identical to the native SDL build's over 37013 lines; `?rd=2` refusal and Esc
-("game ended") shown on the page; audio context running at 48000 Hz.
+byte-identical to the native SDL build's (55026 lines, 107 segments, after master
+`89d0e1a`); gameplay pace 23.6 logic steps/s at default speed vs 23.9 native (40 ms
+period = the ST's 25 steps/s; scroll frames are not in the trace); `?rd=2` refusal and
+Esc ("game ended") shown on the page; audio context running at 48000 Hz.

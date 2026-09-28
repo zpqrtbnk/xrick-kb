@@ -269,7 +269,7 @@ the session scratchpad (`wt-wasm`); the branch itself is in the port repo.
 
 | step | commit | result |
 |---|---|---|
-| W1.1 build script | `720c037` | `build/emsdk/build.sh` mirrors the `Makefile`; `.gitattributes` keeps it LF |
+| W1.1 build script | `720c037`, `16fc448` | mirrors the `Makefile`; moved to `./build-wasm.sh` at the top of the repo (user, 2026-09-28), registers emsdk itself first and reports failures; LF and executable in git |
 | W1.2 `__EMSCRIPTEN__` | `aaaaf1e` | web paths compiled in (checked with `llvm-nm`); native unchanged (ST 230 / PC 231) |
 | W1.3 timing | `69a0a35` | `requestAnimationFrame` loop, one step per `game_period` of real time — **see the open question below** |
 | W1.4 `-rd 2` refused | `15c5684` | message shown on the page (after W1.5a) |
@@ -277,7 +277,7 @@ the session scratchpad (`wt-wasm`); the branch itself is in the port repo.
 | W1.5 page | `5fa4904` | new `index.html` + `player.js`; `startInDemo = false` option |
 | W1.6 audio | — | WebAudio context running (48000 Hz, ScriptProcessorNode 4096); the `?speed=2` run kept ~300 steps/s with audio on, so no CPU problem seen. **Not heard**: headless Chrome cannot tell whether it sounds right |
 | W1.7 determinism | — | headless Chrome over the DevTools protocol: `?demo&speed=2&trace` = native SDL trace, **byte-identical over 37013 lines** (whole game + start of loop 2); `?rd=2` and Esc messages checked |
-| W1.8 packaging, docs | — | `build.sh gz` (wasm 2.1 MB → 0.82 MB); `kb/build.md` §4 written |
+| W1.8 packaging, docs | — | `./build-wasm.sh gz` (wasm 2.1 MB → 0.82 MB); `kb/build.md` §4 written |
 
 Web warning baseline: 168 (clang), after W1.5a.
 
@@ -319,7 +319,7 @@ the `web_frame` comment `806fc8f`):
    frames and room redraws excluded, like the ST's 24.0 when walking);
    `-demo -speed 2 -trace` byte-identical to the previous native trace over 37013
    lines; warnings ST 229 / PC 230.
-3. Web: the rebuild and the browser re-measurement of the rate are **pending**. The
-   session's permission check stopped answering for the build command. To do: `build.sh
-   clean gz`, then headless Chrome `?demo&trace` (expect ~24 steps/s) and
-   `?demo&speed=2&trace` (expect byte-identical to native).
+3. Web, rebuilt with `./build-wasm.sh clean gz` from a fresh bash (168 warnings), in
+   headless Chrome: `?demo&trace` runs **23.6 logic steps/s** at default speed (native
+   23.9); `?demo&speed=2&trace` is **byte-identical to the native trace over 55026
+   lines** (107 segments, more than two demo loops).
