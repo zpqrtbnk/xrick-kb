@@ -1,0 +1,3 @@
+[submodule "xrick"]
+	path = xrick
+	url = https://github.com/zpqrtbnk/xrick.git
