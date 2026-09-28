@@ -13,5 +13,6 @@ been extended to also play Rick Dangerous II, with the same demanding level of f
 
 It embeds the [source code repository](https://github.com/zpqrtbnk/xrick) as a Git submodule.
 
-For more details about Rick Dangerous, documentation, how-tos, history, and even play online, browse to the
+> [!WARNING]
+> For more details about Rick Dangerous, documentation, how-tos, history, and even play online, browse to the
 project's home page at [rick-dangerous.org](https://www.rick-dangerous.org/).
