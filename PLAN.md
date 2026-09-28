@@ -177,6 +177,8 @@ tagged **[master]** or **[solver]**.
    `export()`. The agent never sees pixels.
 8. **[solver] Pilot gate: submaps 0x00–0x03.** Agent + solver produce scripts; the user watches them.
    Record solver time and LLM calls per submap. **Go/no-go with the user before scaling.**
+   ⛔ **CLOSED 2026-09-28 by the user: not relevant anymore** (the full run, phase 9, went
+   ahead and completed the game; the visual check happens in phase 10).
 9. **[solver] Full run.** Submaps in order, commit each. If submap N cannot be solved from its entry
    state (ammo), go back to N-1 with a constraint added ("arrive with ≥ k bombs").
    Limit how far back this can go.
@@ -218,6 +220,14 @@ tagged **[master]** or **[solver]**.
    game in the SDL build (Windows + WSL), watched by the user. Handle end of game → attract
    loop (`game.c:403-435` currently resets to map 0 and goes to game over). Check: two
    consecutive attract loops are identical.
+   🟡 **2026-09-28, master `98dbaca` + `c9c35ed`** (merged into `solver`): the demo table is
+   now one take per submap VISIT (map 3's castle revisits 0x15/0x16; per-submap scripts
+   died on the first 0x16), and a demo that completes the game fades back to the title
+   screens and starts again. `dat_demo.c` = export of s422 (49 takes). Checked: SDL
+   (dummy drivers, `-speed 2`) trace == headless over the whole game; the second loop
+   matches the first on game state over 17 submaps (Rick's sprite frame/state bit differ
+   for its first 5 frames only). Open: the user's visual check in SDL; Windows build not
+   done (WSL only).
 
 **Open questions (user):** none. (Q7, F1: fix it, done. Q8, F6/F7: fix on `master` first.
 ✅ **FIXED 2026-09-25, master `cf9b4f1`**, merged into `solver` (`e2cfd92`) plus the snapshot
