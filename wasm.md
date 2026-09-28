@@ -296,3 +296,26 @@ The logic is tick-based, so this changes pace only, not determinism. Options:
 (B) keep the nominal rate on the web and fix the native timer on `master` (the whole
 game would play half as fast as today); (C) measure the ST original's logic rate in
 Hatari first, then set both. **User to decide.**
+
+**Option C done (user, 2026-09-28): the ST original measured in Hatari** (`kb/hatari.md`
+§7, 2026-09-28): gameplay runs **one logic step per 2 VBLs = 25 steps/s = 40 ms per
+step** (606 of 608 main-loop iterations standing, 425 walking; only room redraws and
+the respawn take longer). So today: native ≈ 37.5 ms/step (7% fast, and jittery:
+frames alternate between a full sleep and none), web W1.3 = 75 ms/step (half speed),
+ST = 40 ms/step.
+
+Every period in the port goes through the same native timer, so each one runs at about
+half its nominal value today: `GAME_PERIOD` 75 → ~37.5 ms, `SCROLL_PERIOD` 24 → ~12,
+`IMAIN_PERIOD` and the game-over screen 50 → ~25, and the fades (`period/2`). Only the
+gameplay rate was measured on the ST.
+
+**Proposal (to confirm):**
+1. **On `master`**: fix the native timer so each frame lasts exactly `game_period`,
+   measured after the sleep (the same accumulator as the web's `web_frame`). Set
+   `GAME_PERIOD` to **40** (the ST rate). Halve the other periods (`SCROLL_PERIOD` 12,
+   `IMAIN_PERIOD` 25, game-over 25) so they keep the pace they have today (not
+   measured on the ST).
+2. **On `wasm`**: nothing more in the code. The web loop already runs one step per
+   `game_period`, so it follows `master` once merged.
+3. Checks: native and web both measured at 25 steps/s in gameplay; demo traces
+   unchanged (the logic is tick-based).

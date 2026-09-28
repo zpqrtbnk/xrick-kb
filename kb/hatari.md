@@ -218,6 +218,20 @@ the 256-byte resolution is why the fit is over many samples rather than one pair
 
 **2026-09-04 — T6, trigger bits watched firing.** See §6 probe 4 for detail.
 
+**2026-09-28 — gameplay step rate of the ST original (wasm.md §8, option C).** A copy of
+`hatari_probe.py` in the session scratchpad (its `OUT` still points at the removed `re/`
+folder), realtime, delta `-0x2054`: `:trace` breakpoints on the main-loop head
+`0x4DCCE` (live `$4bc7a`), `RENDER` `0x4DD2E` (`$4bcda`) and `vblank_isr` `0x492FA`
+(`$472a6`), then VBLs counted between consecutive main-loop heads.
+- Rick standing still, 20 s: **606 of 608 iterations took exactly 2 VBLs** (one 1, one 3).
+- Walking right, 15 s: 425 iterations at 2 VBLs; a few long ones (1× 4, 2× 8, 3× 19)
+  are room redraws / the respawn.
+So gameplay runs **one logic step per 2 VBLs = 25 steps/s = 40 ms** at 50 Hz, as
+`flip_screen_buffer` (wait for ≥1 tick) + `vsync_wait` (wait for the counter to change,
+then clear it) predict (`algo-system.md` main loop). For comparison, the port's
+`GAME_PERIOD` is 75 ms, but its native timer runs frames at about half the period on
+average (≈ 37.5 ms, ~26 steps/s measured) — see `../wasm.md` §8.
+
 **2026-08-28 — harness commissioned (against the wrong disk).** Environment verified;
 nothing needed installing. Automated a boot chain for `rd.st` and measured its
 stage-dependent relocation. Superseded: `rd.st` is not the analysed build.
