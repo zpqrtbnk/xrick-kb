@@ -21,8 +21,12 @@ desktop version (MSBuild, §2) and the web version (emscripten, §4) every time*
 request). It first checks that it can find MSBuild (`vswhere`, or `MSBUILD`), SDL3 in
 `xrick/vcpkg_installed/x64-windows`, and emsdk (`EMSDK_DIR`, default `/d/d/EmSdk`), and
 stops with a message if one is missing. `./build.sh clean` rebuilds both,
-`./build.sh gz` adds gzip copies of the web files. The WSL `Makefile` (§1) is
-unchanged and separate.
+`./build.sh gz` adds gzip copies of the web files. **Outputs (master `964807d`):
+`build/win/`** — `xrick.exe`, `SDL3.dll`, objects in `obj/` (MSBuild `OutDir`/`IntDir`
+overridden on the command line; a direct `MSBuild xrick.vcxproj` still builds into
+`xrick\bin\Release\`, §2) — and **`build/web/`** (§4); both git-ignored, next to the tracked
+page sources in `build/emsdk/`, which the script also checks for up front. The WSL
+`Makefile` (§1) is unchanged and separate.
 
 Both build systems were verified working as of 2026-09-10 before any of T20/T21/T22
 too (T19's audio-latency investigation, see `kb/audio-sndh.md`). Exact tool versions
@@ -279,9 +283,9 @@ at the top of the port repo next to `build/` and `demo.sh`; the page files stay 
 `build/emsdk/`:
 
 ```bash
-./build.sh          # desktop + web, incremental; web into build.web/ (git-ignored)
+./build.sh          # desktop + web, incremental; web into build/web/, desktop into build/win/ (both git-ignored)
 ./build.sh clean    # both from scratch -- needed for the web after a header change
-./build.sh gz       # also gzip copies of the web files in build.web/gz/
+./build.sh gz       # also gzip copies of the web files in build/web/gz/
 ```
 
 Same sources and flags as the `Makefile` (PC data tables left out, `-fcommon`,
@@ -291,8 +295,8 @@ Output: `index.html`, `player.js`, `xrick.js` (~190 KB), `xrick.wasm` (~2.1 MB;
 ~0.8 MB gzipped). 168 clang warnings at `wasm` W1.5a — the web baseline, not comparable
 with gcc's 230.
 
-**Run.** Serve `build.web/` over http with `.wasm` as `application/wasm` (e.g.
-`emrun build.web/index.html`), click the page to start (that also unlocks sound).
+**Run.** Serve `build/web/` over http with `.wasm` as `application/wasm` (e.g.
+`emrun build/web/index.html`), click the page to start (that also unlocks sound).
 URL options: `?demo`, `?speed=N`, `?zoom=N`, `?keys=L-R-U-D-F`, `?nosound`, `?trace`
 (adds a "download trace" button). `startInDemo` at the top of `player.js` makes the
 page start in demo mode (off by default).

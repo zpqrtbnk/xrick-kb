@@ -268,7 +268,9 @@ Developed on branch `wasm` (forked from `master` `c9c35ed`), **merged into `mast
 2026-09-28** (fast-forward to `1002ceb`) and the branch deleted, at the user's request.
 Then `build-wasm.sh` became **`./build.sh`**, which builds the Windows desktop version
 (MSBuild) **and** the web version every time, after checking that it finds MSBuild,
-SDL3 (vcpkg) and emsdk (master `d0ed44f`, `kb/build.md` intro and §4).
+SDL3 (vcpkg) and emsdk (master `d0ed44f`, `kb/build.md` intro and §4). Outputs since
+master `964807d`: web in **`build/web/`**, desktop in **`build/win/`** (the web page
+sources stay in `build/emsdk/` and are checked up front).
 
 | step | commit | result |
 |---|---|---|
