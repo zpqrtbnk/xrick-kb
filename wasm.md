@@ -369,5 +369,5 @@ a room → `-submap N` (1-based). Built by `player.js` inside the `selector` ele
 pre-selects. All ST submaps are valid starts (each has a rightward `map_connect`
 entry; checked). Demo mode not handled yet. Separately, `sysarg.c`'s `-vol` checked the
 submap number instead of the volume (`-submap 11+` before `-vol` failed to start); fixed.
-Still open there: `-vol` stores N−1, so `-vol 1` = default volume and `-vol 0` is
-rejected although the help says 0 is silence.
+The `-vol` off-by-one (N−1 stored, `-vol 0` rejected, `-vol 1` = default) is fixed too
+(master `03d39f0`): `-vol 0`..`10` as the help says, 0 = silence.
