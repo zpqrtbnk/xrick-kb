@@ -357,3 +357,17 @@ iOS path only mechanically (faked user agent) — **to confirm on an iPhone**. T
 needs:
 `<script>window.xrickPlayer = { start: '#xrick', label: '#xrick span', status: '#player_console', buttons: '#controls1 div[data-code]', wasmUrl: '/media/1vqhdi1t/xrick.wasm' };</script>`
 before `player.js`.
+
+**2026-09-29 — map and starting-room selector (master `701a038`), `-vol` fix (`fba490d`).**
+Above the game: one drop-down of "<game> - <map>" entries ("RD1 - South America",
+"RD1 - Egypt", "RD1 - Schwarzendumpf Castle", "RD1 - Missile Base"; RD2 entries later in
+the same list, adding `-rd 2`), then the starting room, "start of map" by default. Both
+lock when the game starts; a new choice needs a page reload. Start of map → `-map N`,
+a room → `-submap N` (1-based). Built by `player.js` inside the `selector` element
+(default `#select`; the CMS page adds e.g. `<div id="xrick-select"></div>` and
+`selector: '#xrick-select'` in `window.xrickPlayer`); the URL (`?map=`, `?submap=`)
+pre-selects. All ST submaps are valid starts (each has a rightward `map_connect`
+entry; checked). Demo mode not handled yet. Separately, `sysarg.c`'s `-vol` checked the
+submap number instead of the volume (`-submap 11+` before `-vol` failed to start); fixed.
+Still open there: `-vol` stores N−1, so `-vol 1` = default volume and `-vol 0` is
+rejected although the help says 0 is silence.
