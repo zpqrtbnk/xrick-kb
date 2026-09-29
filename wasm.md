@@ -328,3 +328,16 @@ the `web_frame` comment `806fc8f`):
    headless Chrome: `?demo&trace` runs **23.6 logic steps/s** at default speed (native
    23.9); `?demo&speed=2&trace` is **byte-identical to the native trace over 55026
    lines** (107 segments, more than two demo loops).
+
+**2026-09-29 — black canvas on Chrome/macOS (M1), fixed on master `0eb6eda`.** The game
+ran (sound) but the canvas stayed black. Cause: the palette's alpha was never set
+(`pald[].a` = 0), and SDL3 creates the WebGL canvas with an alpha channel (default
+`gl_config.alpha_size` 8), so every frame was colour with alpha 0: an invalid
+premultiplied value that Chrome/macOS shows as transparent (the user's console check:
+WebGL context present, canvas 640×400, a red CSS background showed through), while
+Chrome/Windows and iOS Safari showed the colours. Fix: `sysvid_setDisplayPalette` sets
+alpha 255 for all entries. Checked in headless Chrome: the framebuffer pixel read right
+after drawing went from alpha 0 to 255. **Open:** no sound on iPhone (Safari and
+Firefox) with the speaker icon showing — most likely iOS silent mode muting Web Audio;
+proposed fix (not done): `navigator.audioSession.type = 'playback'` plus a silent
+`<audio>` element started in the start tap, as the 2019 player did.
