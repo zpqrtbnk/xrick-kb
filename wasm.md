@@ -341,3 +341,19 @@ after drawing went from alpha 0 to 255. **Open:** no sound on iPhone (Safari and
 Firefox) with the speaker icon showing — most likely iOS silent mode muting Web Audio;
 proposed fix (not done): `navigator.audioSession.type = 'playback'` plus a silent
 `<audio>` element started in the start tap, as the 2019 player did.
+
+**2026-09-29 — web player for any host page, and iPhone sound (master `f033ec5`).**
+`xrick/emsdk/player.js` now takes its page layout from `window.xrickPlayer` (set by the
+page before loading `player.js`; defaults = `index.html`): `start`, `label`, `status`,
+`buttons`, `pad`, `saveTrace`, `startInDemo`, and `wasmUrl`. The last one is served
+through `Module.locateFile`, so the generated `xrick.js` no longer needs hand edits (the
+user's CMS page had patched it for `/media/1vqhdi1t/xrick.wasm`; their backup is
+`web.1/`, left untouched). Missing elements are skipped; start hides the overlay and
+shows the canvas with inline styles. iPhone sound: in the start tap,
+`navigator.audioSession.type = 'playback'` where available, a silent looping `<audio>`
+on iOS/iPadOS (as the 2019 player did), then SDL's AudioContext resumed. Checked in
+headless Chrome on `index.html` and on a CMS-like page (wasm from the media URL); the
+iOS path only mechanically (faked user agent) — **to confirm on an iPhone**. The CMS page
+needs:
+`<script>window.xrickPlayer = { start: '#xrick', label: '#xrick span', status: '#player_console', buttons: '#controls1 div[data-code]', wasmUrl: '/media/1vqhdi1t/xrick.wasm' };</script>`
+before `player.js`.

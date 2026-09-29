@@ -304,7 +304,9 @@ with gcc's 230.
 **Run.** Serve `build/web/` over http with `.wasm` as `application/wasm` (e.g.
 `emrun build/web/index.html`), click the page to start (that also unlocks sound).
 URL options: `?demo`, `?speed=N`, `?zoom=N`, `?keys=L-R-U-D-F`, `?nosound`, `?trace`
-(adds a "download trace" button). `startInDemo` at the top of `player.js` makes the
+(adds a "download trace" button). Another page can host the player by setting
+`window.xrickPlayer` (elements, `wasmUrl`, `startInDemo`) before `player.js` -- see the
+top of `xrick/emsdk/player.js` and `../wasm.md`. `startInDemo` in `player.js` makes the
 page start in demo mode (off by default).
 
 **Checked** (headless Chrome driven over the DevTools protocol): the demo's `-trace` is
