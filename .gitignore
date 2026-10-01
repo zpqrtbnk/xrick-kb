@@ -15,3 +15,7 @@ grab*.png
 
 # Python caches
 __pycache__/
+
+# Stuff
+/upload.sh.user
+/jq.exe

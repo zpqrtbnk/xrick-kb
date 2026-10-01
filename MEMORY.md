@@ -289,7 +289,8 @@ Our analysis of it lives in `kb/xrick/` — 12 documents mirroring `kb/`'s struc
 `kb/xrick/xref.md` as the comparison worksheet.
 
 **As of 2026-09-22 (`PLAN.md` T41) the port is no longer RD1-only.** The goal is one
-`xrick` executable that plays either game via a runtime `-rd [1|2]` flag. Its project
+`xrick` executable that plays either game via a runtime `-game [1|2]` flag (named `-rd`
+until 2026-09-30). Its project
 dir, `xrick/xrick/` (`include/`, `src/`), was split into a common platform layer (SDL
 video/audio/input/arg-parsing, the vendored Atari-chip emulator) plus `include/rd1`,
 `include/rd2`, `src/rd1`, `src/rd2`. RD1's whole engine and compiled-in data now live
@@ -398,6 +399,13 @@ two half-right descriptions coexisted: `spawn_level_entity` (`0x496B8`) routes t
 placement into `sprite_list[0]`, and `scripted_trap_update` (`0x4D204`) picks the spent
 bullet's disposal route. "Bullet passes through" is retracted; the bullet is consumed
 either way.
+
+**Video output (2026-09-30, `PLAN.md` T44):** with `ENABLE_SHADERS` (config.h, on by
+default) `sysvid.c` hands the frame to `sysvid_gl.c`, which runs a table of libretro
+`.glsl` passes (`chain[]`) and draws into a GL window; otherwise (or if GL setup fails)
+the original SDL_Renderer path. Shader sources are compiled in (`src/shaders/embed.sh`).
+The xrick splash is common code (`src/splash.c`, T45), shown before either game from an
+embedded PNG; it needs SDL ≥ 3.4 and is skipped on WSL's SDL 3.2.
 
 ---
 

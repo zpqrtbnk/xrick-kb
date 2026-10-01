@@ -75,6 +75,50 @@ not what to do. The history of what each pass found is in `kb/byte-identity.md`.
 None of these blocks a reimplementation. `kb/` is not known to be missing anything
 structural.
 
+### T45 — xrick splash for both games, outside RD1 ✅ **DONE 2026-09-30 (desktop Windows RD1/RD2, renderer + shader paths; web in Chrome)** [master]
+
+**Goal (user, 2026-09-30):** the splash shows before either game, for a constant time,
+not skippable, no sound, drawn by SDL at the window size (not through the frame buffer),
+from an embedded PNG.
+
+- `src/splash.c` + `include/splash.h` (`SPLASH_MS` 2000); called from `main()` before
+  `game_run`/`rd2_game_run`. Web: `splash_start` in `main()`, RD1's `web_frame` waits
+  for `splash_done`.
+- Image: `src/splash/splash.png` (copy of `splash-640x400.png`), embedded by
+  `src/splash/embed.sh` → `splash.png.inc`, decoded by `SDL_LoadPNG_IO` (SDL ≥ 3.4.0).
+  With an older SDL (WSL: Debian SDL 3.2.10) the splash is skipped and logged (user's
+  choice: version guard).
+- Display: `sysvid_showImage` — renderer path at full window resolution; shader path
+  via `sysvid_gl_showImage` (plain copy program, not the xBRZ chain).
+- Removed: `src/rd1/scr_xrick.c`, `src/rd1/img_splash.e`, the `XRICK` game state,
+  `IMG_SPLASH`, `img_paintImg`, `fb_setPaletteFromImg`. The gunshot is gone with it (user).
+- Fade in/out inside `SPLASH_MS` (user): RD2's method (`rd2_19134`/`rd2_1919e`), 8 steps
+  of 40 ms, each channel −1 ST level (255/7) per step. Measured on Windows (shader
+  build): brightness steps of ~35/255 every 40 ms, black again at ~2 s.
+- Checked: RD1 and RD2 screenshots at 1 s (splash) / 3 s (title), zoom 2/4/8, shaders
+  on/off; `-demo -trace` identical to the previous build over 587 steps; WSL build + run.
+
+### T44 — GL shader chain between the game frame and the screen ⭐ **DONE 2026-09-30 (desktop Windows + Linux, web in Chrome)** [master]
+
+**Goal (user, 2026-09-30):** run libretro GLSL shaders on the port's output, chainable,
+all under a compile-time switch that is on by default and easy to turn off.
+
+- `ENABLE_SHADERS` in `include/config.h`; `#undef` gives the old SDL_Renderer path. The
+  same fallback runs at run time if the GL context or a shader fails.
+- `src/sysvid_gl.c`: GL 3.3 core (desktop) / WebGL 2 (web, `-sMAX_WEBGL_VERSION=2` in
+  `build.sh`). Chain = the `chain[]` table (one row per pass, fields mirror a `.glslp`).
+  Uniforms fed as RetroArch's `shader_glsl.c` does (`Orig*`, `PassN*`, `PassPrevN*`).
+- Shipped chain: libretro `xbrz/xbrz-freescale-multipass` (2 passes), sources verbatim
+  in `src/shaders/xbrz/`, compiled in via `src/shaders/embed.sh` → `.glsl.inc`.
+  xBRZ output capped at `XBRZ_MAX_SCALE` (3) × the frame, then libretro `stock.glsl`
+  stretches it to the window with linear filtering (user: "too much" at zoom 8).
+- Checked: desktop exe on Windows (screenshots: upright, xBRZ-smoothed, correct across
+  screens), Linux build in WSL (no warnings, "shader chain ready"), `#undef` build runs.
+- Web: `stock.glsl` failed on WebGL (float declared before its `precision` line); fixed
+  by a `precision highp float;` prelude on GLES fragment shaders. Open: if the chain
+  fails on the web, the SDL_Renderer fallback shows a black canvas (not fixed).
+- **Open:** xBRZ is GPL-3 (licence question, user).
+
 ### T43 — Full-game RD1 attract demo, found by a solver driven by an LLM ☐ **PLAN 2026-09-25 — D1–D6 decided; F1 fixed, phases 1–5 DONE, F6/F7 fixed 2026-09-25; phase 6 in progress (0x00–0x03 solved) 2026-09-26**
 
 **Goal:** `-demo` plays RD1 from submap 0x00 to the end of the game (all 0x2F submaps) with
