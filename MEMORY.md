@@ -524,6 +524,9 @@ Two games, two reverse projects, one repo. **Do not mix their addresses** — RD
 
 ## 11. Demo solver (T43) — two branches, two audiences (registered 2026-09-25, user)
 
+**RD2 (T47, 2026-10-01):** same split and same objective. The demo plays as a real game, only
+behind `-demo`; what follows map 4 stays literal until checked on the Atari (`PLAN.md` T47 E1–E4).
+
 The port repo (`xrick/xrick/`) has two branches. **Keep every change on the right one.**
 
 - **`master` = the version for end users.** Only work that matters to a player goes

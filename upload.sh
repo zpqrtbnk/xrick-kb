@@ -1,5 +1,5 @@
 source upload.sh.user
-JQ=./jq
+JQ=jq
 
 MEDIA_WASM="11467372-23fb-4d45-818b-fc78edf889a6"
 MEDIA_RICK="ef083197-9811-4332-9d87-50982eea5ccc"

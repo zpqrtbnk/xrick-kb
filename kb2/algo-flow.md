@@ -86,7 +86,7 @@ loop: draw the cursor string $17e9e (the single glyph $0f) at (col 5 (D0), row D
 
 `[$17992]` is written only by `game_main` (`$10af2`, value 5). Picker records at `$17996` (read from RAM): five `(word 5, word row, long string pointer)` = rows 18, 15, 12, 9, 6 with
 strings `$17a28`, `$17a10`, `$179f2`, `$179d4`, `$179c0`, then a `ffff` terminator. Strings are font glyph ids ending in `$ff`: `$179c0` = `01 20 20` "HYDE PARK, EARTH",
-`$179d4` = `02 20 20` "THE ICE CAVERNS OF FREEZIA", `$179f2` = `03 20 20` "THE FORESTS OF VEGETALIA", `$17a10` = `04 20 20` "THE ATOMIC MUD MINES", `$17a28` = `05 20 20` "THE FAT GUY'S HEADQUARTERS"
+`$179d4` = `02 20 20` "THE ICE CAVERNS OF FREEZIA", `$179f2` = `03 20 20` "THE FORESTS OF VEGETABLIA", `$17a10` = `04 20 20` "THE ATOMIC MUD MINES", `$17a28` = `05 20 20` "THE FAT GUY'S HEADQUARTERS"
 (the leading id is a digit glyph 1–5, i.e. the map number). Drawing starts at record `5 − [$17992]`, so with `[$17992] = 4` rows 15, 12, 9, 6 = maps 4, 3, 2, 1
 are shown, map 1 at the top; `D2` = selected entry counted from the top = the map number `[$17994]`.
 `$17b86` shows a text only when `[$1798e] ≠ 0`, at column `$c`, row `$15`: `[$17990] = 0` → the string at `$17bb6` (`01 06 20 42 49 54 20 4c 4f 4e 47 20 47 41 4d 45 ff` = glyph ids 1, 6, space, "BIT LONG GAME"

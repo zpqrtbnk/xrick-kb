@@ -270,11 +270,12 @@ them out). Building `PLATFORM_PC` natively on Windows would need a
 `PreprocessorDefinitions` addition to `xrick.vcxproj`; not done, since nothing in the
 T19 audio work needed it.
 
-## 4. Web (emscripten), RD1 only — on `master`
+## 4. Web (emscripten), RD1 and RD2 — on `master`
 
 Analysis, plan and status: `../wasm.md`. Developed on branch `wasm`, merged into
-`master` 2026-09-28 (the branch is deleted). Phase W1 = RD1 in the browser; `-rd 2` is
-refused on the web until phase W2.
+`master` 2026-09-28 (the branch is deleted). Phase W1 = RD1 in the browser. Phase W2
+(2026-10-01) = RD2 too: linked with ASYNCIFY, restricted to the functions that reach
+`rd2_sys_pump`'s sleep by a two-pass link in `build.sh` (`../wasm.md` §9).
 
 **Toolchain.** emsdk in `D:\d\EmSdk` (emscripten 6.0.10), driven from **Git Bash** (user
 decision 2026-09-28; the emsdk is Windows-native). **`build.sh` registers the emsdk

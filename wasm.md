@@ -371,3 +371,94 @@ entry; checked). Demo mode not handled yet. Separately, `sysarg.c`'s `-vol` chec
 submap number instead of the volume (`-submap 11+` before `-vol` failed to start); fixed.
 The `-vol` off-by-one (N−1 stored, `-vol 0` rejected, `-vol 1` = default) is fixed too
 (master `03d39f0`): `-vol 0`..`10` as the help says, 0 = silence.
+
+## 9. Status of phase W2 (2026-10-01) — RD2 in the browser, ASYNCIFY (option A)
+
+Working tree of port `master` (after `b1e5ecc`); **not committed**.
+
+**Code.**
+- `rd2/rd2_sys.c` `rd2_sys_pump`: on the web, `emscripten_sleep(vbl_next - now)` instead
+  of `sys_sleep`. Every RD2 wait (`rd2_191e6` ×25 call sites, `rd2_19216` ×6, the direct
+  pumps, `rd2_sys_hang_red`) spins on this pump, so this one sleep is where the browser
+  gets control back: drawing, input, and the SDL audio callback (on the web it runs on
+  the main thread, so `do rd2_191e6(); while (rd2_snd_rw(0x1aa08))` progresses only
+  because of it).
+- `xrick.c`: with `-game 2`, `main` waits for the splash with `emscripten_sleep(10)`
+  (RD1 keeps its `web_frame` wait). `SDL_SetHint(SDL_HINT_EMSCRIPTEN_ASYNCIFY, "0")`
+  before `SDL_Init`: with ASYNCIFY linked, SDL 3.4.2 (emsdk port,
+  `cache/ports/sdl3/SDL-release-3.4.2`) calls `emscripten_sleep` in `SDL_SYS_DelayNS`,
+  `Emscripten_GLES_SwapWindow`, the framebuffer update and the message box. That would
+  sleep inside RD1's main-loop callback, and in functions left uninstrumented.
+- `sysarg.c`: the W1.4 `-game 2` refusal is removed.
+- `exit(0)` in the pump (Esc, window close) is left as is: with `EXIT_RUNTIME` it ends the
+  runtime and the page shows "game ended" (checked).
+- `emsdk/player.js`: the selector's RD2 entry (`game: '2'`) never passed `-game 2`
+  (`selectionArgs` compared `'rd2'`); fixed.
+
+**Link (`build.sh`).** `-sASYNCIFY -sASYNCIFY_IGNORE_INDIRECT=1`, linked twice:
+`-sASYNCIFY_ADVISE` first, then `-sASYNCIFY_ONLY=[...]` with the transitive callers of
+`SLEEPERS="rd2_sys_pump main"`, read from the advise output (names after the optimizer's
+inlining: most of RD2 is inlined into `main`). The build stops if a sleeper no longer
+shows as calling `emscripten_sleep`. 13 functions instrumented: `main rd2_1793a rd2_17bf4
+rd2_17c86 rd2_17e40 rd2_18186 rd2_19134 rd2_1919e rd2_191e6 rd2_19216 rd2_sys_hang_red
+rd2_sys_pump transition_common`. `llvm-nm` crashes on these objects here, so the list
+cannot be checked against the symbol table automatically.
+
+**Size** (same objects, `-O2`; gzip -9):
+
+| link | xrick.wasm | gzip | xrick.js |
+|---|---|---|---|
+| no ASYNCIFY | 2,149,092 | 875,699 | 220,790 |
+| `-sASYNCIFY` | 2,594,066 (+20.7 %) | 988,634 (+12.9 %) | 228,351 |
+| `+ ASYNCIFY_IGNORE_INDIRECT` | 2,275,990 (+5.9 %) | 911,762 (+4.1 %) | 228,341 |
+| `+ ASYNCIFY_ONLY` (13 functions), as built | 2,156,855 (+0.36 %) | 878,961 (+0.37 %) | 228,341 |
+
+Functions instrumented (distinct names in the advise output): plain `-sASYNCIFY` 788,
+with `IGNORE_INDIRECT` 316, with `ONLY` 13. Plain ASYNCIFY treats every indirect call as
+a possible sleep: 278 functions are flagged for that alone ("due to initial scan"), and
+their callers with them. Among them SDL's driver-table calls, libc's stdio, xrick's
+`web_frame` and `demo_*`, and the sound engine (`AtariMachine::JmpBinary`, so `Jsr` and
+`ComputeNextSample`). Of the 316 left by `IGNORE_INDIRECT`, 224 are `SDL*`/`Emscripten*`
+functions that reach SDL's own `emscripten_sleep` calls; the rest are their callers.
+
+**Checked** (headless Chrome 154, DevTools protocol, `build/web` served locally):
+- `?game=2`: splash, RD2 title, attract demo (screenshots); fire opens the level picker;
+  fire again → the story scene, then gameplay; Rick moves; P pauses; Esc → "game ended".
+- Pace: 501 sleeps in 10.0 s of RD2 (one per 20 ms VBL).
+- Audio context running (48000 Hz). **Not heard.**
+- Selector "RD2 - Nothing" → args `-game 2 -submap 1`, RD2 starts.
+- RD1 unchanged: `?demo&speed=2&trace`, 60 s, without vs with ASYNCIFY → traces
+  byte-identical over 9392 lines (9398 / 9393 lines written).
+- Desktop build unchanged (all changes under `__EMSCRIPTEN__`); MSBuild built it.
+
+**Not checked:** sound by ear, a full RD2 game, other browsers, CPU cost of the
+instrumented functions (13 functions, called at most once per VBL; not measured).
+
+## 10. RD2 maps in the web selector (2026-10-01) — not committed
+
+User decision (2026-10-01): **maps only**, no RD2 submaps. RD2 enters a submap only through
+an exit trigger (`rd2_14362`: Rick keeps his height on screen, arrives at the left or
+right edge) or a respawn (`rd2_142fc`), so a submap start would need an invented entry
+point. Per `kb2/assets/levels/tables.json` (not re-checked against the images), triggers
+reach submaps 0–7 of map 1's 17 headers, 0–12 of map 2's 14, 0–9 of map 3's 14, and all
+13 of map 4.
+
+- `sysarg.c`: `-map N` sets `sysarg_args_mapset`; `-submap` with `-game 2` fails
+  ("-submap is not available with -game 2"); help text updated.
+- `rd2_game.c`: with `-map N`, the first pass skips the title and the picker and stores
+  `RD2_PICKER_CHOICE = N` as the picker would, then continues at `rd2_1771c` (new game).
+  MAPDONE reads that choice, so a run started past level 1 ends after map 4, as in the
+  original. Later runs (after game over or Esc) go through the title and picker.
+- `player.js`: 4 RD2 entries named after the picker strings (`$179c0`..`$17a10`, decoded
+  from `rd2_program`: glyph ids are ASCII; level 3 is "THE FORESTS OF VEGETABLIA", which
+  corrects a typo in `kb2/algo-flow.md`). For them the room list holds only "start of
+  map" (`-game 2 -map N`). The URL pre-selection filters by `?game` again (RD1 and RD2
+  both number their maps 1–4).
+
+**Checked** (headless Chrome, clean `./build.sh`, 166 web warnings as before): each of
+the four RD2 entries passes `-game 2 -map N` and reaches gameplay with the overlay
+showing `M01 S00`, `M02 S00`, `M03 S01` (map 3's start record), `M04 S00`; an RD1 room
+still passes `-submap` (Egypt room 3 → `-submap 12`); `?game=2&submap=3` shows the refusal
+on the page; `xrick.exe -game 2 -submap 3` prints it on the desktop; `-game 2` without
+`-map` still shows the title and hall of fame. **Not checked:** a full run from level 2–4
+to the end of map 4.

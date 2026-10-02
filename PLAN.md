@@ -75,6 +75,147 @@ not what to do. The history of what each pass found is in `kb/byte-identity.md`.
 None of these blocks a reimplementation. `kb/` is not known to be missing anything
 structural.
 
+### T47 — Full-game RD2 attract demo, found by the T43 solver ☐ **E1–E4 decided; phases 1–4 DONE, 5 done, 6 PAUSED 2026-10-02 in map 1 submap 1 — user decision needed (below)**
+
+**Goal:** `-demo -game 2` plays RD2 from map 1 to the end of map 4 with no death, as a real game,
+like RD1's T43. Scripts in `src/rd2/dat_rd2_script.c` (one segment per map, tick = frame head
+`$10a54`, `kb/demo.md` §7).
+
+**Decisions (user, 2026-10-01):**
+- **E1 — real game, like RD1.** Music, sound effects, score and scenes. Not the game's own demo
+  flag `[$3efb6]`.
+- **E2 — after map 4: left open.** The port stays literal (row 5 unlocked, map 5 load, red border,
+  `port-rd2.md` §7). First find out what really happens on the Atari (phase 11).
+- **E3 — behind `-demo` only.** The original per-map attract demos in the title loop stay.
+- **E4 — T43's D3 objective:** no death (hard) > exit reached (hard) > natural and efficient > score (low).
+
+**Facts this plan rests on (read 2026-10-01):**
+- PRNG `$18538` reseeded by `$18516` at every `$14458` (submap entry, slides, respawn via `$14300`):
+  `kb2/algo-render.md:162-164`, `rd2_level.c:118`. T43's D1 is native; no port change.
+- Laser ammo and bombs := 6 at every map load (`$10a3c` → `$17760`) and respawn (`$13060`)
+  (`kb2/algo-flow.md` §7/§8). Ammo budgeting is per map, not across the game.
+- Exits = trigger-table records (`b0 & 3` side, `b1` tile row, `$90`/`$80` map-complete bits),
+  `kb2/algo-flow.md` §9.
+- Game state lives in `rd2_ram[0x100000]` (`rd2_mem.c:12`). Other mutable statics in `src/rd2`
+  are host-side (`rd2_sys.c:27-42,195`, `rd2_snd.c:36-39`).
+- The game reads sound state `[$1aa08]` only in the title wait, title and game over
+  (`rd2_flow.c:83,133,256`), never during play.
+- `rd2_game_run` (`rd2_game.c`) is one function with gotos; the FRAME body is self-contained
+  (deaths/respawn and submap slides finish inside it). No step API exists.
+- Run scripts `run_scene` (`$18186`) read fire (`rd2_flow.c:498`); they run before the segment
+  starts (`$142a0` before `rd2_demo_level`).
+- `-demo` with `-game 2` today plays only once a game is started by hand (title, picker), `kb/demo.md` §7.
+- Demo tick is `U16` (`include/demo.h:42`): ≤ 65 535 frames per map; 2 VBLs per frame
+  (MEMORY.md §10) = 43 min per map.
+- RD2 port never checked across a whole map: slides over a whole map, map completion, picker,
+  name entry (`port-rd2.md` §7). Expect port defects, as T43 F10–F13.
+- `kb2/hatari_rd2_trace.py` replays a `.joy` in the original: one map, entered via the forced-map
+  attract route (`[$3efb6] := 0` at frame 1). That route differs from title → picker in 80
+  constant bytes `$16d7d`–`$16edd`+, **not identified** (`port-rd2.md` §7).
+- **User, 2026-10-01:** a viewer's fire during a scene changes nothing; headless speed = whatever
+  the solver needs; headless may skip rendering if that is simpler and still exact.
+- **Not yet checked:** whether any RD2 game logic reads the screens `$70000`/`$78000` or the
+  `$68000` window (decides whether rendering can be skipped headless); headless steps/s;
+  whether a viewer's fire during a scene changes game state after `$14300`.
+
+**Phases** (branch per MEMORY.md §11; each ends with a check):
+1. **[solver] State audit.** Log every address written by `rd2_wb/ww/wl` over the 4 attract demos
+   plus scripted play (`RD2_JOYSEQ`) on all maps; classify game state / screens / level-image
+   runtime bits / sound cells. Then run with rendering stubbed and compare the game-state ranges
+   with a full run (and, once the Ghidra MCP is back, xrefs to the screen ranges).
+   Output: `kb2/demo-solver.md` state table. Check: no game-state range missed (a snapshot taken
+   from the table restores to an identical trace).
+   ✅ **DONE 2026-10-01**, solver `4b1bbbb`: `make audit2` (`-DHL2_WATCH` marks every write in
+   `rd2_mem.h`), random play 200 000 frames per map. Result, widened (whole `$12e00`–`$17800`, all
+   spawn/trigger tables), in `src/headless/rd2/hl2_regions.h`; render buffers `$65800`–`$80000`
+   flagged. Rendering is NOT skipped (106k frames/s with it, user: speed is not a concern).
+2. **[master] Step function.** Move the FRAME body into `rd2_frame_step()` returning the outcome
+   (next frame / MAPDONE / END_OF_RUN / TITLE / PICK), with no change in behaviour.
+   Check: `RD2_TRACE` before vs after byte-identical (attract demos of the 4 maps, 2000 frames each,
+   plus a scripted game to game over).
+   ✅ **DONE 2026-10-01**, master `2ddedc8`: identical on the 4 attract demos (1500 frames each) and
+   4 scripted games (`RD2_JOYSEQ`, 471–2500 frames).
+3. **[solver] Headless core.** `xrick-core -game 2`: `src/rd2` without SDL video/sound/timing,
+   VBL waits = no-op, start = new game on map N via the `-map N` route, `step(joy)`.
+   Check: SDL vs headless trace byte-identical on a scripted `.joy`. Measure frames/s with and
+   without rendering.
+   ✅ **DONE 2026-10-01**, solver `4b1bbbb`: a separate binary `xrick2-core` (`make core2`,
+   `src/headless/rd2/`), not `xrick-core -game 2`. SDL `-map N` + `RD2_JOYSEQ` vs `-inputs`:
+   byte-identical on maps 1–4, 6896 frames to game over. 106 000 frames/s.
+4. **[solver] Snapshot / restore / hash** over the phase 1 ranges. Check: random-input fuzz, as
+   T43 phase 4 (restore at t, re-run, hashes equal every frame). Measure save/restore cost.
+   ✅ **DONE 2026-10-01**, solver `4b1bbbb`: `-fuzz 2000`, with and without the render buffers:
+   16 000 restores (cross-map restores included), 0 mismatches. Search snapshot 26 KB,
+   save 0.6 µs, restore 2.1 µs. Random play only reached each map's first submap.
+5. **[solver] Observation.** JSON dump: lives `[$17710]`, laser `[$176f4]`, bombs `[$17702]`, score;
+   Rick x/y/state/dead `[$12e2a]`; submap `[$16464]`, scroll `[$16462]`; the 17-record chain
+   (objects, laser, bomb, debris, actors) with trigger boxes; spawn records; exits from the trigger
+   table; tile classes (`rd2_tileattr.h`). Check: against the 4 attract demos (exit window → real exit frame).
+   ✅ **done 2026-10-01**, solver `3c4a396`: `-dump` (plus each actor's spawn record and hit class,
+   the submap's spawn records with trigger boxes), `-tiles <s>`. Checked: Rick's feet row = the
+   trigger row at the map-1 exits solved. Not checked against the attract demos.
+6. **[solver] Solver.** Reuse T43's search (macro-actions, beam, hash dedup, post-pass against jitter)
+   with an RD2 adapter: joystick byte actions, distance field over the tall scrolling submap, exits
+   from triggers, laser/bomb use, bomb backtracking within a map. Pilot: map 1 chained, no hints.
+   🟡 **IN PROGRESS 2026-10-01**, solver `3c4a396`+: `hl2_solve.c` (beam, 2-row crawl footprint,
+   jump 4 rows, RELAX cost for lifts), route = Dijkstra over (submap, entry row) weighted by the
+   field (the plain submap graph picked an impossible route: map 1 submap 2's row-103 exit is only
+   reachable from its top, via submap 5). Facts measured: bomb fuse 40 frames, ~7 lethal frames;
+   jump 33 px / 23 frames; walk 2 px/frame. **Switches**: many exits need a trigger box fired by
+   melee/laser/bomb (map 1 submap 2: punch x 24 row 114 despawns the exit creature, hit class $0c;
+   submap 5: punch x 224 row 110 for the shaft lift). `hl2_switch.c` tries them when an exit fails.
+   Staging (2026-10-02): a failed search hands back its closest landed state that survives 50 idle
+   frames; the driver commits it while it gets closer, then tries switches (nearest first, every
+   standable column that reaches the box). Map 1 so far, no hand input after the first switch:
+   submaps 0, 2 (bottom), 5 (2 lift switches), 2 (top: a shaft hazard punched, a bomb switch) done;
+   submap 4 done (2 blocks bombed with a ladder escape, a lift punched from the room below).
+   Fixed on the way: stale objects (core2 had no header dependencies → a segfault), drops through
+   one-way floors made dear (`RELAX_DOWN` 40), switch "fired" = the box's latch seen during the press
+   (the latch clears the next frame; a record signature was fooled by actors spawning), ammo in the
+   ranking (lasers were all spent by submap 4).
+   **State 2026-10-02:** map 1 solved, no death, up to submap 1's entry: 4425 frames, lives 6, laser 0,
+   bombs 1 — `build/rd2solve/map1_to_submap1.joy` (port tree, git-ignored), logs alongside.
+   **Stuck at map 1 submap 1** (bottom corridor rows 128–131): three kind-2 objects home on Rick's x,
+   hurt on contact, are only stunned 40 frames by a punch (`algo-objects.md` contacts); the ceiling
+   allows a jump only over columns 4–11 and 20–23; no laser left. Beam 640 / 5000 frames: no progress.
+   Each new submap so far needed 1–3 rounds of analysis by hand plus 10–45 min of search.
+   **Open question (user):** keep going this way (estimate: days for maps 2–4), or change approach
+   (record human play with `-record` and let the solver repair/polish; or accept deaths).
+   **Phase 10 code ready, not committed:** `build/rd2solve/t47-phase10-autostart.patch` (master):
+   `rd2_demo_autostart()` — with `-demo` and a map-1 script, the title runs once, then a real game
+   on map 1 starts. Builds; untested with a script.
+7. **[solver] MCP.** Extend T43's tools to `-game 2` (load, observe, step, snapshot/restore,
+   solve, repair, validate, trace, export to `dat_rd2_script.c` + `.joy`).
+   ✅ **DONE 2026-10-02**, solver `4893a51`: `src/headless/rd2/mcp2_server.py`, `.mcp.json` entry
+   `xrick2` (literal WSL path). Tools: new_game, load_joy, observe, step, trace, solve (partial
+   states kept), fire_switch, list_states, validate, repair, export. Checked over stdio, every tool.
+   Needs the port checkout on branch `solver` when the session starts (the file is not on master).
+8. **[solver] Fidelity gate, per map.** Replay each solved map's `.joy` in the original with
+   `hatari_rd2_trace.py` and compare RAM every frame. First identify the 80-byte route difference
+   (or prove it inert). A divergence = port defect → fix on master with user go (like F10–F13),
+   then re-solve the affected legs.
+9. **[solver] Full run.** Maps 1→4 chained from a new game (lives and score carry over), no death,
+   each map through phase 8. Export `dat_rd2_script.c`; check frames per map < 65 536.
+10. **[master] Integration.** `-demo -game 2` starts by itself: title sequence once, then a real
+    game on map 1 (picker skipped, choice 1), scripts per map, scenes between maps. Keys during
+    the demo behave as in RD1. After map 4: literal (E2). Check: SDL trace == headless over the
+    whole game; Windows, WSL and web; user's visual check.
+11. **[Atari] After map 4.** Extend the Hatari script to one continuous game started from map 1
+    across map loads, replay the phase 9 chain in the original and record what follows map 4's
+    MAPDONE (row 5 unlock, map 5 load, red border or not). User then decides the demo's end (E2).
+
+### T46 — RD2 in the browser (wasm phase W2, ASYNCIFY) ✅ **DONE 2026-10-01 (headless Chrome), not committed — user to hear sound and play** [master]
+
+- `rd2_sys_pump` sleeps with `emscripten_sleep` on the web; `main` waits for the splash
+  the same way; the `-game 2` refusal in `sysarg.c` is gone; SDL's own sleeps are off
+  (`SDL_HINT_EMSCRIPTEN_ASYNCIFY` 0, `xrick.c`).
+- `build.sh` links twice: an `ASYNCIFY_ADVISE` pass, then `ASYNCIFY_ONLY` = the 13 callers
+  (transitively) of `rd2_sys_pump`/`main`. wasm +7.8 KB (+0.4 %) vs +445 KB for plain
+  `-sASYNCIFY`. Details and measurements: `wasm.md` §9.
+- `player.js`: the selector's RD2 entry now passes `-game 2` (it compared `'rd2'`).
+- RD2 maps 1–4 in the selector; RD2 `-map N` = the SELECT LEVEL choice; `-submap` refused
+  with `-game 2` (user: maps only). `wasm.md` §10.
+
 ### T45 — xrick splash for both games, outside RD1 ✅ **DONE 2026-09-30 (desktop Windows RD1/RD2, renderer + shader paths; web in Chrome)** [master]
 
 **Goal (user, 2026-09-30):** the splash shows before either game, for a constant time,
